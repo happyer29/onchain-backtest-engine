@@ -118,6 +118,61 @@ def test_local_mac_or_linux_measurements_are_non_negative() -> None:
     assert process_group.private_rss_bytes >= process.private_rss_bytes
 
 
+def test_linux_proc_parser_keeps_counters_after_empty_metadata(tmp_path: Path) -> None:
+    """Empty status metadata must not hide later memory or swap counters."""
+    status = tmp_path / "status"
+    # Both colon-delimited status and whitespace-delimited vmstat use this parser.
+    status.write_text(
+        "Name:\tworker\nGroups:\t\nx86_Thread_features:\nVmRSS:\t128 kB\n"
+        "VmSwap:\t0 kB\nUnavailable:\t\npswpin 7\nmalformed\n",
+        encoding="ascii",
+    )
+    # Missing metadata stays absent, while explicit zero remains a measured value.
+    assert host_resources_module._linux_key_values(status) == {
+        "VmRSS": 128,
+        "VmSwap": 0,
+        "pswpin": 7,
+    }
+
+
+def _linux_proc_fixture(tmp_path: Path, monkeypatch) -> Path:
+    """Exercise Linux parsing against fixed proc files on either supported host."""
+    root = tmp_path / "proc"
+    root.mkdir()
+    (root / "smaps_rollup").write_text("", encoding="ascii")
+    (root / "stat").write_text("12345 (worker) S 0 12345 0 0 0 0 0 0 9\n", encoding="ascii")
+    # Redirect only this module's proc root; counter readers still parse real files.
+    monkeypatch.setattr(host_resources_module, "Path", lambda _: root)
+    return root
+
+
+def test_linux_process_status_fallback_conservatively_charges_total_rss(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Unavailable rollup must retain total RSS, swap and faults from proc status."""
+    root = _linux_proc_fixture(tmp_path, monkeypatch)
+    (root / "status").write_text(
+        "Name:\tworker\nGroups:\t\nVmRSS:\t128 kB\nVmSwap:\t4 kB\n", encoding="ascii"
+    )
+    measured = host_resources_module._linux_process_resources(12345)
+    # Total RSS is deliberately charged as private rather than guessing shared pages.
+    assert measured is not None
+    assert measured.private_rss_bytes == measured.total_rss_bytes == 128 * 1024
+    assert measured.child_swap_bytes == 4 * 1024
+    assert measured.major_page_faults == 9
+
+
+def test_linux_process_status_without_rss_does_not_invent_zero_usage(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """An incomplete status remains unmeasured, including an exit during sampling."""
+    root = _linux_proc_fixture(tmp_path, monkeypatch)
+    for rss in ("", "VmRSS:\t\n", "VmRSS:\tnot-a-number\n"):
+        # Valid unrelated counters cannot turn an unavailable RSS into a safe sample.
+        (root / "status").write_text(f"Groups:\t\n{rss}VmSwap:\t4 kB\n", encoding="ascii")
+        assert host_resources_module._linux_process_resources(12345) is None
+
+
 def test_directory_measurement_does_not_follow_or_double_count_links(tmp_path: Path) -> None:
     # Execute the test directory measurement does not follow or double count links
     # workflow in explicit, reviewable steps.

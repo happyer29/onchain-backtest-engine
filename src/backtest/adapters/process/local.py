@@ -263,7 +263,7 @@ class LocalSubprocessRunner:
                 dropped_progress_frames=dropped_frames,
             )
 
-        current_token = _read_process_start_token(handle.process_id)
+        current_token = _read_process_start_token(handle.process_id, require_live=True)
         if current_token != handle.start_token:
             # Return the completed local subprocess runner probe result without a hidden
             # fallback.
@@ -293,9 +293,13 @@ class LocalSubprocessRunner:
         # Repeat the local subprocess runner terminate step only while time.monotonic() <
         # deadline remains true.
         while time.monotonic() < deadline:
-            # Keep the time.monotonic() < deadline loop body bounded within local
-            # subprocess runner terminate.
-            if self.probe(handle).state is ProcessState.EXITED:
+            # Owned children retain their established Popen polling and cleanup behavior.
+            if owned is not None:
+                exited = self.probe(handle).state is ProcessState.EXITED
+            else:
+                # A zombie leader may still have group members that ignore cooperative stop.
+                exited = _read_process_start_token(handle.process_id) != handle.start_token
+            if exited:
                 return
             time.sleep(min(0.05, max(0.0, deadline - time.monotonic())))
         if _read_process_start_token(handle.process_id) == handle.start_token:
@@ -307,6 +311,20 @@ class LocalSubprocessRunner:
             with suppress(subprocess.TimeoutExpired):
                 owned.process.wait(timeout=1.0)
             self._forget(handle, owned)
+        else:
+            # A restarted runner has no Popen waiter but must still observe delayed exit.
+            self._wait_for_persisted_exit(handle)
+
+    def _wait_for_persisted_exit(self, handle: ProcessHandle) -> None:
+        """Use the same one-second post-kill bound as the owned-child wait."""
+
+        deadline = time.monotonic() + 1.0
+        while _read_process_start_token(handle.process_id, require_live=True) == handle.start_token:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0.0:
+                return
+            # Observe only identity; absent resource measurements cannot prove exit.
+            time.sleep(min(0.05, remaining))
 
     def cleanup_launch(self, attempt_id: AttemptId) -> None:
         _unlink_quietly(self._envelope_path(attempt_id))
@@ -478,8 +496,8 @@ class LocalSubprocessRunner:
                 os.kill(process_id, sig)
 
 
-def _read_process_start_token(process_id: int) -> str | None:
-    # Execute the read process start token workflow in explicit, reviewable steps.
+def _read_process_start_token(process_id: int, *, require_live: bool = False) -> str | None:
+    """Preserve exact OS identity, optionally excluding processes that cannot execute."""
     if process_id <= 0:
         return None
     if sys.platform.startswith("linux"):
@@ -491,6 +509,9 @@ def _read_process_start_token(process_id: int) -> str | None:
             stat = Path(f"/proc/{process_id}/stat").read_text(encoding="ascii")
             close_paren = stat.rfind(")")
             fields_after_name = stat[close_paren + 2 :].split()
+            # A zombie's identity can still authorize cleanup of its surviving process group.
+            if require_live and fields_after_name[0] in {"Z", "X", "x"}:
+                return None
             start_ticks = fields_after_name[19]
             boot_id = Path("/proc/sys/kernel/random/boot_id").read_text(encoding="ascii").strip()
         # Translate file not found error through the read process start token boundary

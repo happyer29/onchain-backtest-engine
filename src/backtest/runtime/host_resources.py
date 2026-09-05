@@ -525,9 +525,12 @@ def _linux_key_values(path: Path) -> dict[str, int]:
     for line in path.read_text(encoding="ascii").splitlines():
         # Process splitlines, read text and path inside the bounded linux key values loop.
         if ":" in line:
-            # Handle the linux key values ':' in line branch as a distinct logical block.
+            # Optional proc status metadata can be empty; it is not a zero-valued counter.
             key, raw_value = line.split(":", 1)
-            token = raw_value.strip().split(maxsplit=1)[0]
+            parts = raw_value.split(maxsplit=1)
+            if not parts:
+                continue
+            token = parts[0]
         else:
             # Handle the linux key values complement of ':' in line explicitly.
             parts = line.split(maxsplit=1)
