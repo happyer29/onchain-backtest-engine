@@ -1,0 +1,351 @@
+{
+  "schema": "pumpfun-program-v1-trade-golden-v1",
+  "network_id": "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d",
+  "program_id": "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P",
+  "quote_mint": "11111111111111111111111111111111",
+  "event_schema_paths": {
+    "pump-current-2026-07-15": "upstream/pump-current.events.idl.json",
+    "pump-historical-2025-05-08": "upstream/pump-historical.events.idl.json"
+  },
+  "vector_count": "8",
+  "matrix": {
+    "NORMAL:LEGACY_SPL_TOKEN": ["BUY", "SELL"],
+    "TOKEN_2022:TOKEN_2022": ["BUY", "SELL"],
+    "CASHBACK:TOKEN_2022": ["BUY", "SELL"],
+    "MAYHEM:TOKEN_2022": ["BUY", "SELL"]
+  },
+  "vectors": [
+    {
+      "id": "legacy-normal-buy-v1",
+      "mode": "NORMAL",
+      "token_program_family": "LEGACY_SPL_TOKEN",
+      "side": "BUY",
+      "event_schema_pin": "pump-historical-2025-05-08",
+      "position": {"slot": "346729519", "transaction_index": "1193", "instruction_outer_index": "6", "instruction_inner_index": "0", "event_log_index": "44"},
+      "signature": "5frph8gBFyX7ayBmqntvwpTPwzZ8aF4kdfJAvC52Li2iDnnaRwtmcZP839Cm4YQUFx7GzsUUStCfAy3hAG69ir4u",
+      "block_time": "1749900608",
+      "mint": "Coyj3LtKn1BNSgWc9HsGK5SKoGfEoDaymig4wrN6pump",
+      "creator": "AVBhCSDEC9MTHt1JgzEncJNDdWZWYwYj4unAXmEcgKDW",
+      "user": "toAPhdPcxDZsm2ziAgKcLLb5FMvhsUxqWpRvxTnYfnP",
+      "instruction_name": "buy",
+      "formula": "pump-buy-legacy-exact-net-sol-v1",
+      "mode_evidence": {
+        "token_program": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "mint_account_evidence": "raw/mint-accounts.json#Coyj3LtKn1BNSgWc9HsGK5SKoGfEoDaymig4wrN6pump",
+        "historical_idl_has_explicit_mode_fields": false,
+        "basis": ["trade_instruction_token_program_account", "finalized_mint_account_owner", "exact historical IDL decode with zero trailing bytes"]
+      },
+      "trade": {
+        "quote_amount_atomic": "1000000",
+        "token_amount_atomic": "34722966527",
+        "fee_basis_quote_atomic": "1000000",
+        "gross_wallet_quote_debit_atomic": "1010000",
+        "net_curve_quote_input_atomic": "1000000",
+        "output_amount_atomic": "34722966527"
+      },
+      "fees": {
+        "protocol_bps": "95",
+        "protocol_fee_atomic": "9500",
+        "creator_bps": "5",
+        "creator_fee_atomic": "500",
+        "cashback_bps": "0",
+        "cashback_atomic": "0",
+        "buyback_bps": "0",
+        "buyback_atomic": "0",
+        "network_fee_lamports": "1000000"
+      },
+      "curve": {
+        "pre": {"virtual_sol_reserves_lamports": "30447030737", "virtual_token_reserves_atomic": "1057245952122094", "real_sol_reserves_lamports": "447030737", "real_token_reserves_atomic": "777345952122094"},
+        "post": {"virtual_sol_reserves_lamports": "30448030737", "virtual_token_reserves_atomic": "1057211229155567", "real_sol_reserves_lamports": "448030737", "real_token_reserves_atomic": "777311229155567"},
+        "pre_state_source": "exact inverse of decoded post-state and TradeEvent deltas"
+      },
+      "raw": {"path": "raw/5frph8gBFyX7ayBmqntvwpTPwzZ8aF4kdfJAvC52Li2iDnnaRwtmcZP839Cm4YQUFx7GzsUUStCfAy3hAG69ir4u.json", "file_sha256": "d85d91fbd4ab70c252f814a6f95fa8e79044f0e92bcd7426e6828442eaa9e58e", "program_data_sha256": "c46ac47247857990cd0bc7c3f1fbbf90d66af4963c7b9687f08ab1b170d56b95"}
+    },
+    {
+      "id": "legacy-normal-sell-v1",
+      "mode": "NORMAL",
+      "token_program_family": "LEGACY_SPL_TOKEN",
+      "side": "SELL",
+      "event_schema_pin": "pump-historical-2025-05-08",
+      "position": {"slot": "346729519", "transaction_index": "184", "instruction_outer_index": "0", "instruction_inner_index": null, "event_log_index": "6"},
+      "signature": "Qm2xtttvDYvSuQfXkKywcPfE4P22Pokn47jBx4x9h4DZPDhtGpjpjmyeUfCskoHnutUPBjwGuwgr9GQ7SYxpnZB",
+      "block_time": "1749900608",
+      "mint": "3VaVxiBeDVmPRhwQkhP1PKWjbTFCtAaSU4Vkbz1Dpump",
+      "creator": "2pyK5XXoEunuwLggJi6hXJT19jqriyde3efZHY2qnjiU",
+      "user": "5pBQ3sAnCHAAD6buLKJCfkxAH1iJfdg7a6Hx95NpUkhQ",
+      "instruction_name": "sell",
+      "formula": "pump-sell-exact-token-in-v1",
+      "mode_evidence": {
+        "token_program": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "mint_account_evidence": "raw/mint-accounts.json#3VaVxiBeDVmPRhwQkhP1PKWjbTFCtAaSU4Vkbz1Dpump",
+        "historical_idl_has_explicit_mode_fields": false,
+        "basis": ["trade_instruction_token_program_account", "finalized_mint_account_owner", "exact historical IDL decode with zero trailing bytes"]
+      },
+      "trade": {
+        "quote_amount_atomic": "732169967",
+        "token_amount_atomic": "25548535432200",
+        "gross_curve_quote_output_atomic": "732169967",
+        "net_wallet_quote_credit_atomic": "724848267",
+        "output_amount_atomic": "724848267"
+      },
+      "fees": {
+        "protocol_bps": "95",
+        "protocol_fee_atomic": "6955615",
+        "creator_bps": "5",
+        "creator_fee_atomic": "366085",
+        "cashback_bps": "0",
+        "cashback_atomic": "0",
+        "buyback_bps": "0",
+        "buyback_atomic": "0",
+        "network_fee_lamports": "125000"
+      },
+      "curve": {
+        "pre": {"virtual_sol_reserves_lamports": "30740993838", "virtual_token_reserves_atomic": "1047135957196398", "real_sol_reserves_lamports": "740993838", "real_token_reserves_atomic": "767235957196398"},
+        "post": {"virtual_sol_reserves_lamports": "30008823871", "virtual_token_reserves_atomic": "1072684492628598", "real_sol_reserves_lamports": "8823871", "real_token_reserves_atomic": "792784492628598"},
+        "pre_state_source": "exact inverse of decoded post-state and TradeEvent deltas"
+      },
+      "raw": {"path": "raw/Qm2xtttvDYvSuQfXkKywcPfE4P22Pokn47jBx4x9h4DZPDhtGpjpjmyeUfCskoHnutUPBjwGuwgr9GQ7SYxpnZB.json", "file_sha256": "44e6650f6a3c8e4cf01c1cf6d697cf06caa61aeccfa723b90a2b991036a43a58", "program_data_sha256": "ebc818fd194a1d5eda7bae9c77f70fa8c50113b7c137c54f658916e196c98d42"}
+    },
+    {
+      "id": "token-2022-normal-buy-v1",
+      "mode": "TOKEN_2022",
+      "token_program_family": "TOKEN_2022",
+      "side": "BUY",
+      "event_schema_pin": "pump-current-2026-07-15",
+      "position": {"slot": "443739685", "transaction_index": "382", "instruction_outer_index": "9", "instruction_inner_index": "3", "event_log_index": "79"},
+      "signature": "2RxiEtuGbTd8bWUdzxBZasVgymreRmquDt6NmJq6ec7EMMfM2DTixwv6ECb3nagFfwRiprNbr8ekSYqMSEkAYBjN",
+      "block_time": "1788365619",
+      "mint": "HTxbgkRZ4CkioKebc4Dj3K4BhfpGVtcW8JK867i5oyYU",
+      "creator": "AFMq7XZfmM1LNVc8WXdrLcT4wbHrr1788qYfTBgVQQ4b",
+      "user": "ARu4n5mFdZogZAravu7CcizaojWnS6oqka37gdLT5SZn",
+      "instruction_name": "buy_exact_sol_in",
+      "formula": "pump-buy-exact-gross-sol-v1",
+      "mode_evidence": {
+        "token_program": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+        "mint_account_evidence": "raw/mint-accounts.json#HTxbgkRZ4CkioKebc4Dj3K4BhfpGVtcW8JK867i5oyYU",
+        "mayhem_mode": false,
+        "cashback_fee_basis_points": "0",
+        "basis": ["trade_instruction_token_program_account", "finalized_mint_account_owner", "TradeEvent mode fields"]
+      },
+      "trade": {
+        "quote_amount_atomic": "34395060",
+        "token_amount_atomic": "285434848439",
+        "fee_basis_quote_atomic": "34395060",
+        "gross_wallet_quote_debit_atomic": "34825000",
+        "net_curve_quote_input_atomic": "34395060",
+        "output_amount_atomic": "285434848439"
+      },
+      "fees": {
+        "protocol_bps": "95", "protocol_fee_atomic": "326754", "creator_bps": "30", "creator_fee_atomic": "103186",
+        "cashback_bps": "0", "cashback_atomic": "0", "buyback_bps": "5000", "buyback_atomic": "163377", "network_fee_lamports": "242151"
+      },
+      "curve": {
+        "pre": {"virtual_sol_reserves_lamports": "62263725546", "virtual_token_reserves_atomic": "516994450073166", "real_sol_reserves_lamports": "32263725546", "real_token_reserves_atomic": "237094450073166"},
+        "post": {"virtual_sol_reserves_lamports": "62298120606", "virtual_token_reserves_atomic": "516709015224727", "real_sol_reserves_lamports": "32298120606", "real_token_reserves_atomic": "236809015224727"},
+        "pre_state_source": "exact inverse of decoded post-state and TradeEvent deltas"
+      },
+      "raw": {"path": "raw/2RxiEtuGbTd8bWUdzxBZasVgymreRmquDt6NmJq6ec7EMMfM2DTixwv6ECb3nagFfwRiprNbr8ekSYqMSEkAYBjN.json", "file_sha256": "272dd4a197df091722992782fbb42b0c1c3ac73a1019a1f761b331197d959f19", "program_data_sha256": "b471bee9bfab30ecd71f7d692e91ed2497ed427a8d919f6f24675a678d8d2b87"}
+    },
+    {
+      "id": "token-2022-normal-sell-v1",
+      "mode": "TOKEN_2022",
+      "token_program_family": "TOKEN_2022",
+      "side": "SELL",
+      "event_schema_pin": "pump-current-2026-07-15",
+      "position": {"slot": "443741012", "transaction_index": "799", "instruction_outer_index": "5", "instruction_inner_index": "0", "event_log_index": "29"},
+      "signature": "5At5itU6139EwphTWbM4RZp3peq4X4yn3mDTf1Pe5fG7JQUw5AN8zFCjkyEE5gfwbtrjQVrQvHrZiKSEZvWDtnf5",
+      "block_time": "1788366041",
+      "mint": "HTxbgkRZ4CkioKebc4Dj3K4BhfpGVtcW8JK867i5oyYU",
+      "creator": "AFMq7XZfmM1LNVc8WXdrLcT4wbHrr1788qYfTBgVQQ4b",
+      "user": "G1rxpP7KkKwkJ1XxbhwSeNmkFu6K8QZSY16kaGj7QtAy",
+      "instruction_name": "sell",
+      "formula": "pump-sell-exact-token-in-v1",
+      "mode_evidence": {
+        "token_program": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+        "mint_account_evidence": "raw/mint-accounts.json#HTxbgkRZ4CkioKebc4Dj3K4BhfpGVtcW8JK867i5oyYU",
+        "mayhem_mode": false,
+        "cashback_fee_basis_points": "0",
+        "basis": ["trade_instruction_token_program_account", "finalized_mint_account_owner", "TradeEvent mode fields"]
+      },
+      "trade": {
+        "quote_amount_atomic": "83702797",
+        "token_amount_atomic": "382196637318",
+        "gross_curve_quote_output_atomic": "83702797",
+        "net_wallet_quote_credit_atomic": "82656511",
+        "output_amount_atomic": "82656511"
+      },
+      "fees": {
+        "protocol_bps": "95", "protocol_fee_atomic": "795177", "creator_bps": "30", "creator_fee_atomic": "251109",
+        "cashback_bps": "0", "cashback_atomic": "0", "buyback_bps": "5000", "buyback_atomic": "397588", "network_fee_lamports": "25000"
+      },
+      "curve": {
+        "pre": {"virtual_sol_reserves_lamports": "84004688147", "virtual_token_reserves_atomic": "383192906891023", "real_sol_reserves_lamports": "54004688147", "real_token_reserves_atomic": "103292906891023"},
+        "post": {"virtual_sol_reserves_lamports": "83920985350", "virtual_token_reserves_atomic": "383575103528341", "real_sol_reserves_lamports": "53920985350", "real_token_reserves_atomic": "103675103528341"},
+        "pre_state_source": "exact inverse of decoded post-state and TradeEvent deltas"
+      },
+      "raw": {"path": "raw/5At5itU6139EwphTWbM4RZp3peq4X4yn3mDTf1Pe5fG7JQUw5AN8zFCjkyEE5gfwbtrjQVrQvHrZiKSEZvWDtnf5.json", "file_sha256": "01bd4faea210888e5f4f52903712f2520efdb86a43fd28f3c038e1eefe683552", "program_data_sha256": "ebf7ed6d7876eb57460cee0d277fe90a93e4fbea67932011964a7420904a9fea"}
+    },
+    {
+      "id": "cashback-buy-v1",
+      "mode": "CASHBACK",
+      "token_program_family": "TOKEN_2022",
+      "side": "BUY",
+      "event_schema_pin": "pump-current-2026-07-15",
+      "position": {"slot": "443739685", "transaction_index": "996", "instruction_outer_index": "5", "instruction_inner_index": null, "event_log_index": "47"},
+      "signature": "53SFCxXQkWff1s3n4Yf6oNFiPs3zVZMYAAVuoWLkC6WhbnsNjgEbg4J9RuawHtdp8Q6yEz7465pzhG4iK8EWfjsq",
+      "block_time": "1788365619",
+      "mint": "eqnidra8rp8UttMDx67GrWuHjKuzkiayEsXB9wBpump",
+      "creator": "9NH3BiyPCuhA5bvby8oDHPYEJr6XmV7Vp9boYygqPaBd",
+      "user": "Hd9cUvNqbqzagVeJqwMq1UmMTs1iVbLsUbo4gXTx18by",
+      "instruction_name": "buy_exact_quote_in",
+      "formula": "pump-buy-exact-gross-sol-v1",
+      "mode_evidence": {
+        "token_program": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+        "mint_account_evidence": "raw/mint-accounts.json#eqnidra8rp8UttMDx67GrWuHjKuzkiayEsXB9wBpump",
+        "mayhem_mode": false,
+        "cashback_fee_basis_points": "30",
+        "basis": ["trade_instruction_token_program_account", "finalized_mint_account_owner", "non-zero TradeEvent cashback component"]
+      },
+      "trade": {
+        "quote_amount_atomic": "987654320",
+        "token_amount_atomic": "12688311706326",
+        "fee_basis_quote_atomic": "987654320",
+        "gross_wallet_quote_debit_atomic": "1000000000",
+        "net_curve_quote_input_atomic": "987654320",
+        "output_amount_atomic": "12688311706326"
+      },
+      "fees": {
+        "protocol_bps": "95", "protocol_fee_atomic": "9382717", "creator_bps": "0", "creator_fee_atomic": "0",
+        "cashback_bps": "30", "cashback_atomic": "2962963", "cashback_receivable_atomic": "2962963",
+        "buyback_bps": "5000", "buyback_atomic": "4691358", "network_fee_lamports": "5985000"
+      },
+      "curve": {
+        "pre": {"virtual_sol_reserves_lamports": "49565174677", "virtual_token_reserves_atomic": "649447928894115", "real_sol_reserves_lamports": "19565174677", "real_token_reserves_atomic": "369547928894115"},
+        "post": {"virtual_sol_reserves_lamports": "50552828997", "virtual_token_reserves_atomic": "636759617187789", "real_sol_reserves_lamports": "20552828997", "real_token_reserves_atomic": "356859617187789"},
+        "pre_state_source": "exact inverse of decoded post-state and TradeEvent deltas"
+      },
+      "raw": {"path": "raw/53SFCxXQkWff1s3n4Yf6oNFiPs3zVZMYAAVuoWLkC6WhbnsNjgEbg4J9RuawHtdp8Q6yEz7465pzhG4iK8EWfjsq.json", "file_sha256": "a4f3f8158b13bea1dca5e60d46db97c1f2142667f1dd574af3b342845c922611", "program_data_sha256": "72d125f46d6c960afd0483de8122f1439ecfdc8ca5c4f3894a46995342ebcb8f"}
+    },
+    {
+      "id": "cashback-sell-v1",
+      "mode": "CASHBACK",
+      "token_program_family": "TOKEN_2022",
+      "side": "SELL",
+      "event_schema_pin": "pump-current-2026-07-15",
+      "position": {"slot": "443741848", "transaction_index": "640", "instruction_outer_index": "2", "instruction_inner_index": null, "event_log_index": "15"},
+      "signature": "2Qa2ZHAKAzs6KWayPmobYP4YNkJfbnJ3m6oSQjNRNBo57Z7KgZBm22TPBmCcEawXthWfpTLBZVdMWWbf3Trspreo",
+      "block_time": "1788366306",
+      "mint": "eqnidra8rp8UttMDx67GrWuHjKuzkiayEsXB9wBpump",
+      "creator": "9NH3BiyPCuhA5bvby8oDHPYEJr6XmV7Vp9boYygqPaBd",
+      "user": "H91LLyNSLTDncfp1HLRFFw5zb1wauEn2X6yvfoQsVp27",
+      "instruction_name": "sell",
+      "formula": "pump-sell-exact-token-in-v1",
+      "mode_evidence": {
+        "token_program": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+        "mint_account_evidence": "raw/mint-accounts.json#eqnidra8rp8UttMDx67GrWuHjKuzkiayEsXB9wBpump",
+        "mayhem_mode": false,
+        "cashback_fee_basis_points": "30",
+        "basis": ["trade_instruction_token_program_account", "finalized_mint_account_owner", "non-zero TradeEvent cashback component"]
+      },
+      "trade": {
+        "quote_amount_atomic": "9173014",
+        "token_amount_atomic": "110728700055",
+        "gross_curve_quote_output_atomic": "9173014",
+        "net_wallet_quote_credit_atomic": "9058350",
+        "output_amount_atomic": "9058350"
+      },
+      "fees": {
+        "protocol_bps": "95", "protocol_fee_atomic": "87144", "creator_bps": "0", "creator_fee_atomic": "0",
+        "cashback_bps": "30", "cashback_atomic": "27520", "cashback_receivable_atomic": "27520",
+        "buyback_bps": "5000", "buyback_atomic": "43572", "network_fee_lamports": "32000"
+      },
+      "curve": {
+        "pre": {"virtual_sol_reserves_lamports": "51644610107", "virtual_token_reserves_atomic": "623298345985417", "real_sol_reserves_lamports": "21644610107", "real_token_reserves_atomic": "343398345985417"},
+        "post": {"virtual_sol_reserves_lamports": "51635437093", "virtual_token_reserves_atomic": "623409074685472", "real_sol_reserves_lamports": "21635437093", "real_token_reserves_atomic": "343509074685472"},
+        "pre_state_source": "exact inverse of decoded post-state and TradeEvent deltas"
+      },
+      "raw": {"path": "raw/2Qa2ZHAKAzs6KWayPmobYP4YNkJfbnJ3m6oSQjNRNBo57Z7KgZBm22TPBmCcEawXthWfpTLBZVdMWWbf3Trspreo.json", "file_sha256": "6084319255ef2ed630ae078eba894a86b7744c7632095339ea21ce809d8aed5a", "program_data_sha256": "04a4a97ba269565f5d05195e2fb785e0187332a9801c54b4bfa234707a6d1f7a"}
+    },
+    {
+      "id": "mayhem-user-buy-v1",
+      "mode": "MAYHEM",
+      "token_program_family": "TOKEN_2022",
+      "side": "BUY",
+      "event_schema_pin": "pump-current-2026-07-15",
+      "position": {"slot": "443739971", "transaction_index": "250", "instruction_outer_index": "5", "instruction_inner_index": null, "event_log_index": "29"},
+      "signature": "4goThRiXfmr6crzMfaT2gB9TWiizNHD1Q2F8YzeePgrRz2Nd2UyfhQv17uam9Qq2bzH8MnzZsY28x5Kq5fjARz57",
+      "block_time": "1788365711",
+      "mint": "9pGu6Hwgs5ZohxwneGkDGX16T89VXhhWNMTYK1Rapump",
+      "creator": "9ah3qLozF7q3321CVcW3dTQgSnWTHU2XHohkTzndbLG7",
+      "user": "8FXJtB7P2RDcNtSAf5J8QwFPUxtqej3igiiE5XvB9Kgo",
+      "instruction_name": "buy_exact_sol_in",
+      "formula": "pump-buy-exact-gross-sol-v1",
+      "mode_evidence": {
+        "token_program": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+        "mint_account_evidence": "raw/mint-accounts.json#9pGu6Hwgs5ZohxwneGkDGX16T89VXhhWNMTYK1Rapump",
+        "mayhem_mode": true,
+        "documented_fee_exempt_agent": "BwWK17cbHxwWBKZkUYvzxLcNQ1YVyaFezduWbtm2de6s",
+        "is_fee_exempt_agent_trade": false,
+        "basis": ["TradeEvent mayhem_mode=true", "user differs from official agent", "non-zero 95/30 fees", "Token-2022 owner evidence"]
+      },
+      "trade": {
+        "quote_amount_atomic": "7039331",
+        "token_amount_atomic": "244077720304",
+        "fee_basis_quote_atomic": "7039331",
+        "gross_wallet_quote_debit_atomic": "7127323",
+        "net_curve_quote_input_atomic": "7039331",
+        "output_amount_atomic": "244077720304"
+      },
+      "fees": {
+        "protocol_bps": "95", "protocol_fee_atomic": "66874", "creator_bps": "30", "creator_fee_atomic": "21118",
+        "cashback_bps": "0", "cashback_atomic": "0", "buyback_bps": "0", "buyback_atomic": "0", "network_fee_lamports": "61000"
+      },
+      "curve": {
+        "pre": {"virtual_sol_reserves_lamports": "29934966705", "virtual_token_reserves_atomic": "1038192068616568", "real_sol_reserves_lamports": "81929909", "real_token_reserves_atomic": "758292068616568"},
+        "post": {"virtual_sol_reserves_lamports": "29942006036", "virtual_token_reserves_atomic": "1037947990896264", "real_sol_reserves_lamports": "88969240", "real_token_reserves_atomic": "758047990896264"},
+        "pre_state_source": "exact inverse of decoded post-state and TradeEvent deltas"
+      },
+      "raw": {"path": "raw/4goThRiXfmr6crzMfaT2gB9TWiizNHD1Q2F8YzeePgrRz2Nd2UyfhQv17uam9Qq2bzH8MnzZsY28x5Kq5fjARz57.json", "file_sha256": "5c15d65b38730b690504e7666ba343b7c795b28f0a51dbf298aadb43d5ee52e0", "program_data_sha256": "61b5a430c1daa88fe1e571eb49fe893c867e926a9cbf253d65b57d6a7d854a76"}
+    },
+    {
+      "id": "mayhem-user-sell-v1",
+      "mode": "MAYHEM",
+      "token_program_family": "TOKEN_2022",
+      "side": "SELL",
+      "event_schema_pin": "pump-current-2026-07-15",
+      "position": {"slot": "443740470", "transaction_index": "55", "instruction_outer_index": "4", "instruction_inner_index": null, "event_log_index": "34"},
+      "signature": "wubPBYa9LimxqhrbmfMCGz4iWHqyMtH78poDhhK7Cf5bbDFy8asCbUBtt6hDXPUVhrjnmDfbrkaWLeHibRz4KeW",
+      "block_time": "1788365868",
+      "mint": "9pGu6Hwgs5ZohxwneGkDGX16T89VXhhWNMTYK1Rapump",
+      "creator": "9ah3qLozF7q3321CVcW3dTQgSnWTHU2XHohkTzndbLG7",
+      "user": "8FXJtB7P2RDcNtSAf5J8QwFPUxtqej3igiiE5XvB9Kgo",
+      "instruction_name": "sell",
+      "formula": "pump-sell-exact-token-in-v1",
+      "mode_evidence": {
+        "token_program": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+        "mint_account_evidence": "raw/mint-accounts.json#9pGu6Hwgs5ZohxwneGkDGX16T89VXhhWNMTYK1Rapump",
+        "mayhem_mode": true,
+        "documented_fee_exempt_agent": "BwWK17cbHxwWBKZkUYvzxLcNQ1YVyaFezduWbtm2de6s",
+        "is_fee_exempt_agent_trade": false,
+        "basis": ["TradeEvent mayhem_mode=true", "user differs from official agent", "non-zero 95/30 fees", "Token-2022 owner evidence"]
+      },
+      "trade": {
+        "quote_amount_atomic": "16083155",
+        "token_amount_atomic": "4196160905119",
+        "gross_curve_quote_output_atomic": "16083155",
+        "net_wallet_quote_credit_atomic": "15882115",
+        "output_amount_atomic": "15882115"
+      },
+      "fees": {
+        "protocol_bps": "95", "protocol_fee_atomic": "152790", "creator_bps": "30", "creator_fee_atomic": "48250",
+        "cashback_bps": "0", "cashback_atomic": "0", "buyback_bps": "0", "buyback_atomic": "0", "network_fee_lamports": "61000"
+      },
+      "curve": {
+        "pre": {"virtual_sol_reserves_lamports": "3977094441", "virtual_token_reserves_atomic": "1033444017798443", "real_sol_reserves_lamports": "17765778", "real_token_reserves_atomic": "753544017798443"},
+        "post": {"virtual_sol_reserves_lamports": "3961011286", "virtual_token_reserves_atomic": "1037640178703562", "real_sol_reserves_lamports": "1682623", "real_token_reserves_atomic": "757740178703562"},
+        "pre_state_source": "exact inverse of decoded post-state and TradeEvent deltas"
+      },
+      "raw": {"path": "raw/wubPBYa9LimxqhrbmfMCGz4iWHqyMtH78poDhhK7Cf5bbDFy8asCbUBtt6hDXPUVhrjnmDfbrkaWLeHibRz4KeW.json", "file_sha256": "d1ca6fd7b8e5fa6a91717f5aa8638832f213cd29f0efc058cd01328d200de04d", "program_data_sha256": "c2770c847dc7bf0ec450c5c8383cc4a89eb1087a9374d688c3b311ef3088006e"}
+    }
+  ]
+}

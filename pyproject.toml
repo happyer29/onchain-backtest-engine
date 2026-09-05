@@ -1,0 +1,121 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "on-chain-backtest-engine"
+version = "0.1.0"
+description = "Deterministic self-hosted on-chain backtesting engine"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.13,<3.14"
+keywords = [
+  "backtesting",
+  "blockchain",
+  "self-hosted",
+  "on-chain",
+  "reproducibility",
+  "solana",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Framework :: FastAPI",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.13",
+]
+dependencies = [
+  "clickhouse-connect>=1.7.2,<2",
+  "duckdb>=1.5.5,<2",
+  "fastapi>=0.141.1,<1",
+  "numpy>=2.5.2,<3",
+  "pyarrow>=25.0.1,<26",
+  "pydantic>=2.13.4,<3",
+  "typer>=0.27.1,<1",
+  "uvicorn>=0.52.4,<1",
+]
+
+[project.scripts]
+backtest = "backtest.bootstrap.cli:app"
+backtest-job-child = "backtest.bootstrap.job_child:main"
+
+[dependency-groups]
+dev = [
+  "httpx2>=2,<3",
+  "hypothesis>=6.167,<7",
+  "import-linter>=2.7,<3",
+  "mypy>=2.3,<3",
+  "pytest>=9.1,<10",
+  "pytest-cov>=7.1,<8",
+  "ruff>=0.16.4,<1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/backtest"]
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+  "/.agents",
+  "/.github",
+  "/AGENTS.md",
+  "/AGENTS.ru.md",
+  "/docs/indexer-profile.md",
+  "/docs/indexer-profile.ru.md",
+  "/docs/release-readiness.md",
+  "/docs/release-readiness.ru.md",
+  "/docs/public-release-checklist.md",
+  "/docs/public-release-checklist.ru.md",
+  "/docs/architecture-audit-and-rust-plan.ru.md",
+  "/docs/rust-migration-plan.md",
+  "/docs/rust-migration-plan.ru.md",
+]
+
+[tool.uv]
+required-environments = [
+  "sys_platform == 'darwin' and platform_machine == 'arm64'",
+  "sys_platform == 'linux' and platform_machine == 'x86_64'",
+]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["B", "C4", "E", "F", "I", "RUF", "SIM", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+packages = ["backtest"]
+show_error_codes = true
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = ["clickhouse_connect.*", "duckdb.*", "pyarrow.*", "uvicorn.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-config --strict-markers -m 'not performance'"
+testpaths = ["tests"]
+markers = [
+  "live: opt-in tests that require external services",
+  "integration: tests spanning multiple adapters",
+  "performance: opt-in representative capacity and throughput tests",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["backtest"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+fail_under = 80

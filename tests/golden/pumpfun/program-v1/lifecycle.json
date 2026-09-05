@@ -1,0 +1,37 @@
+{
+  "schema": "pumpfun-program-v1-lifecycle-golden-v1",
+  "network_id": "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d",
+  "program_id": "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P",
+  "mint": "7HJCxCMTnit9rLS21e9SMdisJaaZ9A5P3N1Lq99roeTz",
+  "bonding_curve": "5HSH4BggaE4wwi2LtQRmu1x6tGyySZhGfEQRoGqELsLg",
+  "events": [
+    {
+      "id": "completion-v1",
+      "event": "CompleteEvent",
+      "signature": "31QhkqJrmW4MPZ2ABRUZMKtzV72aRKn9kXM1BJMqGyxfMRbys7vf97c32HWjAsLrLnS1vbjoz5WVJycxEod8qPRK",
+      "slot": "443742171",
+      "transaction_index": "509",
+      "block_time": "1788366409",
+      "event_log_index": "48",
+      "terminal_trade_log_index": "44",
+      "terminal_real_token_reserves_atomic": "0",
+      "quote_mint": "11111111111111111111111111111111",
+      "raw": {"path": "raw/31QhkqJrmW4MPZ2ABRUZMKtzV72aRKn9kXM1BJMqGyxfMRbys7vf97c32HWjAsLrLnS1vbjoz5WVJycxEod8qPRK.json", "file_sha256": "926cb7707a57be0fb820a3b2ef74fe01eebc0274fd7ede5bc951be1d6897e5f6", "program_data_sha256": "01a68c5774df50627d51e0fe126b34fa0fed681435951d64270d422408830fb9"}
+    },
+    {
+      "id": "pump-amm-migration-v1",
+      "event": "CompletePumpAmmMigrationEvent",
+      "signature": "49mdxJ2sLHzVhQe52gUQQV9DfeDqEHohji5uqVK2RC62wbxDXht6nnvc9w3o8bEk2wUA45T53hZbAcpJSozqFjL6",
+      "slot": "443742173",
+      "transaction_index": "1209",
+      "block_time": "1788366409",
+      "event_log_index": "181",
+      "mint_amount_atomic": "206900000000000",
+      "sol_amount_lamports": "84990359380",
+      "pool_migration_fee_lamports": "15000001",
+      "pool": "5hb55hEEaWbKyC8TzvvRzXZtT9Byabet45s5Md7VwJuK",
+      "quote_mint": "11111111111111111111111111111111",
+      "raw": {"path": "raw/49mdxJ2sLHzVhQe52gUQQV9DfeDqEHohji5uqVK2RC62wbxDXht6nnvc9w3o8bEk2wUA45T53hZbAcpJSozqFjL6.json", "file_sha256": "f5663a4ad4ba61f1203ebed9ef767a33de52b72360ea28679e4982041fd004aa", "program_data_sha256": "3e799f7efb2525c2e3cdcd90296522c425fa22c9ec1de0cba2aa54587ad73112"}
+    }
+  ]
+}

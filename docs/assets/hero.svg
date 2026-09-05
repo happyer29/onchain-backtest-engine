@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="320" viewBox="0 0 1280 640" role="img" aria-labelledby="title description">
+  <title id="title">On-Chain Backtest Engine</title>
+  <desc id="description">Deterministic replay on one workstation or server</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#070a12"/>
+      <stop offset="0.55" stop-color="#0b1120"/>
+      <stop offset="1" stop-color="#101827"/>
+    </linearGradient>
+    <linearGradient id="mint" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#4ee1a0"/>
+      <stop offset="1" stop-color="#7cf7cf"/>
+    </linearGradient>
+    <linearGradient id="violet" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8b7dff"/>
+      <stop offset="1" stop-color="#a99fff" stop-opacity="0.25"/>
+    </linearGradient>
+    <radialGradient id="glow">
+      <stop offset="0" stop-color="#4ee1a0" stop-opacity="0.26"/>
+      <stop offset="1" stop-color="#4ee1a0" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#ffffff" stroke-opacity="0.04"/>
+    </pattern>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="28" flood-color="#000000" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+
+  <rect width="1280" height="640" fill="url(#background)"/>
+  <rect width="1280" height="640" fill="url(#grid)"/>
+  <circle cx="1110" cy="90" r="360" fill="url(#glow)"/>
+  <circle cx="140" cy="610" r="280" fill="#8b7dff" opacity="0.08"/>
+
+  <g filter="url(#shadow)">
+    <rect x="64" y="64" width="1152" height="512" rx="36" fill="#0d1421" fill-opacity="0.92" stroke="#ffffff" stroke-opacity="0.09"/>
+  </g>
+
+  <g transform="translate(112 112)">
+    <rect width="72" height="72" rx="20" fill="url(#mint)"/>
+    <path d="M22 19v34h29M29 43l9-10 7 6 11-15" fill="none" stroke="#07110d" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <g font-family="Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">
+    <text x="112" y="250" fill="#f5f7fb" font-size="68" font-weight="760" letter-spacing="-2">ON-CHAIN</text>
+    <text x="112" y="320" fill="#f5f7fb" font-size="68" font-weight="760" letter-spacing="-2">BACKTEST ENGINE</text>
+    <text x="115" y="360" fill="#aeb9ca" font-size="20" font-weight="450">Deterministic replay on one workstation or server.</text>
+
+    <g font-size="15" font-weight="700" letter-spacing="1.3">
+      <rect x="112" y="388" width="172" height="42" rx="21" fill="#4ee1a0" fill-opacity="0.11" stroke="#4ee1a0" stroke-opacity="0.35"/>
+      <text x="136" y="415" fill="#7cf7cf">SELF-HOSTED</text>
+      <rect x="296" y="388" width="202" height="42" rx="21" fill="#8b7dff" fill-opacity="0.11" stroke="#8b7dff" stroke-opacity="0.38"/>
+      <text x="321" y="415" fill="#b8afff">DETERMINISTIC</text>
+      <rect x="510" y="388" width="165" height="42" rx="21" fill="#ffffff" fill-opacity="0.045" stroke="#ffffff" stroke-opacity="0.13"/>
+      <text x="535" y="415" fill="#d8dfeb">FAIL-CLOSED</text>
+    </g>
+
+    <text x="112" y="490" fill="#64748b" font-size="16" font-weight="650" letter-spacing="1.2">PARQUET</text>
+    <path d="M203 484h42m-10-8 10 8-10 8" fill="none" stroke="#4ee1a0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="264" y="490" fill="#64748b" font-size="16" font-weight="650" letter-spacing="1.2">REPLAYPACK</text>
+    <path d="M387 484h42m-10-8 10 8-10 8" fill="none" stroke="#4ee1a0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="448" y="490" fill="#64748b" font-size="16" font-weight="650" letter-spacing="1.2">ENGINE</text>
+    <path d="M527 484h42m-10-8 10 8-10 8" fill="none" stroke="#4ee1a0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="588" y="490" fill="#64748b" font-size="16" font-weight="650" letter-spacing="1.2">RESULT</text>
+  </g>
+
+  <g transform="translate(768 128)">
+    <rect width="368" height="344" rx="28" fill="#0a0f19" stroke="#ffffff" stroke-opacity="0.08"/>
+    <g transform="translate(30 28)" font-family="Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">
+      <circle cx="6" cy="6" r="6" fill="#4ee1a0"/>
+      <text x="24" y="12" fill="#9aa8bc" font-size="13" font-weight="700" letter-spacing="1.2">CANONICAL REPLAY</text>
+    </g>
+    <g transform="translate(30 82)">
+      <line x1="0" y1="216" x2="308" y2="216" stroke="#ffffff" stroke-opacity="0.1"/>
+      <line x1="0" y1="144" x2="308" y2="144" stroke="#ffffff" stroke-opacity="0.06"/>
+      <line x1="0" y1="72" x2="308" y2="72" stroke="#ffffff" stroke-opacity="0.06"/>
+      <path d="M0 194 C38 193 43 164 76 169 S119 122 151 133 S201 62 230 83 S272 32 308 20" fill="none" stroke="url(#mint)" stroke-width="4" stroke-linecap="round"/>
+      <path d="M0 205 C41 201 58 190 89 193 S132 161 165 170 S217 117 247 132 S280 106 308 96" fill="none" stroke="url(#violet)" stroke-width="3" stroke-linecap="round" opacity="0.9"/>
+      <g fill="#4ee1a0">
+        <circle cx="76" cy="169" r="5"/>
+        <circle cx="151" cy="133" r="5"/>
+        <circle cx="230" cy="83" r="5"/>
+        <circle cx="308" cy="20" r="5"/>
+      </g>
+      <g fill="#8b7dff">
+        <circle cx="89" cy="193" r="4"/>
+        <circle cx="165" cy="170" r="4"/>
+        <circle cx="247" cy="132" r="4"/>
+        <circle cx="308" cy="96" r="4"/>
+      </g>
+    </g>
+  </g>
+</svg>

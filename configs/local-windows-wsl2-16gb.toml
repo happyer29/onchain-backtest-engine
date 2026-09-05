@@ -1,0 +1,82 @@
+# Windows 11 support uses WSL2 with Ubuntu x86_64, not native Win32 Python.
+# Keep both this repository and data_root inside the WSL Linux filesystem.
+# /mnt/c, /mnt/d, other DrvFS paths, and network mounts are unsupported for
+# runtime artifacts because their crash-durability and mmap contracts differ.
+
+[paths]
+data_root = "var"
+
+[resources]
+max_aggregate_child_memory_mb = 8192
+max_builder_memory_mb = 6144
+builder_peak_private_memory_mb = 7168
+run_peak_private_memory_mb = 3072
+max_parallel_runs = 1
+tmp_quota_gb = 32
+max_run_tmp_gb = 2
+max_run_output_gb = 4
+disk_low_watermark_gb = 32
+disk_emergency_watermark_gb = 16
+native_threads_per_process = 1
+memory_safety_reserve_mb = 1024
+page_cache_floor_mb = 2048
+host_staging_output_reserve_mb = 512
+fixed_shared_overhead_mb = 256
+memory_breach_samples = 2
+swap_activity_samples = 3
+
+[replay]
+backend = "reference-python-v1"
+batch_rows = 65536
+readahead = 1
+output_buffer_rows = 8192
+threads = 1
+
+[retention]
+minimum_artifact_age_seconds = 86400
+trash_grace_seconds = 86400
+maximum_sweep_gb = 32
+
+# Configure both paths only when a different physical device/host is mounted
+# inside WSL. Do not use /mnt/c or /mnt/d as a runtime or backup durability
+# claim without a separate verified restore contract.
+# [backup]
+# target_root = "/mnt/wsl/external-disk/backtest-backup"
+# restore_verify_parent = "/mnt/wsl/external-disk/backtest-restore-drills"
+# allow_same_device_for_drill = false
+# target_encryption_verified = true
+
+[planning]
+max_remote_gb = 16
+max_local_gb = 16
+max_days = 7
+staging_reserve_gb = 4
+max_total_blocks = 2000000
+max_total_shards = 4096
+max_shard_blocks = 250000
+max_query_execution_seconds = 300
+max_query_memory_mb = 4096
+max_query_result_rows = 10000000
+
+[control]
+host = "127.0.0.1"
+port = 8081
+progress_interval_ms = 500
+max_request_mb = 2
+secure_cookie = false
+
+[source]
+source_id = "default-indexer"
+host = "127.0.0.1"
+port = 8123
+database = "default"
+username = "default"
+secret_ref = "BACKTEST_INDEXER_PASSWORD"
+secure = false
+# Set true only when a non-loopback endpoint is reached through an already
+# authenticated VPN/SSH tunnel instead of driver-managed verified TLS.
+verified_private_tunnel = false
+# Direct remote plaintext HTTP is unsafe and disabled by default. If explicitly
+# enabled in a gitignored local.toml, secure and verified_private_tunnel must
+# both remain false; credentials, queries, and results may be intercepted.
+allow_insecure_remote_http = false

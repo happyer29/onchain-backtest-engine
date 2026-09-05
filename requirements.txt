@@ -1,0 +1,3 @@
+# Compatibility entry point for tools that only understand requirements files.
+# pyproject.toml and uv.lock are the authoritative dependency definitions.
+-e .

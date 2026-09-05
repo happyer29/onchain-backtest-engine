@@ -1,0 +1,1 @@
+"""Columnar storage adapters."""

@@ -1,0 +1,70 @@
+{
+  "schema": "solana-finalized-pump-event-excerpt/v1",
+  "event_schema_pin": "pump-current-2026-07-15",
+  "network_id": "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d",
+  "rpc": {
+    "method": "getTransaction",
+    "config": {"commitment": "finalized", "encoding": "jsonParsed", "maxSupportedTransactionVersion": 0},
+    "full_result_canonical_sha256": "0730f12f3656f81f51bf7512419e2823132d38921a5cd770b67f217a04deb613"
+  },
+  "transaction": {
+    "signature": "4goThRiXfmr6crzMfaT2gB9TWiizNHD1Q2F8YzeePgrRz2Nd2UyfhQv17uam9Qq2bzH8MnzZsY28x5Kq5fjARz57",
+    "slot": "443739971",
+    "block_time": "1788365711",
+    "transaction_index": "250",
+    "meta_err": null,
+    "fee_lamports": "61000"
+  },
+  "instruction": {
+    "program_id": "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P",
+    "outer_index": "5",
+    "inner_index": null,
+    "data_base58": "PvwdRapqdNvNMfdNnHezZp6EQnHUXm9oqi",
+    "mint_account": "9pGu6Hwgs5ZohxwneGkDGX16T89VXhhWNMTYK1Rapump",
+    "user_account": "8FXJtB7P2RDcNtSAf5J8QwFPUxtqej3igiiE5XvB9Kgo",
+    "quote_mint_account": "11111111111111111111111111111111",
+    "token_program_account": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+  },
+  "program_data": {
+    "log_index": "29",
+    "log_line": "Program data: vdt/007mYe6C+cT+Ppqe+jYJC3hqc9PowMI5dTVWmcHuahBPoQnA32NpawAAAAAA8HIq1DgAAAABa7o1o/umlA4T7dcRK7Vy7TQdnr36VUmvNCDzMYG8rAyPS5hqAAAAABTBrvgGAAAAiO5KGQKwAwAYkE0FAAAAAIhWOM1wsQIA6JMUH7GOnxV02BDheOGeMGBOMXWqLkoy38hgByfRBwlfAAAAAAAAADoFAQAAAAAAf37yC9BphaNeqOBfMhc3PS7xM0y1U4xWF1EYs20vIggeAAAAAAAAAH5SAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAGJ1eV9leGFjdF9zb2xfaW4BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABjaWsAAAAAABTBrvgGAAAAGJBNBQAAAAA=",
+    "decoded_bytes_sha256": "61b5a430c1daa88fe1e571eb49fe893c867e926a9cbf253d65b57d6a7d854a76",
+    "raw_size_bytes": "371",
+    "trailing_bytes": "0",
+    "event_name": "TradeEvent",
+    "fields": {
+      "mint": "9pGu6Hwgs5ZohxwneGkDGX16T89VXhhWNMTYK1Rapump",
+      "sol_amount": "7039331",
+      "token_amount": "244077720304",
+      "is_buy": true,
+      "user": "8FXJtB7P2RDcNtSAf5J8QwFPUxtqej3igiiE5XvB9Kgo",
+      "timestamp": "1788365711",
+      "virtual_sol_reserves": "29942006036",
+      "virtual_token_reserves": "1037947990896264",
+      "real_sol_reserves": "88969240",
+      "real_token_reserves": "758047990896264",
+      "fee_recipient": "GesfTA3X2arioaHp8bbKdjG9vJtskViWACZoYvxp4twS",
+      "fee_basis_points": "95",
+      "fee": "66874",
+      "creator": "9ah3qLozF7q3321CVcW3dTQgSnWTHU2XHohkTzndbLG7",
+      "creator_fee_basis_points": "30",
+      "creator_fee": "21118",
+      "track_volume": true,
+      "total_unclaimed_tokens": "0",
+      "total_claimed_tokens": "0",
+      "current_sol_volume": "0",
+      "last_update_timestamp": "0",
+      "ix_name": "buy_exact_sol_in",
+      "mayhem_mode": true,
+      "cashback_fee_basis_points": "0",
+      "cashback": "0",
+      "buyback_fee_basis_points": "0",
+      "buyback_fee": "0",
+      "shareholders": [],
+      "quote_mint": "11111111111111111111111111111111",
+      "quote_amount": "7039331",
+      "virtual_quote_reserves": "29942006036",
+      "real_quote_reserves": "88969240"
+    }
+  }
+}

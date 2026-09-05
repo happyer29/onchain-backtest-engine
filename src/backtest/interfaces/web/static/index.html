@@ -1,0 +1,553 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>On-Chain Backtest Engine · Control</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Single-host control plane</p>
+        <h1>On-Chain Backtest Engine</h1>
+      </div>
+      <div id="health" class="status" role="status" aria-live="polite">Проверяю API…</div>
+    </header>
+
+    <main>
+      <section class="panel intro">
+        <div>
+          <p class="eyebrow">Локальный контур</p>
+          <h2>Управление без участия UI в hot loop</h2>
+        </div>
+        <p>
+          Команды разрешаются в exact RunSpec и надёжно сохраняются в SQLite.
+          Local supervisor запускает тяжёлые jobs в изолированных процессах.
+          UI не участвует в hot loop и не получает Parquet или ReplayPack.
+        </p>
+      </section>
+
+      <!-- Dataset planning stays in the main workflow rather than stretching the top bar. -->
+      <section class="panel" aria-labelledby="dataset-plan-heading">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Selective acquisition</p>
+            <h2 id="dataset-plan-heading">Спланировать и подготовить dataset</h2>
+          </div>
+        </div>
+        <p class="notice">
+          Сначала создаётся проверяемый exact plan с лимитами и half-open shards.
+          Только принятый plan можно поставить в очередь на prepare-dataset.
+        </p>
+        <form id="dataset-plan-form">
+          <!-- Source identity and the proven chain-position contract define the extraction. -->
+          <div class="field-grid">
+            <label>Source ID<input name="source_id" value="default-indexer" required /></label>
+            <label>Inspection artifact ID<input name="source_inspection_artifact_id" minlength="64" maxlength="64" required /></label>
+            <label>Capability ID<input name="capability_id" required /></label>
+            <label>Logical columns (через запятую)<input name="columns" required /></label>
+            <label>Network ID<input name="network_id" value="solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d" required /></label>
+            <label>Position schema<input name="position_schema_id" value="block32-transaction32-v1" required /></label>
+
+            <!-- Range and tail controls are explicit because incomplete settlement fails closed. -->
+            <label>From block ordinal<input name="from_block_ordinal" type="number" min="0" required /></label>
+            <label>To block ordinal (exclusive)<input name="to_block_ordinal" type="number" min="1" required /></label>
+            <label>Warmup, blocks<input name="warmup_blocks" type="number" min="0" value="0" required /></label>
+            <label>Settlement tail, blocks<input name="settlement_tail_blocks" type="number" min="0" value="0" required /></label>
+            <label>Max shard, blocks<input name="max_shard_blocks" type="number" min="1" value="100000" required /></label>
+
+            <!-- Admission limits bound source traffic, local storage, and query memory. -->
+            <label>Max source, GiB<input name="max_remote_gib" type="number" min="1" value="20" required /></label>
+            <label>Max local, GiB<input name="max_local_gib" type="number" min="1" value="50" required /></label>
+            <label>Max days<input name="max_days" type="number" min="1" value="30" required /></label>
+            <label>Query memory, MiB<input name="query_memory_mib" type="number" min="64" value="1024" required /></label>
+          </div>
+          <div class="actions">
+            <button type="submit">Построить exact plan</button>
+            <button id="prepare-dataset" class="secondary" type="button" disabled>Поставить prepare-dataset</button>
+          </div>
+        </form>
+        <pre id="dataset-plan-result" class="result" hidden aria-live="polite"></pre>
+      </section>
+
+      <section class="panel" aria-labelledby="pumpfun-sniping-heading">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Typed strategy contract</p>
+            <h2 id="pumpfun-sniping-heading">Pump.fun Sniping</h2>
+          </div>
+          <span id="sniping-contract-status" class="status">Загрузка contract…</span>
+        </div>
+        <p class="notice">
+          Фиксированные cooldown 600 секунд, buy latency 500 транзакций, ожидание
+          sell decision 2 секунды и sell-all загружаются из API. Execution mode
+          выбирается из закрытого API contract. Atomic amounts передаются как decimal strings.
+        </p>
+        <!-- Keep the limitation in the form while JavaScript shows it only for virtual mode. -->
+        <p id="sniping-execution-warning" class="notice" role="note" hidden>
+          <strong>EXOGENOUS_VIRTUAL_SETTLEMENT — синтетическая модель.</strong>
+          Дефицит SOL при sell покрывается виртуальным источником; результат не является
+          исполнимой on-chain оценкой ликвидности.
+        </p>
+        <details open>
+          <summary>Создать exact sniping run</summary>
+          <form id="sniping-form" class="compact-form">
+            <div class="field-grid">
+              <label>Dataset revision ID<input name="dataset_revision_id" minlength="64" maxlength="71" required /></label>
+              <label>Snapshot ID<input name="snapshot_id" minlength="64" maxlength="71" required /></label>
+              <label>ReplayPack ID (необязательно)<input name="replay_pack_id" minlength="64" maxlength="71" /></label>
+              <label>DeliverySchedule ID (необязательно)<input name="delivery_schedule_id" minlength="64" maxlength="71" /></label>
+              <label>Initial SOL, lamports<input name="initial_sol_balance_lamports" inputmode="numeric" value="100000000000" required /></label>
+              <label>Gross buy budget, lamports<input name="gross_buy_budget_lamports" inputmode="numeric" value="100000000" required /></label>
+              <label>Buy slippage, bps<input name="buy_slippage_bps" type="number" min="0" max="10000" value="500" required /></label>
+              <label>Sell slippage, bps<input name="sell_slippage_bps" type="number" min="0" max="10000" value="500" required /></label>
+              <!-- Populate only the mode values returned by typed contract discovery. -->
+              <label>Execution mode<select id="sniping-execution-mode" name="execution_mode" required disabled><option value="">Загрузка contract…</option></select></label>
+              <label>Sell delay, transactions<input name="sell_delay_transactions" type="number" min="1" value="1" required /></label>
+              <label>Root seed<input name="root_seed" inputmode="numeric" value="42" required /></label>
+              <label>Wallet profile ID<input name="wallet_profile_id" value="pumpfun-solana-wallet-v2" required /></label>
+              <label>Initial UVA state<select name="wallet_mode"><option value="fresh">fresh</option><option value="prewarmed">prewarmed</option></select></label>
+              <label>Wallet profile effective from<input name="wallet_effective_from" type="number" min="0" value="0" required /></label>
+              <label>Wallet profile effective until<input name="wallet_effective_until" type="number" min="1" value="4102444800" required /></label>
+              <label>UVA deposit, lamports<input name="uva_rent_lamports" inputmode="numeric" value="1844400" required /></label>
+              <label>Legacy ATA deposit, lamports<input name="legacy_ata_rent_lamports" inputmode="numeric" value="2039280" required /></label>
+              <label>Token-2022 ATA deposit, lamports<input name="token_2022_ata_rent_lamports" inputmode="numeric" value="2074080" required /></label>
+              <label>Pump fee profile ID<input name="pump_profile_id" value="pump-static-95-30-v1" required /></label>
+              <label>Pump program version<input name="pump_program_version" value="pump-program-static-fee-v1" required /></label>
+              <label>Pump buy math<input name="pump_buy_formula_version" value="pump-buy-exact-gross-sol-v1" required /></label>
+              <label>Pump sell math<input name="pump_sell_formula_version" value="pump-sell-exact-token-in-v1" required /></label>
+              <label>Pump effective from, unix s<input name="pump_effective_from" type="number" min="0" value="0" required /></label>
+              <label>Pump effective until, unix s<input name="pump_effective_until" type="number" min="1" value="4102444800" required /></label>
+              <label>Pump protocol fee, bps<input name="pump_protocol_fee_bps" type="number" min="0" max="9999" value="95" required /></label>
+              <label>Pump creator fee, bps<input name="pump_creator_fee_bps" type="number" min="0" max="9999" value="30" required /></label>
+            </div>
+            <div class="profile-grid">
+              <fieldset>
+                <legend>Solana buy fee profile</legend>
+                <div class="field-grid">
+                  <label>Profile ID<input name="buy_fee_profile_id" value="solana-buy-v1" required /></label>
+                  <label>Formula<input name="buy_fee_formula_version" value="solana-legacy-v0-base-priority-v1" required /></label>
+                  <label>Transaction format<input name="buy_transaction_format" value="V0" required /></label>
+                  <label>Effective from<input name="buy_fee_effective_from" type="number" min="0" value="0" required /></label>
+                  <label>Effective until<input name="buy_fee_effective_until" type="number" min="1" value="4102444800" required /></label>
+                  <label>Signatures<input name="buy_signature_count" type="number" min="1" value="1" required /></label>
+                  <label>Lamports/signature<input name="buy_lamports_per_signature" inputmode="numeric" value="5000" required /></label>
+                  <label>CU limit<input name="buy_compute_unit_limit" type="number" min="1" value="200000" required /></label>
+                  <label>Micro-lamports/CU<input name="buy_micro_lamports_per_cu" inputmode="numeric" value="1000" required /></label>
+                </div>
+              </fieldset>
+              <fieldset>
+                <legend>Solana sell fee profile</legend>
+                <div class="field-grid">
+                  <label>Profile ID<input name="sell_fee_profile_id" value="solana-sell-v1" required /></label>
+                  <label>Formula<input name="sell_fee_formula_version" value="solana-legacy-v0-base-priority-v1" required /></label>
+                  <label>Transaction format<input name="sell_transaction_format" value="V0" required /></label>
+                  <label>Effective from<input name="sell_fee_effective_from" type="number" min="0" value="0" required /></label>
+                  <label>Effective until<input name="sell_fee_effective_until" type="number" min="1" value="4102444800" required /></label>
+                  <label>Signatures<input name="sell_signature_count" type="number" min="1" value="1" required /></label>
+                  <label>Lamports/signature<input name="sell_lamports_per_signature" inputmode="numeric" value="5000" required /></label>
+                  <label>CU limit<input name="sell_compute_unit_limit" type="number" min="1" value="200000" required /></label>
+                  <label>Micro-lamports/CU<input name="sell_micro_lamports_per_cu" inputmode="numeric" value="1000" required /></label>
+                </div>
+              </fieldset>
+            </div>
+            <div class="field-grid">
+              <label>Run backend<select name="run_backend"><option value="reference-pumpfun-sniping-v1">reference-pumpfun-sniping-v1</option><option value="numpy-mmap-pumpfun-sniping-v1">numpy-mmap-pumpfun-sniping-v1</option></select></label>
+              <label>Reader batch rows<input name="reader_batch_rows" type="number" min="1" value="65536" required /></label>
+              <label>Reader readahead<select name="reader_readahead"><option value="1">1</option><option value="2">2</option><option value="4">4</option></select></label>
+              <label>Output buffer rows<input name="output_buffer_rows" type="number" min="1" value="8192" required /></label>
+              <label>Run threads<input name="run_threads" type="number" min="1" value="1" required /></label>
+            </div>
+            <button type="submit">Resolve и поставить backtest</button>
+            <pre id="sniping-result" class="result" hidden aria-live="polite"></pre>
+          </form>
+        </details>
+      </section>
+
+      <section class="panel" aria-labelledby="sniping-results-heading">
+        <div class="section-heading">
+          <div><p class="eyebrow">Exact result artifact</p><h2 id="sniping-results-heading">Sniping summary и сделки</h2></div>
+        </div>
+        <form id="sniping-results-form" class="compact-form">
+          <div class="field-grid">
+            <label>Run artifact ID<input name="run_artifact_id" minlength="64" maxlength="64" required /></label>
+          </div>
+          <div class="actions">
+            <button type="submit">Открыть summary</button>
+            <!-- Keep one bounded result page in the DOM and navigate with exact cursors. -->
+            <button id="sniping-previous-page" class="secondary" type="button" aria-label="Предыдущая страница сделок" aria-controls="sniping-roundtrips-body" disabled>
+              ← Предыдущие
+            </button>
+            <button id="sniping-next-page" class="secondary" type="button" aria-label="Следующая страница сделок" aria-controls="sniping-roundtrips-body" disabled>Следующие сделки</button>
+            <span id="sniping-page-label" class="status">Страница 1 · по 25 сделок</span>
+          </div>
+          <!-- Sorting is deliberately local to the one fetched, bounded page. -->
+          <div class="actions">
+            <label>Сортировка текущей страницы
+              <select id="sniping-page-sort">
+                <option value="target_time">Дата target</option>
+                <option value="target">Позиция target</option>
+                <option value="status">Статус</option>
+                <option value="asset">Токен</option>
+                <!-- Identity and result options remain an explicit client allowlist. -->
+                <option value="developer">Разработчик</option>
+                <option value="realized_pnl">Реализованный PnL</option>
+                <option value="economic_pnl">Экономический PnL</option>
+              </select>
+            </label>
+            <button id="sniping-page-sort-direction" class="secondary" type="button" aria-controls="sniping-roundtrips-body" aria-pressed="true" aria-label="Сортировать по убыванию">
+              Сначала новые ↓
+            </button>
+          </div>
+        </form>
+        <div id="sniping-summary-cards" class="summary-cards" aria-live="polite"></div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Target</th>
+                <th>Asset / developer</th>
+                <th>Lifecycle</th>
+                <th>Buy quote</th>
+                <th>Sell quote</th>
+                <th>Sell liquidity</th>
+                <th>Fees</th>
+                <th>Account / rent</th>
+                <th>Cashback</th>
+                <th>Realized PnL</th>
+                <th>Economic PnL</th>
+                <th>MTM</th>
+              </tr>
+            </thead>
+            <tbody id="sniping-roundtrips-body"><tr><td colspan="12" class="empty">Выберите run artifact</td></tr></tbody>
+          </table>
+        </div>
+        <pre id="sniping-results-error" class="result" hidden></pre>
+      </section>
+
+      <div class="grid">
+        <section class="panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Источник</p>
+              <h2>Проверить схему</h2>
+            </div>
+          </div>
+          <form id="inspect-form">
+            <label for="source-id">Логический source ID</label>
+            <input id="source-id" name="source_id" value="default-indexer" required />
+            <button type="submit">Запустить inspect-source</button>
+          </form>
+          <pre id="inspect-result" class="result" hidden></pre>
+        </section>
+
+        <section class="panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Ресурсы host</p>
+              <h2>Admission budget</h2>
+            </div>
+          </div>
+          <pre id="resources-result" class="result" aria-live="polite">Загрузка…</pre>
+        </section>
+      </div>
+
+      <section class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Exact local execution</p>
+            <h2>Бэктест или sweep</h2>
+          </div>
+        </div>
+        <p class="notice">
+          Форма снача закрепляет exact committed artifacts и immutable defaults,
+          затем ставит уже resolved command в очередь. Aliases и arbitrary JSON не принимаются.
+        </p>
+        <form id="backtest-form">
+          <div class="field-grid">
+            <label>Snapshot ID<input name="snapshot_id" minlength="64" maxlength="71" required /></label>
+            <label>ReplayPack ID (необязательно)<input name="replay_pack_id" minlength="64" maxlength="71" /></label>
+            <label>DeliverySchedule ID (необязательно)<input name="delivery_schedule_id" minlength="64" maxlength="71" /></label>
+            <label>Pool ID<input name="pool_id" required /></label>
+            <label>Продаваемый asset<input name="sold_asset_id" value="SOL" required /></label>
+            <label>Покупаемый asset<input name="bought_asset_id" required /></label>
+            <label>Amount in atomic<input name="amount_in_atomic" type="number" min="1" value="1000000" required /></label>
+            <label>Minimum amount out<input name="minimum_amount_out_atomic" type="number" min="0" value="1" required /></label>
+            <label>Fee, bps<input name="fee_bps" type="number" min="0" max="10000" value="30" required /></label>
+            <label>Execution mode<select name="execution_mode"><option>SHADOW_STATE_REPLAY</option><option>EXOGENOUS_REPLAY</option></select></label>
+            <label>Risk max input<input name="maximum_order_input_atomic" type="number" min="1" value="1000000" required /></label>
+            <label>Initial sold-asset balance<input name="initial_balance_atomic" type="number" min="0" value="1000000000" required /></label>
+            <label>Observation latency, slots<input name="observation_slots" type="number" min="0" value="1" required /></label>
+            <label>Order latency, slots<input name="order_slots" type="number" min="0" value="1" required /></label>
+            <label>Root seed<input name="root_seed" type="number" min="0" value="42" required /></label>
+            <label>Sweep seeds (через запятую)<input name="sweep_seeds" value="42,43" /></label>
+            <label>FeatureSet IDs (через запятую)<input name="feature_set_ids" /></label>
+            <label>ModelSchedule ID<input name="model_schedule_id" minlength="64" maxlength="64" /></label>
+            <label>PredictionSet IDs (через запятую)<input name="prediction_set_ids" /></label>
+            <label>Inference mode<select name="inference_mode"><option>DISABLED</option><option>FROZEN</option><option>EMBEDDED_BATCH</option></select></label>
+            <label>Prediction name<input name="prediction_name" /></label>
+            <label>Missing prediction<select name="inference_missing_policy"><option>REJECT</option><option>NULL</option></select></label>
+            <label>Inference delay, boundaries<input name="inference_delay_boundaries" type="number" min="0" value="0" required /></label>
+            <label>Run backend<select name="run_backend"><option value="reference-python-v1">reference-python-v1</option><option value="numpy-mmap-first-swap-exact-v1">numpy-mmap-first-swap-exact-v1</option></select></label>
+            <label>Reader batch rows<input name="reader_batch_rows" type="number" min="1" value="65536" required /></label>
+            <label>Reader readahead<select name="reader_readahead"><option value="1">1</option><option value="2">2</option><option value="4">4</option></select></label>
+            <label>Output buffer rows<input name="output_buffer_rows" type="number" min="1" value="8192" required /></label>
+            <label>Run threads<input name="run_threads" type="number" min="1" value="1" required /></label>
+          </div>
+          <div class="actions">
+            <button type="submit" data-action="run">Поставить backtest</button>
+            <button type="submit" data-action="sweep" class="secondary">Поставить sweep</button>
+          </div>
+        </form>
+        <pre id="backtest-result" class="result" hidden></pre>
+      </section>
+
+      <section class="panel">
+        <div class="section-heading">
+          <div><p class="eyebrow">Point-in-time ML</p><h2>Exact ML lifecycle</h2></div>
+          <span id="ml-contract-status" class="status">Загрузка contract…</span>
+        </div>
+        <p class="notice">
+          Формы принимают только exact artifact IDs и typed поля. Код, paths, aliases,
+          pickle и произвольный JSON через UI не передаются.
+        </p>
+        <div class="workflow-stack">
+          <details open>
+            <summary>1. Build FeatureSet</summary>
+            <form id="ml-features-form" class="compact-form">
+              <div class="field-grid">
+                <label>ReplayPack ID<input name="replay_pack_id" minlength="64" maxlength="64" required /></label>
+                <label>Replay semantics ID<input name="replay_semantics_id" minlength="64" maxlength="64" required /></label>
+                <label>Replay layout ID<input name="replay_layout_schema_id" minlength="64" maxlength="64" required /></label>
+                <label>Feature<select name="feature_name" id="ml-feature-name"></select></label>
+                <label>Warmup boundaries<input name="warmup_boundaries" type="number" min="0" value="0" required /></label>
+              </div>
+              <button type="submit">Поставить BUILD_FEATURES</button>
+              <pre class="result" hidden></pre>
+            </form>
+          </details>
+
+          <details>
+            <summary>2. Build Universe</summary>
+            <form id="ml-universe-form" class="compact-form">
+              <div class="field-grid">
+                <label>Snapshot ID<input name="snapshot_id" minlength="64" maxlength="64" required /></label>
+                <label>FeatureSet IDs<input name="feature_set_ids" required /></label>
+              </div>
+              <button type="submit">Поставить BUILD_UNIVERSE</button>
+              <pre class="result" hidden></pre>
+            </form>
+          </details>
+
+          <details>
+            <summary>3. Build LabelSet</summary>
+            <form id="ml-labels-form" class="compact-form">
+              <div class="field-grid">
+                <label>Snapshot ID<input name="snapshot_id" minlength="64" maxlength="64" required /></label>
+                <label>Universe ID<input name="universe_id" minlength="64" maxlength="64" required /></label>
+                <label>Training cutoff<input name="training_cutoff" type="number" min="0" required /></label>
+              </div>
+              <button type="submit">Поставить BUILD_LABELS</button>
+              <pre class="result" hidden></pre>
+            </form>
+          </details>
+
+          <details>
+            <summary>4. Train exact linear model</summary>
+            <form id="ml-train-form" class="compact-form">
+              <div class="field-grid">
+                <label>FeatureSet IDs<input name="feature_set_ids" required /></label>
+                <label>Feature schema digest<input name="feature_schema_digest" minlength="64" maxlength="64" required /></label>
+                <label>LabelSet ID<input name="label_set_id" minlength="64" maxlength="64" required /></label>
+                <label>Universe ID<input name="universe_id" minlength="64" maxlength="64" required /></label>
+                <label>Train from<input name="train_from" type="number" min="0" required /></label>
+                <label>Train until<input name="train_until" type="number" min="1" required /></label>
+                <label>Validation from<input name="validation_from" type="number" min="1" required /></label>
+                <label>Validation until<input name="validation_until" type="number" min="1" required /></label>
+                <label>Purge boundaries<input name="purge_boundaries" type="number" min="0" value="0" required /></label>
+                <label>Embargo boundaries<input name="embargo_boundaries" type="number" min="0" value="0" required /></label>
+                <label>Training cutoff<input name="training_cutoff" type="number" min="0" required /></label>
+                <label>Model available boundary<input name="modeled_available_boundary" type="number" min="0" required /></label>
+                <label>Root seeds<input name="root_seeds" value="42" required /></label>
+                <label>Hyperparameter digest<input name="hyperparameter_digest" minlength="64" maxlength="64" required /></label>
+                <label>Preprocessing digest<input name="preprocessing_digest" minlength="64" maxlength="64" required /></label>
+                <label>Calibration digest<input name="calibration_digest" minlength="64" maxlength="64" required /></label>
+                <label>Ridge lambda<input name="ridge_lambda" type="number" min="0" value="1" required /></label>
+              </div>
+              <button type="submit">Поставить TRAIN_MODEL</button>
+              <pre class="result" hidden></pre>
+            </form>
+          </details>
+
+          <details>
+            <summary>5. Build ModelSchedule</summary>
+            <form id="ml-schedule-form" class="compact-form">
+              <div class="field-grid">
+                <label>ModelBundle ID<input name="model_bundle_id" minlength="64" maxlength="64" required /></label>
+                <label>Eligible from<input name="eligible_from" type="number" min="0" required /></label>
+                <label>Eligible until<input name="eligible_until" type="number" min="1" required /></label>
+                <label>Training cutoff<input name="training_cutoff" type="number" min="0" required /></label>
+                <label>Model available boundary<input name="model_available_boundary" type="number" min="0" required /></label>
+              </div>
+              <button type="submit">Поставить BUILD_MODEL_SCHEDULE</button>
+              <pre class="result" hidden></pre>
+            </form>
+          </details>
+
+          <details>
+            <summary>6. Build frozen PredictionSet</summary>
+            <form id="ml-predict-form" class="compact-form">
+              <div class="field-grid">
+                <label>ReplayPack ID<input name="replay_pack_id" minlength="64" maxlength="64" required /></label>
+                <label>Replay semantics ID<input name="replay_semantics_id" minlength="64" maxlength="64" required /></label>
+                <label>Replay layout ID<input name="replay_layout_schema_id" minlength="64" maxlength="64" required /></label>
+                <label>FeatureSet IDs<input name="feature_set_ids" required /></label>
+                <label>ModelSchedule ID<input name="model_schedule_id" minlength="64" maxlength="64" required /></label>
+                <label>ModelBundle IDs<input name="model_bundle_ids" required /></label>
+                <label>Prediction name<input name="prediction_name" value="score" required /></label>
+                <label>Inference delay<input name="inference_delay_boundaries" type="number" min="0" value="0" required /></label>
+                <label>Missing policy<select name="missing_policy"><option>REJECT</option><option>NULL</option></select></label>
+              </div>
+              <button type="submit">Поставить PREDICT</button>
+              <pre class="result" hidden></pre>
+            </form>
+          </details>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Operational state</p>
+            <h2>Последние jobs</h2>
+          </div>
+          <!-- Manual refresh remains available outside adaptive background polling. -->
+          <button id="refresh-jobs" class="secondary" type="button">Обновить</button>
+        </div>
+        <!-- Jobs are globally newest-first; optional sorting rearranges this bounded page. -->
+        <div class="actions">
+          <label>Сортировка текущей страницы
+            <select id="jobs-sort">
+              <option value="submitted_at">Дата создания</option>
+              <option value="updated_at">Дата обновления</option>
+              <option value="job_type">Тип</option>
+              <option value="state">Состояние</option>
+              <option value="job_id">Job ID</option>
+            </select>
+          </label>
+          <button id="jobs-sort-direction" class="secondary" type="button" aria-controls="jobs-body" aria-pressed="true" aria-label="Сортировать по убыванию">
+            Сначала новые ↓
+          </button>
+          <span id="jobs-page-label" class="status" role="status" aria-live="polite">Страница 1 · по 20 jobs</span>
+          <button id="jobs-previous-page" class="secondary" type="button" aria-label="Предыдущая страница jobs" aria-controls="jobs-body" disabled>←</button>
+          <button id="jobs-next-page" class="secondary" type="button" aria-label="Следующая страница jobs" aria-controls="jobs-body" disabled>→</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Job ID</th>
+                <th>Тип</th>
+                <th>Состояние</th>
+                <th>Создан</th>
+                <th>Обновлён</th>
+                <th>Версия</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="jobs-body">
+              <tr><td colspan="7" class="empty">Загрузка…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <pre id="job-events-result" class="result" hidden></pre>
+      </section>
+
+      <section class="panel">
+        <div class="section-heading">
+          <div><p class="eyebrow">Committed results</p><h2>Последние runs</h2></div>
+          <button id="refresh-runs" class="secondary" type="button">Обновить</button>
+        </div>
+        <!-- The server pages globally by completion time; alternate sorts stay page-local. -->
+        <div class="actions">
+          <label>Сортировка текущей страницы
+            <select id="runs-sort">
+              <option value="completed_at">Дата завершения</option>
+              <option value="started_at">Дата запуска</option>
+              <option value="logical_run_id">Logical run</option>
+              <option value="result_hash">Result hash</option>
+            </select>
+          </label>
+          <button id="runs-sort-direction" class="secondary" type="button" aria-controls="runs-body" aria-pressed="true" aria-label="Сортировать по убыванию">
+            Сначала новые ↓
+          </button>
+          <span id="runs-page-label" class="status" role="status" aria-live="polite">Страница 1 · по 10 runs</span>
+          <button id="runs-previous-page" class="secondary" type="button" aria-label="Предыдущая страница runs" aria-controls="runs-body" disabled>←</button>
+          <button id="runs-next-page" class="secondary" type="button" aria-label="Следующая страница runs" aria-controls="runs-body" disabled>→</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th></th><th>Запущен</th><th>Завершён</th><th>Logical run</th><th>Result hash</th><th>Audit hash</th><th></th></tr></thead>
+            <tbody id="runs-body"><tr><td colspan="7" class="empty">Загрузка…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="actions">
+          <label>Метрика
+            <select id="run-comparison-metric">
+              <option value="canonical_result_hash">canonical_result_hash</option>
+              <option value="audit_hash">audit_hash</option>
+              <option value="ledger_hash">ledger_hash</option>
+              <option value="fill_hash">fill_hash</option>
+              <option value="historical_group_count">historical_group_count</option>
+              <option value="historical_event_count">historical_event_count</option>
+              <option value="delivered_event_count">delivered_event_count</option>
+              <option value="accepted_order_count">accepted_order_count</option>
+              <option value="rejected_order_count">rejected_order_count</option>
+              <option value="filled_order_count">filled_order_count</option>
+              <option value="failed_order_count">failed_order_count</option>
+              <option value="ledger_transaction_count">ledger_transaction_count</option>
+              <option value="fill_count">fill_count</option>
+              <option value="final_balances_count">final_balances_count</option>
+              <option value="final_balances_digest">final_balances_digest</option>
+            </select>
+          </label>
+          <button id="compare-runs" class="secondary" type="button">Сравнить выбранные</button>
+        </div>
+        <pre id="runs-result" class="result" hidden aria-live="polite"></pre>
+      </section>
+
+      <section class="panel">
+        <div class="section-heading"><div><p class="eyebrow">Immutable artifacts</p><h2>Manifest и lineage</h2></div></div>
+        <form id="artifact-form">
+          <div class="field-grid">
+            <label>Artifact ID<input name="artifact_id" minlength="64" maxlength="64" required /></label>
+          </div>
+          <div class="actions">
+            <button type="submit" data-action="manifest">Проверить manifest</button>
+            <button type="submit" data-action="lineage" class="secondary">Показать lineage</button>
+          </div>
+        </form>
+        <pre id="artifact-result" class="result" hidden></pre>
+      </section>
+    </main>
+
+    <template id="job-row-template">
+      <tr>
+        <td class="mono job-id"></td>
+        <td class="job-type"></td>
+        <td><span class="badge job-state"></span></td>
+        <td class="job-submitted-at"></td>
+        <td class="job-updated-at"></td>
+        <td class="job-version"></td>
+        <td class="row-actions">
+          <button class="secondary show-events" type="button">События</button>
+          <button class="secondary retry-job" type="button">Повторить</button>
+          <button class="danger cancel-job" type="button">Отменить</button>
+        </td>
+      </tr>
+    </template>
+    <script type="module" src="/static/app.js"></script>
+  </body>
+</html>

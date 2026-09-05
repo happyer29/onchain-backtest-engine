@@ -1,0 +1,232 @@
+{
+  "schema": "pumpfun-official-package-event-schema-extract/v1",
+  "canonicalization": "UTF-8 JSON; object keys sorted and separators ',' ':' when a canonical digest is calculated",
+  "program_id": "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P",
+  "pins": [
+    {
+      "name": "pump-current-2026-07-15",
+      "source_pin": {
+        "registry": "crates.io",
+        "package": "pump-rust-client",
+        "version": "0.1.10",
+        "metadata_url": "https://crates.io/api/v1/crates/pump-rust-client/0.1.10",
+        "archive_url": "https://crates.io/api/v1/crates/pump-rust-client/0.1.10/download",
+        "archive_size_bytes": "1967541",
+        "archive_sha256": "b506959627ec272b37c54769180010d413df3a153f4adebda2879eea76e98345",
+        "registry_integrity": "sha256-b506959627ec272b37c54769180010d413df3a153f4adebda2879eea76e98345",
+        "idl_path": "pump-rust-client-0.1.10/idls/pump.json",
+        "idl_size_bytes": "168929",
+        "idl_sha256": "6edaa1f67f7003514df97eb0ec40ff7e60d1278667521fabb679be1bb0ddd01e",
+        "license": {
+          "spdx_expression": "MIT",
+          "declaration_path": "pump-rust-client-0.1.10/Cargo.toml.orig#package.license",
+          "standalone_notice_file": null
+        },
+        "publisher_evidence": {
+          "kind": "crates-io-owner-team",
+          "identity": "github:pump-fun:mobile-blockchain",
+          "url": "https://crates.io/api/v1/crates/pump-rust-client/owners",
+          "observed_utc_date": "2026-09-04"
+        },
+        "projection": {
+          "schema": "pumpfun-idl-event-projection/v1",
+          "selected_events": ["CreateEvent", "TradeEvent", "CompleteEvent", "CompletePumpAmmMigrationEvent"],
+          "selected_types": ["CreateEvent", "TradeEvent", "CompleteEvent", "CompletePumpAmmMigrationEvent", "Shareholder"],
+          "omitted_object_keys": ["docs"],
+          "layout_sha256": "eba9c3dd1006f0c7e63fa2a183d77fd1b31bb1ee17d2626450b91783331ea2bf"
+        },
+        "equivalence_reference": {
+          "purpose": "non-redistribution-equivalence-only",
+          "repository": "https://github.com/pump-fun/pump-public-docs",
+          "commit": "9c82f61cb711b044a17f770ab8ce9f9bdf78f333",
+          "path": "idl/pump.json",
+          "raw_url": "https://raw.githubusercontent.com/pump-fun/pump-public-docs/9c82f61cb711b044a17f770ab8ce9f9bdf78f333/idl/pump.json",
+          "raw_size_bytes": "169632",
+          "raw_sha256": "b90bc471327f671449271d5d1d42354d1fae6f5a06502f5834459a3108138e49",
+          "redistribution_basis": false
+        }
+      },
+      "events": [
+        {
+          "name": "CreateEvent",
+          "discriminator": [27, 114, 169, 77, 222, 235, 99, 118],
+          "fields": [
+            ["name", "string"],
+            ["symbol", "string"],
+            ["uri", "string"],
+            ["mint", "pubkey"],
+            ["bonding_curve", "pubkey"],
+            ["user", "pubkey"],
+            ["creator", "pubkey"],
+            ["timestamp", "i64"],
+            ["virtual_token_reserves", "u64"],
+            ["virtual_sol_reserves", "u64"],
+            ["real_token_reserves", "u64"],
+            ["token_total_supply", "u64"],
+            ["token_program", "pubkey"],
+            ["is_mayhem_mode", "bool"],
+            ["is_cashback_enabled", "bool"],
+            ["quote_mint", "pubkey"],
+            ["virtual_quote_reserves", "u64"]
+          ]
+        },
+        {
+          "name": "TradeEvent",
+          "discriminator": [189, 219, 127, 211, 78, 230, 97, 238],
+          "fields": [
+            ["mint", "pubkey"],
+            ["sol_amount", "u64"],
+            ["token_amount", "u64"],
+            ["is_buy", "bool"],
+            ["user", "pubkey"],
+            ["timestamp", "i64"],
+            ["virtual_sol_reserves", "u64"],
+            ["virtual_token_reserves", "u64"],
+            ["real_sol_reserves", "u64"],
+            ["real_token_reserves", "u64"],
+            ["fee_recipient", "pubkey"],
+            ["fee_basis_points", "u64"],
+            ["fee", "u64"],
+            ["creator", "pubkey"],
+            ["creator_fee_basis_points", "u64"],
+            ["creator_fee", "u64"],
+            ["track_volume", "bool"],
+            ["total_unclaimed_tokens", "u64"],
+            ["total_claimed_tokens", "u64"],
+            ["current_sol_volume", "u64"],
+            ["last_update_timestamp", "i64"],
+            ["ix_name", "string"],
+            ["mayhem_mode", "bool"],
+            ["cashback_fee_basis_points", "u64"],
+            ["cashback", "u64"],
+            ["buyback_fee_basis_points", "u64"],
+            ["buyback_fee", "u64"],
+            ["shareholders", {"vec": {"defined": {"name": "Shareholder"}}}],
+            ["quote_mint", "pubkey"],
+            ["quote_amount", "u64"],
+            ["virtual_quote_reserves", "u64"],
+            ["real_quote_reserves", "u64"]
+          ]
+        },
+        {
+          "name": "CompleteEvent",
+          "discriminator": [95, 114, 97, 156, 212, 46, 152, 8],
+          "fields": [
+            ["user", "pubkey"],
+            ["mint", "pubkey"],
+            ["bonding_curve", "pubkey"],
+            ["timestamp", "i64"],
+            ["quote_mint", "pubkey"]
+          ]
+        },
+        {
+          "name": "CompletePumpAmmMigrationEvent",
+          "discriminator": [189, 233, 93, 185, 92, 148, 234, 148],
+          "fields": [
+            ["user", "pubkey"],
+            ["mint", "pubkey"],
+            ["mint_amount", "u64"],
+            ["sol_amount", "u64"],
+            ["pool_migration_fee", "u64"],
+            ["bonding_curve", "pubkey"],
+            ["timestamp", "i64"],
+            ["pool", "pubkey"],
+            ["quote_mint", "pubkey"]
+          ]
+        }
+      ],
+      "types": [
+        {
+          "name": "Shareholder",
+          "fields": [["address", "pubkey"], ["share_bps", "u16"]]
+        }
+      ]
+    },
+    {
+      "name": "pump-historical-2025-05-08",
+      "source_pin": {
+        "registry": "npm",
+        "package": "@pump-fun/pump-sdk",
+        "version": "1.2.0",
+        "metadata_url": "https://registry.npmjs.org/%40pump-fun%2Fpump-sdk/1.2.0",
+        "archive_url": "https://registry.npmjs.org/@pump-fun/pump-sdk/-/pump-sdk-1.2.0.tgz",
+        "archive_size_bytes": "46489",
+        "archive_sha256": "22703838d09ea32ab09a680f543a0bd153cb17e328c7954337f80fc2d7acec19",
+        "registry_integrity": "sha512-N2NT2OU1yCydz8Htko1j5AUuQmu5elmigsUN9nTGTd1gnoKNXF03COp538aNrZoflgBG8gfYvi07E2q8XOtGSg==",
+        "idl_path": "package/src/idl/pump.json",
+        "idl_size_bytes": "46673",
+        "idl_sha256": "1c81b2064995b75bb256c0bc17b0e30878583787e30a932975dfd505ff8ba9fb",
+        "license": {
+          "spdx_expression": "MIT",
+          "declaration_path": "package/package.json#license",
+          "standalone_notice_file": null
+        },
+        "publisher_evidence": {
+          "kind": "npm-package-author",
+          "identity": "pump-fun",
+          "url": "https://registry.npmjs.org/%40pump-fun%2Fpump-sdk/1.2.0",
+          "observed_utc_date": "2026-09-04"
+        },
+        "projection": {
+          "schema": "pumpfun-idl-event-projection/v1",
+          "selected_events": ["CreateEvent", "TradeEvent"],
+          "selected_types": ["CreateEvent", "TradeEvent"],
+          "omitted_object_keys": [],
+          "layout_sha256": "62c9a477da39e19a3b31fa312ec7a2570a7df5f24fdf642af7c0af435460ef61"
+        },
+        "equivalence_reference": {
+          "purpose": "non-redistribution-equivalence-only",
+          "repository": "https://github.com/pump-fun/pump-public-docs",
+          "commit": "e2b66e4fce2fc130955912315167dc41e56956ad",
+          "path": "idl/pump.json",
+          "raw_url": "https://raw.githubusercontent.com/pump-fun/pump-public-docs/e2b66e4fce2fc130955912315167dc41e56956ad/idl/pump.json",
+          "raw_size_bytes": "62508",
+          "raw_sha256": "312051ac07f38dfc231819cbed35c90b048201b67e1d86503fabfdbffe52f010",
+          "redistribution_basis": false
+        }
+      },
+      "events": [
+        {
+          "name": "CreateEvent",
+          "discriminator": [27, 114, 169, 77, 222, 235, 99, 118],
+          "fields": [
+            ["name", "string"],
+            ["symbol", "string"],
+            ["uri", "string"],
+            ["mint", "pubkey"],
+            ["bonding_curve", "pubkey"],
+            ["user", "pubkey"],
+            ["creator", "pubkey"],
+            ["timestamp", "i64"],
+            ["virtual_token_reserves", "u64"],
+            ["virtual_sol_reserves", "u64"],
+            ["real_token_reserves", "u64"],
+            ["token_total_supply", "u64"]
+          ]
+        },
+        {
+          "name": "TradeEvent",
+          "discriminator": [189, 219, 127, 211, 78, 230, 97, 238],
+          "fields": [
+            ["mint", "pubkey"],
+            ["sol_amount", "u64"],
+            ["token_amount", "u64"],
+            ["is_buy", "bool"],
+            ["user", "pubkey"],
+            ["timestamp", "i64"],
+            ["virtual_sol_reserves", "u64"],
+            ["virtual_token_reserves", "u64"],
+            ["real_sol_reserves", "u64"],
+            ["real_token_reserves", "u64"],
+            ["fee_recipient", "pubkey"],
+            ["fee_basis_points", "u64"],
+            ["fee", "u64"],
+            ["creator", "pubkey"],
+            ["creator_fee_basis_points", "u64"],
+            ["creator_fee", "u64"]
+          ]
+        }
+      ]
+    }
+  ]
+}

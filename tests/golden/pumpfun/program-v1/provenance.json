@@ -1,0 +1,151 @@
+{
+  "schema": "pumpfun-program-v1-golden-provenance/v2",
+  "scope": "Eight successful SOL-paired Pump bonding-curve user trades plus authoritative completion and migration lifecycle evidence",
+  "acquired_utc_date": "2026-09-02",
+  "network": {
+    "network_id": "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d",
+    "genesis_hash": "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d"
+  },
+  "program_id": "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P",
+  "quote_mint": "11111111111111111111111111111111",
+  "rpc": {
+    "endpoint": "https://api.mainnet-beta.solana.com",
+    "transaction_method": "getTransaction",
+    "transaction_config": {
+      "commitment": "finalized",
+      "encoding": "jsonParsed",
+      "maxSupportedTransactionVersion": 0
+    },
+    "full_result_digest": "sha256(canonical-json(result)); canonical JSON uses UTF-8, sorted object keys and separators ',' ':'",
+    "mint_account_methods": ["getAccountInfo(base64, finalized)", "getTokenSupply(finalized)"],
+    "genesis_method": "getGenesisHash"
+  },
+  "schema_evidence": {
+    "source_policy": "Checked-in event layouts are projected from pinned official packages that declare MIT; unlicensed pump-public-docs revisions are retained only as non-redistribution equivalence references.",
+    "schema_extract": "upstream/pump-events.schema.json",
+    "current_decoder_idl_subset": "upstream/pump-current.events.idl.json",
+    "historical_decoder_idl_subset": "upstream/pump-historical.events.idl.json",
+    "sources": {
+      "pump-current-2026-07-15": {
+        "registry": "crates.io",
+        "package": "pump-rust-client",
+        "version": "0.1.10",
+        "metadata_url": "https://crates.io/api/v1/crates/pump-rust-client/0.1.10",
+        "archive_url": "https://crates.io/api/v1/crates/pump-rust-client/0.1.10/download",
+        "archive_size_bytes": "1967541",
+        "archive_sha256": "b506959627ec272b37c54769180010d413df3a153f4adebda2879eea76e98345",
+        "registry_integrity": "sha256-b506959627ec272b37c54769180010d413df3a153f4adebda2879eea76e98345",
+        "idl_path": "pump-rust-client-0.1.10/idls/pump.json",
+        "idl_size_bytes": "168929",
+        "idl_sha256": "6edaa1f67f7003514df97eb0ec40ff7e60d1278667521fabb679be1bb0ddd01e",
+        "license": {
+          "spdx_expression": "MIT",
+          "declaration_path": "pump-rust-client-0.1.10/Cargo.toml.orig#package.license",
+          "standalone_notice_file": null
+        },
+        "publisher_evidence": {
+          "kind": "crates-io-owner-team",
+          "identity": "github:pump-fun:mobile-blockchain",
+          "url": "https://crates.io/api/v1/crates/pump-rust-client/owners",
+          "observed_utc_date": "2026-09-04"
+        },
+        "projection": {
+          "schema": "pumpfun-idl-event-projection/v1",
+          "selected_events": ["CreateEvent", "TradeEvent", "CompleteEvent", "CompletePumpAmmMigrationEvent"],
+          "selected_types": ["CreateEvent", "TradeEvent", "CompleteEvent", "CompletePumpAmmMigrationEvent", "Shareholder"],
+          "omitted_object_keys": ["docs"],
+          "layout_sha256": "eba9c3dd1006f0c7e63fa2a183d77fd1b31bb1ee17d2626450b91783331ea2bf"
+        },
+        "equivalence_reference": {
+          "purpose": "non-redistribution-equivalence-only",
+          "repository": "https://github.com/pump-fun/pump-public-docs",
+          "commit": "9c82f61cb711b044a17f770ab8ce9f9bdf78f333",
+          "path": "idl/pump.json",
+          "raw_url": "https://raw.githubusercontent.com/pump-fun/pump-public-docs/9c82f61cb711b044a17f770ab8ce9f9bdf78f333/idl/pump.json",
+          "raw_size_bytes": "169632",
+          "raw_sha256": "b90bc471327f671449271d5d1d42354d1fae6f5a06502f5834459a3108138e49",
+          "redistribution_basis": false
+        }
+      },
+      "pump-historical-2025-05-08": {
+        "registry": "npm",
+        "package": "@pump-fun/pump-sdk",
+        "version": "1.2.0",
+        "metadata_url": "https://registry.npmjs.org/%40pump-fun%2Fpump-sdk/1.2.0",
+        "archive_url": "https://registry.npmjs.org/@pump-fun/pump-sdk/-/pump-sdk-1.2.0.tgz",
+        "archive_size_bytes": "46489",
+        "archive_sha256": "22703838d09ea32ab09a680f543a0bd153cb17e328c7954337f80fc2d7acec19",
+        "registry_integrity": "sha512-N2NT2OU1yCydz8Htko1j5AUuQmu5elmigsUN9nTGTd1gnoKNXF03COp538aNrZoflgBG8gfYvi07E2q8XOtGSg==",
+        "idl_path": "package/src/idl/pump.json",
+        "idl_size_bytes": "46673",
+        "idl_sha256": "1c81b2064995b75bb256c0bc17b0e30878583787e30a932975dfd505ff8ba9fb",
+        "license": {
+          "spdx_expression": "MIT",
+          "declaration_path": "package/package.json#license",
+          "standalone_notice_file": null
+        },
+        "publisher_evidence": {
+          "kind": "npm-package-author",
+          "identity": "pump-fun",
+          "url": "https://registry.npmjs.org/%40pump-fun%2Fpump-sdk/1.2.0",
+          "observed_utc_date": "2026-09-04"
+        },
+        "projection": {
+          "schema": "pumpfun-idl-event-projection/v1",
+          "selected_events": ["CreateEvent", "TradeEvent"],
+          "selected_types": ["CreateEvent", "TradeEvent"],
+          "omitted_object_keys": [],
+          "layout_sha256": "62c9a477da39e19a3b31fa312ec7a2570a7df5f24fdf642af7c0af435460ef61"
+        },
+        "equivalence_reference": {
+          "purpose": "non-redistribution-equivalence-only",
+          "repository": "https://github.com/pump-fun/pump-public-docs",
+          "commit": "e2b66e4fce2fc130955912315167dc41e56956ad",
+          "path": "idl/pump.json",
+          "raw_url": "https://raw.githubusercontent.com/pump-fun/pump-public-docs/e2b66e4fce2fc130955912315167dc41e56956ad/idl/pump.json",
+          "raw_size_bytes": "62508",
+          "raw_sha256": "312051ac07f38dfc231819cbed35c90b048201b67e1d86503fabfdbffe52f010",
+          "redistribution_basis": false
+        }
+      }
+    }
+  },
+  "licensing": {
+    "redistribution_basis": "official-package-level-SPDX-declarations",
+    "notice_path": "THIRD_PARTY_NOTICES.md",
+    "residual_caveat": "Neither pinned archive contains a standalone license file or copyright-holder notice; attribution follows the package metadata."
+  },
+  "extraction": {
+    "raw_schema": "solana-finalized-pump-event-excerpt/v1",
+    "policy": "Selective canonical extracts retain transaction identity/position/status/fee, exact Pump instruction position/data, exact Program data log line, decoded fields and the digest of the complete RPC result. Unrelated accounts, balances, instructions and log lines are intentionally omitted.",
+    "integer_policy": "All u16/u64/i64 values and all slots, indices, timestamps, balances, amounts and fees are decimal strings; booleans remain JSON booleans.",
+    "curve_pre_policy": "TradeEvent contains post-state. Each vector's pre-state is the exact inverse event transition: BUY subtracts quote from post quote reserves and adds tokens to post token reserves; SELL adds quote to post quote reserves and subtracts tokens from post token reserves.",
+    "success_policy": "Every trade excerpt has meta.err = null and was returned at finalized commitment.",
+    "mode_policy": "Token program is proven twice: by the exact Pump instruction account and by finalized mint-account owner evidence. Current TOKEN_2022/CASHBACK/MAYHEM modes additionally use explicit TradeEvent fields. Legacy vectors use the historical exact-decoding IDL, legacy Token Program and a time before the explicit mode fields existed.",
+    "mayhem_user_policy": "MAYHEM vectors have explicit mayhem_mode=true, non-zero 95/30 Pump fees and user 8FXJtB7P2RDcNtSAf5J8QwFPUxtqej3igiiE5XvB9Kgo, not the documented fee-exempt Mayhem agent BwWK17cbHxwWBKZkUYvzxLcNQ1YVyaFezduWbtm2de6s."
+  },
+  "limitations": [
+    "The checked-in raw files are selective extracts, not complete RPC responses; complete-response canonical SHA-256 values allow independent re-query comparison.",
+    "Mint-account owner/supply evidence was observed at the recorded later finalized context slots; the exact trade instruction independently records the token-program account at execution.",
+    "Pre-curve states are exact inverse transitions derived from decoded event data, not separately fetched bonding-curve account snapshots.",
+    "The two legacy vectors use different mints but the same finalized historical block and the same historical fee/mode contract."
+  ],
+  "files": {
+    "vectors.json": "5cab0a9a7a756465af4861d77e436bb94f91e8b7d79731fbd28cf1fe1182ec23",
+    "lifecycle.json": "46189a4d01a1567c3d2adf5e0a6f262f98a842cfe206db158d3b6936bd767729",
+    "upstream/pump-events.schema.json": "a32a56dbdd8964463642e365c51dcf206fa0c322d29f643a21196eb13fa3a1d9",
+    "upstream/pump-current.events.idl.json": "0c1976e4887fc8e2b98eedd00b46e2b65afd805e7a8ebf945362909b7ba70f51",
+    "upstream/pump-historical.events.idl.json": "9b7c03d5b93a2e79c02c225c90e260bd5a128a644462b5a3f3907e4b135bf306",
+    "raw/mint-accounts.json": "e56fe4c55192a7df83e5d0a1c856ac68e254536bd31859df7d417aa7c31fd7dc",
+    "raw/2RxiEtuGbTd8bWUdzxBZasVgymreRmquDt6NmJq6ec7EMMfM2DTixwv6ECb3nagFfwRiprNbr8ekSYqMSEkAYBjN.json": "272dd4a197df091722992782fbb42b0c1c3ac73a1019a1f761b331197d959f19",
+    "raw/5At5itU6139EwphTWbM4RZp3peq4X4yn3mDTf1Pe5fG7JQUw5AN8zFCjkyEE5gfwbtrjQVrQvHrZiKSEZvWDtnf5.json": "01bd4faea210888e5f4f52903712f2520efdb86a43fd28f3c038e1eefe683552",
+    "raw/53SFCxXQkWff1s3n4Yf6oNFiPs3zVZMYAAVuoWLkC6WhbnsNjgEbg4J9RuawHtdp8Q6yEz7465pzhG4iK8EWfjsq.json": "a4f3f8158b13bea1dca5e60d46db97c1f2142667f1dd574af3b342845c922611",
+    "raw/2Qa2ZHAKAzs6KWayPmobYP4YNkJfbnJ3m6oSQjNRNBo57Z7KgZBm22TPBmCcEawXthWfpTLBZVdMWWbf3Trspreo.json": "6084319255ef2ed630ae078eba894a86b7744c7632095339ea21ce809d8aed5a",
+    "raw/4goThRiXfmr6crzMfaT2gB9TWiizNHD1Q2F8YzeePgrRz2Nd2UyfhQv17uam9Qq2bzH8MnzZsY28x5Kq5fjARz57.json": "5c15d65b38730b690504e7666ba343b7c795b28f0a51dbf298aadb43d5ee52e0",
+    "raw/wubPBYa9LimxqhrbmfMCGz4iWHqyMtH78poDhhK7Cf5bbDFy8asCbUBtt6hDXPUVhrjnmDfbrkaWLeHibRz4KeW.json": "d1ca6fd7b8e5fa6a91717f5aa8638832f213cd29f0efc058cd01328d200de04d",
+    "raw/5frph8gBFyX7ayBmqntvwpTPwzZ8aF4kdfJAvC52Li2iDnnaRwtmcZP839Cm4YQUFx7GzsUUStCfAy3hAG69ir4u.json": "d85d91fbd4ab70c252f814a6f95fa8e79044f0e92bcd7426e6828442eaa9e58e",
+    "raw/Qm2xtttvDYvSuQfXkKywcPfE4P22Pokn47jBx4x9h4DZPDhtGpjpjmyeUfCskoHnutUPBjwGuwgr9GQ7SYxpnZB.json": "44e6650f6a3c8e4cf01c1cf6d697cf06caa61aeccfa723b90a2b991036a43a58",
+    "raw/31QhkqJrmW4MPZ2ABRUZMKtzV72aRKn9kXM1BJMqGyxfMRbys7vf97c32HWjAsLrLnS1vbjoz5WVJycxEod8qPRK.json": "926cb7707a57be0fb820a3b2ef74fe01eebc0274fd7ede5bc951be1d6897e5f6",
+    "raw/49mdxJ2sLHzVhQe52gUQQV9DfeDqEHohji5uqVK2RC62wbxDXht6nnvc9w3o8bEk2wUA45T53hZbAcpJSozqFjL6.json": "f5663a4ad4ba61f1203ebed9ef767a33de52b72360ea28679e4982041fd004aa"
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "schema": "solana-finalized-pump-event-excerpt/v1",
+  "event_schema_pin": "pump-current-2026-07-15",
+  "network_id": "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d",
+  "rpc": {
+    "method": "getTransaction",
+    "config": {"commitment": "finalized", "encoding": "jsonParsed", "maxSupportedTransactionVersion": 0},
+    "full_result_canonical_sha256": "37ad984ecff8bbdf9da2791805d131bb5c3efffe49587b6fe51a3b74873b4452"
+  },
+  "transaction": {
+    "signature": "49mdxJ2sLHzVhQe52gUQQV9DfeDqEHohji5uqVK2RC62wbxDXht6nnvc9w3o8bEk2wUA45T53hZbAcpJSozqFjL6",
+    "slot": "443742173",
+    "block_time": "1788366409",
+    "transaction_index": "1209",
+    "meta_err": null,
+    "fee_lamports": "905000"
+  },
+  "instruction": {
+    "program_id": "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P",
+    "outer_index": "2",
+    "inner_index": null,
+    "data_base58": "YQq8B6nbicx",
+    "mint_account": "7HJCxCMTnit9rLS21e9SMdisJaaZ9A5P3N1Lq99roeTz",
+    "user_account": "9C4nRvhhVquCKATjDCx5FKvNS9PNgNqgyWy9AcoDjYv5",
+    "quote_mint_account": "11111111111111111111111111111111",
+    "token_program_accounts": [
+      "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+      "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+    ]
+  },
+  "program_data": {
+    "log_index": "181",
+    "log_line": "Program data: velduVyU6pR5syl9Y/fz65admv7nJIovNlWDCH2Y954qauspuQDisl1S3pT6FlqCdOfmKRuBxCzEb8pNq8dTZ/i0CyesL62RAAgBqSy8AABU99HJEwAAAMHh5AAAAAAAP6SfCOEZgFGpVWO3DsCCkhX7vG9cXQrRUsl66YrvoQVJTphqAAAAAEXUgOiH0xlyIXindoAsi4Ih5kvc4KbZTirkLZfMzEIuAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+    "decoded_bytes_sha256": "3e799f7efb2525c2e3cdcd90296522c425fa22c9ec1de0cba2aa54587ad73112",
+    "raw_size_bytes": "200",
+    "trailing_bytes": "0",
+    "event_name": "CompletePumpAmmMigrationEvent",
+    "fields": {
+      "user": "9C4nRvhhVquCKATjDCx5FKvNS9PNgNqgyWy9AcoDjYv5",
+      "mint": "7HJCxCMTnit9rLS21e9SMdisJaaZ9A5P3N1Lq99roeTz",
+      "mint_amount": "206900000000000",
+      "sol_amount": "84990359380",
+      "pool_migration_fee": "15000001",
+      "bonding_curve": "5HSH4BggaE4wwi2LtQRmu1x6tGyySZhGfEQRoGqELsLg",
+      "timestamp": "1788366409",
+      "pool": "5hb55hEEaWbKyC8TzvvRzXZtT9Byabet45s5Md7VwJuK",
+      "quote_mint": "11111111111111111111111111111111"
+    }
+  }
+}

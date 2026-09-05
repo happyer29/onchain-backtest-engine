@@ -1,0 +1,95 @@
+{
+  "schema": "pumpfun-official-package-idl-event-subset/v1",
+  "address": "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P",
+  "source_pin": {
+    "registry": "npm",
+    "package": "@pump-fun/pump-sdk",
+    "version": "1.2.0",
+    "metadata_url": "https://registry.npmjs.org/%40pump-fun%2Fpump-sdk/1.2.0",
+    "archive_url": "https://registry.npmjs.org/@pump-fun/pump-sdk/-/pump-sdk-1.2.0.tgz",
+    "archive_size_bytes": "46489",
+    "archive_sha256": "22703838d09ea32ab09a680f543a0bd153cb17e328c7954337f80fc2d7acec19",
+    "registry_integrity": "sha512-N2NT2OU1yCydz8Htko1j5AUuQmu5elmigsUN9nTGTd1gnoKNXF03COp538aNrZoflgBG8gfYvi07E2q8XOtGSg==",
+    "idl_path": "package/src/idl/pump.json",
+    "idl_size_bytes": "46673",
+    "idl_sha256": "1c81b2064995b75bb256c0bc17b0e30878583787e30a932975dfd505ff8ba9fb",
+    "license": {
+      "spdx_expression": "MIT",
+      "declaration_path": "package/package.json#license",
+      "standalone_notice_file": null
+    },
+    "publisher_evidence": {
+      "kind": "npm-package-author",
+      "identity": "pump-fun",
+      "url": "https://registry.npmjs.org/%40pump-fun%2Fpump-sdk/1.2.0",
+      "observed_utc_date": "2026-09-04"
+    },
+    "projection": {
+      "schema": "pumpfun-idl-event-projection/v1",
+      "selected_events": ["CreateEvent", "TradeEvent"],
+      "selected_types": ["CreateEvent", "TradeEvent"],
+      "omitted_object_keys": [],
+      "layout_sha256": "62c9a477da39e19a3b31fa312ec7a2570a7df5f24fdf642af7c0af435460ef61"
+    },
+    "equivalence_reference": {
+      "purpose": "non-redistribution-equivalence-only",
+      "repository": "https://github.com/pump-fun/pump-public-docs",
+      "commit": "e2b66e4fce2fc130955912315167dc41e56956ad",
+      "path": "idl/pump.json",
+      "raw_url": "https://raw.githubusercontent.com/pump-fun/pump-public-docs/e2b66e4fce2fc130955912315167dc41e56956ad/idl/pump.json",
+      "raw_size_bytes": "62508",
+      "raw_sha256": "312051ac07f38dfc231819cbed35c90b048201b67e1d86503fabfdbffe52f010",
+      "redistribution_basis": false
+    }
+  },
+  "events": [
+    {"name": "CreateEvent", "discriminator": [27, 114, 169, 77, 222, 235, 99, 118]},
+    {"name": "TradeEvent", "discriminator": [189, 219, 127, 211, 78, 230, 97, 238]}
+  ],
+  "types": [
+    {
+      "name": "CreateEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {"name": "name", "type": "string"},
+          {"name": "symbol", "type": "string"},
+          {"name": "uri", "type": "string"},
+          {"name": "mint", "type": "pubkey"},
+          {"name": "bonding_curve", "type": "pubkey"},
+          {"name": "user", "type": "pubkey"},
+          {"name": "creator", "type": "pubkey"},
+          {"name": "timestamp", "type": "i64"},
+          {"name": "virtual_token_reserves", "type": "u64"},
+          {"name": "virtual_sol_reserves", "type": "u64"},
+          {"name": "real_token_reserves", "type": "u64"},
+          {"name": "token_total_supply", "type": "u64"}
+        ]
+      }
+    },
+    {
+      "name": "TradeEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {"name": "mint", "type": "pubkey"},
+          {"name": "sol_amount", "type": "u64"},
+          {"name": "token_amount", "type": "u64"},
+          {"name": "is_buy", "type": "bool"},
+          {"name": "user", "type": "pubkey"},
+          {"name": "timestamp", "type": "i64"},
+          {"name": "virtual_sol_reserves", "type": "u64"},
+          {"name": "virtual_token_reserves", "type": "u64"},
+          {"name": "real_sol_reserves", "type": "u64"},
+          {"name": "real_token_reserves", "type": "u64"},
+          {"name": "fee_recipient", "type": "pubkey"},
+          {"name": "fee_basis_points", "type": "u64"},
+          {"name": "fee", "type": "u64"},
+          {"name": "creator", "type": "pubkey"},
+          {"name": "creator_fee_basis_points", "type": "u64"},
+          {"name": "creator_fee", "type": "u64"}
+        ]
+      }
+    }
+  ]
+}

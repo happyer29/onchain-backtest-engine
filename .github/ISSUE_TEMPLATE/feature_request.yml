@@ -1,0 +1,49 @@
+name: Feature request
+description: Propose a bounded change that respects the architecture
+title: "[Feature]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Read `CONTRIBUTING.md` and the affected architecture deep-dive sections first.
+        An ordinary feature request does not authorize a normative architecture change.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What real task is impossible or inconvenient today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: slice
+    attributes:
+      label: Minimal vertical slice
+      description: Describe the smallest complete end-to-end result and its failure semantics.
+    validations:
+      required: true
+
+  - type: textarea
+    id: architecture
+    attributes:
+      label: Architecture impact
+      description: Which layer, use case, port, identity, causality, fidelity, and resource invariants are affected?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: Which options inside the current architecture have already been considered?
+
+  - type: checkboxes
+    id: boundaries
+    attributes:
+      label: Boundaries
+      options:
+        - label: The proposal does not require a silent fidelity downgrade or synthetic fallback.
+          required: true
+        - label: I explicitly identified any required normative architecture change.
+          required: true

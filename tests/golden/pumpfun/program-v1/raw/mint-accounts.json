@@ -1,0 +1,86 @@
+{
+  "schema": "solana-finalized-mint-account-evidence/v1",
+  "network": {
+    "network_id": "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d",
+    "genesis_hash": "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d"
+  },
+  "rpc": {
+    "endpoint": "https://api.mainnet-beta.solana.com",
+    "commitment": "finalized",
+    "account_method": "getAccountInfo",
+    "account_encoding": "base64",
+    "supply_method": "getTokenSupply"
+  },
+  "proofs": [
+    {
+      "mint": "Coyj3LtKn1BNSgWc9HsGK5SKoGfEoDaymig4wrN6pump",
+      "context_slot": "443745253",
+      "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "lamports": "1461600",
+      "executable": false,
+      "rent_epoch": "18446744073709551615",
+      "space": "82",
+      "account_data_base64": "AAAAAAbFwc5jjSVn0mRosF65UdGijcxuEjSCtcZ1FJdw5ivy9nYimMyMAwAGAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+      "account_data_sha256": "6485f176b5df87c5687dce7f7c25159d2a8329ce65ed92f50e5633c754babec3",
+      "supply_context_slot": "443745254",
+      "supply_amount": "999235283744502",
+      "decimals": "6"
+    },
+    {
+      "mint": "3VaVxiBeDVmPRhwQkhP1PKWjbTFCtAaSU4Vkbz1Dpump",
+      "context_slot": "443745255",
+      "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "lamports": "1461600",
+      "executable": false,
+      "rent_epoch": "18446744073709551615",
+      "space": "82",
+      "account_data_base64": "AAAAAAbFwc5jjSVn0mRosF65UdGijcxuEjSCtcZ1FJdw5ivyAIDGpH6NAwAGAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+      "account_data_sha256": "18717462cfb57baef23d0c68985dcc13d2c90470d6bbb6764f53c76521741c61",
+      "supply_context_slot": "443745255",
+      "supply_amount": "1000000000000000",
+      "decimals": "6"
+    },
+    {
+      "mint": "HTxbgkRZ4CkioKebc4Dj3K4BhfpGVtcW8JK867i5oyYU",
+      "context_slot": "443745230",
+      "owner": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+      "lamports": "3563520",
+      "executable": false,
+      "rent_epoch": "18446744073709551615",
+      "space": "384",
+      "account_data_base64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAtKKA6XiNAwAGAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARIAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPSi9O0RihPRo17BUvRr28HU/+v59F7JEQzGSf66jMYREwCSAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA9KL07RGKE9GjXsFS9GvbwdT/6/n0XskRDMZJ/rqMxhEHAAAAQ2FzaGRvZwcAAABDQVNIRE9HNAAAAGh0dHBzOi8vbWV0YWRhdGEubGV2aXRhdGluZ2JhbmFuYXRyZWUueHl6L1hEdHVvV2NFckIAAAAA",
+      "account_data_sha256": "f3d40b6c507f49fa6296357f8eceff1a343cadab6f90adef9aa6fe513dda684f",
+      "supply_context_slot": "443745231",
+      "supply_amount": "999975383245492",
+      "decimals": "6"
+    },
+    {
+      "mint": "eqnidra8rp8UttMDx67GrWuHjKuzkiayEsXB9wBpump",
+      "context_slot": "443745231",
+      "owner": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+      "lamports": "3640080",
+      "executable": false,
+      "rent_epoch": "18446744073709551615",
+      "space": "395",
+      "account_data_base64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIDGpH6NAwAGAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARIAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAmxp6xUYOaAx0PLFGPFhFvjdqMD/y1enU4IIJGwKEYvEwCdAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACbGnrFRg5oDHQ8sUY8WEW+N2owP/LV6dTgggkbAoRi8QAAAAUGVvcGxlIHdobyBzdGlsbAcAAABDQVZFTUVONgAAAGh0dHBzOi8vbWV0YWRhdGEuajd0cmFja2VyLmlvL21ldGFkYXRhL1dHbTVHNXpXZUwuanNvbgAAAAA=",
+      "account_data_sha256": "b43f2254d10bb2e767b1fdcc3b202bdee753048c35d50c2c6e21c64a4faf4f11",
+      "supply_context_slot": "443745232",
+      "supply_amount": "1000000000000000",
+      "decimals": "6"
+    },
+    {
+      "mint": "9pGu6Hwgs5ZohxwneGkDGX16T89VXhhWNMTYK1Rapump",
+      "context_slot": "443745233",
+      "owner": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+      "lamports": "3702720",
+      "executable": false,
+      "rent_epoch": "18446744073709551615",
+      "space": "404",
+      "account_data_base64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACNSf0aBwAGAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARIAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIL5xP4+mp76NgkLeGpz0+jAwjl1NVaZwe5qEE+hCcDfEwCmAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgvnE/j6anvo2CQt4anPT6MDCOXU1VpnB7moQT6EJwN8KAAAAQmV0T25CbGFjawkAAABCZXRPbkJsYWtDAAAAaHR0cHM6Ly9pcGZzLmlvL2lwZnMvUW1QQnQ2bXdnZkhiWnZCU3ZUOXYzVGI0RWJCWmdDRGtrbVlGMzFYdFpmYWtrWAAAAAA=",
+      "account_data_sha256": "97c81bf1d8336c73cf33d72e455536a62a24a88ca00806428c657eb85d98d3a0",
+      "supply_context_slot": "443745233",
+      "supply_amount": "2000000000000000",
+      "decimals": "6"
+    }
+  ]
+}

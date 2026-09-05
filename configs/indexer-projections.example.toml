@@ -1,0 +1,88 @@
+# Secret-free structural companion to indexer-capabilities.example.toml.
+# It proves only that mappings are well formed. UNKNOWN source evidence keeps
+# exact Pump.fun Sniping fail closed until bounded live validation succeeds.
+
+format = "backtest.protocol-projections"
+schema_version = 2
+network_id = "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d"
+position_schema_id = "block32-transaction32-v1"
+
+[[projections]]
+capability_id = "pumpfun.block-clock.v2"
+event_kind = "BLOCK"
+
+[projections.columns]
+block_ordinal = "block_ordinal"
+block_time = "block_time"
+transaction_count = "transaction_count"
+block_hash = "block_hash"
+
+[[projections]]
+capability_id = "pumpfun.token-launch.v2"
+event_kind = "TOKEN_LAUNCH"
+protocol_payload_schema_id = "pump-launch-state-v1"
+
+[projections.columns]
+block_ordinal = "block_ordinal"
+transaction_index = "transaction_index"
+event_index = "event_index"
+signature = "signature"
+transaction_succeeded = "transaction_succeeded"
+asset = "mint"
+developer = "creator"
+creation_user = "creation_user"
+venue = "venue"
+quote_asset = "quote_asset"
+virtual_token_reserves_atomic = "virtual_token_reserves_atomic"
+virtual_sol_reserves_lamports = "virtual_sol_reserves_lamports"
+real_token_reserves_atomic = "real_token_reserves_atomic"
+real_sol_reserves_lamports = "real_sol_reserves_lamports"
+token_total_supply_atomic = "token_total_supply_atomic"
+lifecycle = "lifecycle"
+mode = "mode"
+
+[[projections]]
+capability_id = "pumpfun.curve-trade.v2"
+event_kind = "VENUE_TRADE"
+protocol_payload_schema_id = "pump-trade-state-v1"
+
+[projections.columns]
+block_ordinal = "block_ordinal"
+transaction_index = "transaction_index"
+event_index = "event_index"
+signature = "signature"
+venue = "venue"
+asset = "mint"
+quote_asset = "quote_asset"
+side = "side"
+base_amount_atomic = "base_amount_atomic"
+quote_amount_atomic = "quote_amount_atomic"
+protocol_fee_atomic = "protocol_fee_atomic"
+creator_fee_atomic = "creator_fee_atomic"
+virtual_token_reserves_atomic = "virtual_token_reserves_atomic"
+virtual_sol_reserves_lamports = "virtual_sol_reserves_lamports"
+real_token_reserves_atomic = "real_token_reserves_atomic"
+real_sol_reserves_lamports = "real_sol_reserves_lamports"
+token_total_supply_atomic = "token_total_supply_atomic"
+lifecycle = "lifecycle"
+mode = "mode"
+
+[[projections]]
+capability_id = "pumpfun.curve-lifecycle.v2"
+event_kind = "VENUE_LIFECYCLE"
+protocol_payload_schema_id = "pump-lifecycle-state-v1"
+
+[projections.columns]
+block_ordinal = "block_ordinal"
+transaction_index = "transaction_index"
+event_index = "event_index"
+signature = "signature"
+venue = "venue"
+lifecycle_kind = "lifecycle_kind"
+virtual_token_reserves_atomic = "virtual_token_reserves_atomic"
+virtual_sol_reserves_lamports = "virtual_sol_reserves_lamports"
+real_token_reserves_atomic = "real_token_reserves_atomic"
+real_sol_reserves_lamports = "real_sol_reserves_lamports"
+token_total_supply_atomic = "token_total_supply_atomic"
+lifecycle = "lifecycle"
+mode = "mode"

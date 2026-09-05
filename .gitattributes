@@ -1,0 +1,15 @@
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.parquet binary
+
+# Keep maintainer-only guidance out of source archives created by GitHub.
+.agents/ export-ignore
+AGENTS.md export-ignore
+AGENTS.ru.md export-ignore
+docs/public-release-checklist.md export-ignore
+docs/public-release-checklist.ru.md export-ignore

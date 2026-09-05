@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>Sniping result · On-Chain Backtest Engine</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+    <script defer src="/static/sniping-results.js"></script>
+  </head>
+  <body class="dashboard-body">
+    <header class="topbar dashboard-topbar">
+      <div>
+        <p class="eyebrow">Exact committed run artifact</p>
+        <h1>Sniping result</h1>
+        <p class="dashboard-subtitle">
+          Результаты Pump.fun Sniping без загрузки файлов и участия UI в replay.
+        </p>
+      </div>
+      <div class="dashboard-header-actions">
+        <a class="button-link secondary" href="/">← Control UI</a>
+        <div id="dashboard-status" class="status" role="status" aria-live="polite">
+          Ожидаю Run artifact ID
+        </div>
+      </div>
+    </header>
+
+    <main class="dashboard-main">
+      <section class="panel dashboard-query-panel" aria-labelledby="dashboard-query-heading">
+        <div>
+          <p class="eyebrow">Источник данных</p>
+          <h2 id="dashboard-query-heading">Открыть точный результат</h2>
+          <p class="notice dashboard-query-note">
+            Графики используют проверенную сводку всего run. Таблица получает одну
+            bounded-страницу: 25 сделок по умолчанию, максимум 200.
+          </p>
+        </div>
+        <form id="dashboard-run-form" class="dashboard-query-form">
+          <label>
+            Run artifact ID
+            <input
+              id="dashboard-run-artifact-id"
+              name="run_artifact_id"
+              autocomplete="off"
+              inputmode="text"
+              minlength="64"
+              maxlength="64"
+              pattern="[0-9a-f]{64}"
+              placeholder="64 lowercase hex символа"
+              required
+            />
+          </label>
+          <button type="submit">Открыть dashboard</button>
+        </form>
+      </section>
+
+      <p id="dashboard-error" class="result error dashboard-message" role="alert" hidden></p>
+      <p id="dashboard-prompt" class="panel notice dashboard-message" aria-live="polite">
+        Перейдите сюда кнопкой <span class="mono">Sniping result</span> из списка runs
+        или вставьте точный Run artifact ID.
+      </p>
+
+      <div id="dashboard-content" class="dashboard-content" hidden>
+        <section class="dashboard-overview" aria-labelledby="dashboard-overview-heading">
+          <div class="dashboard-section-title">
+            <div>
+              <p class="eyebrow">Итог run</p>
+              <h2 id="dashboard-overview-heading">Ключевые показатели</h2>
+            </div>
+            <div class="dashboard-header-actions">
+              <span id="execution-mode-badge" class="badge">Execution mode</span>
+              <span id="valuation-badge" class="badge">Valuation</span>
+            </div>
+          </div>
+          <div id="dashboard-kpis" class="dashboard-kpis" aria-live="polite"></div>
+          <div id="dashboard-data-notices" class="dashboard-notices" aria-live="polite"></div>
+        </section>
+
+        <!-- Ratios are derived only from the bounded whole-run summary already on screen. -->
+        <section class="panel" aria-labelledby="dashboard-efficiency-heading">
+          <div class="section-heading dashboard-section-heading">
+            <div>
+              <p class="eyebrow">Full-run summary · derived metrics</p>
+              <h2 id="dashboard-efficiency-heading">Эффективность и покрытие</h2>
+            </div>
+          </div>
+          <!-- Every card names its numerator and denominator to avoid ambiguous percentages. -->
+          <div id="dashboard-analytics" class="dashboard-analytics" aria-live="polite"></div>
+        </section>
+
+        <section class="panel" aria-labelledby="dashboard-charts-heading">
+          <div class="section-heading dashboard-section-heading">
+            <div>
+              <p class="eyebrow">Полный run · summary/v3</p>
+              <h2 id="dashboard-charts-heading">Графики результата</h2>
+            </div>
+          </div>
+          <p class="notice">
+            Счётчики показываются как самостоятельные показатели: некоторые этапы
+            пересекаются и поэтому не образуют одну круговую диаграмму.
+          </p>
+          <div class="dashboard-chart-grid">
+            <figure class="chart-card">
+              <figcaption>
+                <strong>Состояния стратегии</strong>
+                <span>Количество записей на разных этапах run</span>
+              </figcaption>
+              <div id="lifecycle-chart" class="chart-scroll"></div>
+            </figure>
+            <figure class="chart-card">
+              <figcaption>
+                <strong>Ордеры</strong>
+                <span>Accepted/rejected и исходы accepted-ордеров</span>
+              </figcaption>
+              <div id="orders-chart" class="chart-scroll"></div>
+            </figure>
+            <figure class="chart-card chart-card-wide">
+              <figcaption>
+                <strong>PnL</strong>
+                <span>SOL; ноль находится в центре шкалы</span>
+              </figcaption>
+              <div id="pnl-chart" class="chart-scroll"></div>
+            </figure>
+            <figure class="chart-card">
+              <figcaption>
+                <strong>Оплаченные комиссии</strong>
+                <span>SOL; account deposits сюда не входят</span>
+              </figcaption>
+              <div id="fees-chart" class="chart-scroll"></div>
+            </figure>
+            <figure class="chart-card">
+              <figcaption>
+                <strong>Account deposits / rent</strong>
+                <span>SOL; paid, refunded и оставшийся locked</span>
+              </figcaption>
+              <div id="deposits-chart" class="chart-scroll"></div>
+            </figure>
+            <figure class="chart-card">
+              <figcaption>
+                <strong>Источники sell settlement</strong>
+                <span>SOL; venue reserves и явно синтетическое покрытие</span>
+              </figcaption>
+              <div id="settlement-chart" class="chart-scroll"></div>
+            </figure>
+            <figure class="chart-card chart-card-wide">
+              <figcaption>
+                <strong>Slippage outcomes</strong>
+                <span>Количество favourable/adverse landing и отказов по limit</span>
+              </figcaption>
+              <div id="slippage-chart" class="chart-scroll"></div>
+            </figure>
+          </div>
+        </section>
+
+        <section class="panel" aria-labelledby="dashboard-trades-heading">
+          <div class="section-heading dashboard-section-heading">
+            <div>
+              <p class="eyebrow">Roundtrips/v4 · keyset pagination</p>
+              <h2 id="dashboard-trades-heading">Сделки</h2>
+            </div>
+            <p id="loaded-count" class="loaded-count"></p>
+          </div>
+          <div class="dashboard-table-controls">
+            <label>
+              Поиск на текущей странице
+              <input id="trade-search" type="search" placeholder="token, developer, roundtrip ID" aria-controls="dashboard-roundtrips-body" />
+            </label>
+            <!-- Status choices are rebuilt from the current page and never imply a global filter. -->
+            <label>
+              Статус на текущей странице
+              <select id="trade-status-filter" aria-controls="dashboard-roundtrips-body">
+                <option value="ALL">Все статусы</option>
+              </select>
+            </label>
+            <!-- Sorting is deliberately allowlisted and applies after one bounded page arrives. -->
+            <label>
+              Сортировка текущей страницы
+              <select id="trade-sort-field" aria-controls="dashboard-roundtrips-body">
+                <option value="TARGET_TIME">Дата target</option>
+                <option value="TARGET_BOUNDARY">Target boundary</option>
+                <option value="STATUS">Статус</option>
+                <!-- Identity sorts help compare related token and developer rows. -->
+                <option value="ASSET">Токен</option>
+                <option value="DEVELOPER">Разработчик</option>
+                <!-- Atomic-value sorts use BigInt and never coerce money to float. -->
+                <option value="PNL">PnL / MTM</option>
+                <option value="TOTAL_FEES">Все комиссии</option>
+              </select>
+            </label>
+            <!-- A single button keeps direction explicit for keyboard and screen-reader users. -->
+            <button id="trade-sort-direction" class="secondary sort-direction" type="button" aria-controls="dashboard-roundtrips-body" aria-pressed="true">
+              ↓ По убыванию
+            </button>
+            <label>
+              Строк на странице
+              <select id="trade-page-size" aria-controls="dashboard-roundtrips-body">
+                <option value="25" selected>25</option>
+                <option value="50">50</option>
+                <!-- Larger pages are opt-in and remain under the server-side cap. -->
+                <option value="100">100</option>
+                <option value="200">200</option>
+              </select>
+            </label>
+            <!-- Cursor arrows fetch on demand; the browser retains only the visible rows. -->
+            <div class="pagination-controls" aria-label="Пагинация сделок">
+              <button id="previous-page" class="secondary" type="button" aria-label="Предыдущая страница" aria-controls="dashboard-roundtrips-body" disabled>←</button>
+              <span id="page-label" class="mono">Страница —</span>
+              <button id="next-page" class="secondary" type="button" aria-label="Следующая страница" aria-controls="dashboard-roundtrips-body" disabled>→</button>
+            </div>
+          </div>
+          <p class="notice table-scope-note">
+            Поиск, статус и сортировка применяются только к открытой странице.
+            Стрелки загружают одну bounded-страницу по требованию; все сделки в браузер не загружаются.
+          </p>
+          <div class="table-wrap dashboard-table-wrap">
+            <table class="dashboard-table" aria-labelledby="dashboard-trades-heading">
+              <thead>
+                <tr>
+                  <th>Target</th>
+                  <th>Token / developer</th>
+                  <th>Status</th>
+                  <th>Buy</th>
+                  <th>Sell</th>
+                  <th>Sell liquidity</th>
+                  <th>Fees</th>
+                  <th>Account / rent</th>
+                  <th>PnL / MTM</th>
+                </tr>
+              </thead>
+              <tbody id="dashboard-roundtrips-body"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel" aria-labelledby="dashboard-verification-heading">
+          <details>
+            <summary id="dashboard-verification-heading">Identity и verification hashes</summary>
+            <div class="table-wrap verification-table-wrap">
+              <table aria-labelledby="dashboard-verification-heading">
+                <tbody id="dashboard-verification-body"></tbody>
+              </table>
+            </div>
+          </details>
+        </section>
+      </div>
+    </main>
+  </body>
+</html>

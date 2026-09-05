@@ -1,0 +1,60 @@
+[importlinter]
+root_package = backtest
+
+[importlinter:contract:domain]
+name = Domain is independent
+type = forbidden
+source_modules =
+    backtest.domain
+forbidden_modules =
+    backtest.application
+    backtest.engine
+    backtest.adapters
+    backtest.runtime
+    backtest.bootstrap
+    backtest.interfaces
+    backtest.plugins
+
+[importlinter:contract:engine]
+name = Engine does not depend on infrastructure
+type = forbidden
+source_modules =
+    backtest.engine
+forbidden_modules =
+    backtest.application
+    backtest.adapters
+    backtest.runtime
+    backtest.bootstrap
+    backtest.interfaces
+    backtest.plugins
+
+[importlinter:contract:application]
+name = Application does not depend on concrete adapters or interfaces
+type = forbidden
+source_modules =
+    backtest.application
+forbidden_modules =
+    backtest.adapters
+    backtest.runtime
+    backtest.bootstrap
+    backtest.interfaces
+
+[importlinter:contract:interfaces]
+name = Interfaces do not depend on concrete adapters
+type = forbidden
+source_modules =
+    backtest.interfaces
+forbidden_modules =
+    backtest.adapters
+    backtest.bootstrap
+    backtest.runtime
+
+[importlinter:contract:plugins]
+name = Plugins do not depend on adapters or interfaces
+type = forbidden
+source_modules =
+    backtest.plugins
+forbidden_modules =
+    backtest.adapters
+    backtest.bootstrap
+    backtest.interfaces

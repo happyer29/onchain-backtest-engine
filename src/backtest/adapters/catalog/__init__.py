@@ -1,0 +1,1 @@
+"""Catalog adapter implementations."""

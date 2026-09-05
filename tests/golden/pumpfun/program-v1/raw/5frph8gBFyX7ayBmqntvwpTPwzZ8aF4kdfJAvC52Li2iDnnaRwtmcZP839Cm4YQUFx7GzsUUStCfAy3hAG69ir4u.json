@@ -1,0 +1,54 @@
+{
+  "schema": "solana-finalized-pump-event-excerpt/v1",
+  "event_schema_pin": "pump-historical-2025-05-08",
+  "network_id": "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d",
+  "rpc": {
+    "method": "getTransaction",
+    "config": {"commitment": "finalized", "encoding": "jsonParsed", "maxSupportedTransactionVersion": 0},
+    "full_result_canonical_sha256": "b31bad4689389ee11b21fde052990635ed16d2b79e94a592d0f8fc092d2cd2d4"
+  },
+  "transaction": {
+    "signature": "5frph8gBFyX7ayBmqntvwpTPwzZ8aF4kdfJAvC52Li2iDnnaRwtmcZP839Cm4YQUFx7GzsUUStCfAy3hAG69ir4u",
+    "slot": "346729519",
+    "block_time": "1749900608",
+    "transaction_index": "1193",
+    "meta_err": null,
+    "fee_lamports": "1000000"
+  },
+  "instruction": {
+    "program_id": "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P",
+    "outer_index": "6",
+    "inner_index": "0",
+    "data_base58": "AJTQ2h9DXrCAgW1fi5MtcdUBeLdQoEnNb",
+    "mint_account": "Coyj3LtKn1BNSgWc9HsGK5SKoGfEoDaymig4wrN6pump",
+    "user_account": "toAPhdPcxDZsm2ziAgKcLLb5FMvhsUxqWpRvxTnYfnP",
+    "quote_mint_account": "11111111111111111111111111111111",
+    "token_program_account": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+  },
+  "program_data": {
+    "log_index": "44",
+    "log_line": "Program data: vdt/007mYe6veWmR3n5cI8fjNmGg3DzRmadaxp3hRL2TEauqTBVwf0BCDwAAAAAA/2umFQgAAAABDUTRFBWEDacGPmKehvTWShHT2hVZ10ETJFJnNtQCDMhAXU1oAAAAABEU2BYHAAAA7zDEK4fBAwARaLQaAAAAAO+Ysd/1wgIArRHmpPwpRKT6glG++BVCbhv7KMa2ZGZ3YHxq2fVmpkZfAAAAAAAAABwlAAAAAAAAjPGJIW1/bPRZeY1se2ZX3gPauWwQ5IERds7mLkiL3sUFAAAAAAAAAPQBAAAAAAAA",
+    "decoded_bytes_sha256": "c46ac47247857990cd0bc7c3f1fbbf90d66af4963c7b9687f08ab1b170d56b95",
+    "raw_size_bytes": "225",
+    "trailing_bytes": "0",
+    "event_name": "TradeEvent",
+    "fields": {
+      "mint": "Coyj3LtKn1BNSgWc9HsGK5SKoGfEoDaymig4wrN6pump",
+      "sol_amount": "1000000",
+      "token_amount": "34722966527",
+      "is_buy": true,
+      "user": "toAPhdPcxDZsm2ziAgKcLLb5FMvhsUxqWpRvxTnYfnP",
+      "timestamp": "1749900608",
+      "virtual_sol_reserves": "30448030737",
+      "virtual_token_reserves": "1057211229155567",
+      "real_sol_reserves": "448030737",
+      "real_token_reserves": "777311229155567",
+      "fee_recipient": "CebN5WGQ4jvEPvsVU4EoHEpgzq1VV7AbicfhtW4xC9iM",
+      "fee_basis_points": "95",
+      "fee": "9500",
+      "creator": "AVBhCSDEC9MTHt1JgzEncJNDdWZWYwYj4unAXmEcgKDW",
+      "creator_fee_basis_points": "5",
+      "creator_fee": "500"
+    }
+  }
+}

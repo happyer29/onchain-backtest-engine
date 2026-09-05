@@ -1,0 +1,87 @@
+{
+  "schema": "solana-finalized-pump-events-excerpt/v1",
+  "event_schema_pin": "pump-current-2026-07-15",
+  "network_id": "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d",
+  "rpc": {
+    "method": "getTransaction",
+    "config": {"commitment": "finalized", "encoding": "jsonParsed", "maxSupportedTransactionVersion": 0},
+    "full_result_canonical_sha256": "c52218c14bc183379035fda6bf8507bd3f9fe1249bf74e676ba3ffd161242486"
+  },
+  "transaction": {
+    "signature": "31QhkqJrmW4MPZ2ABRUZMKtzV72aRKn9kXM1BJMqGyxfMRbys7vf97c32HWjAsLrLnS1vbjoz5WVJycxEod8qPRK",
+    "slot": "443742171",
+    "block_time": "1788366409",
+    "transaction_index": "509",
+    "meta_err": null,
+    "fee_lamports": "59545"
+  },
+  "instruction": {
+    "program_id": "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P",
+    "outer_index": "3",
+    "inner_index": "0",
+    "data_base58": "AJTQ2h9DXrBgXAuPi2jqh5TwxhnjRxbMR",
+    "mint_account": "7HJCxCMTnit9rLS21e9SMdisJaaZ9A5P3N1Lq99roeTz",
+    "user_account": "6QsmudoTFXKr6cSJwLBD3tvdFUXx2UnYhuEvTJ3k3SYs",
+    "quote_mint_account": "11111111111111111111111111111111",
+    "token_program_account": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+  },
+  "program_data": [
+    {
+      "log_index": "44",
+      "log_line": "Program data: vdt/007mYe5dUt6U+hZagnTn5ikbgcQsxG/KTavHU2f4tAsnrC+tkcWltHMAAAAAG15L514EAAABUGg0MfWPZAlOmPd4ckoQWA5VK7ynAf8boF7GmuLUAzxJTphqAAAAABWF2sYaAAAAAJgSTJH+AAAV2bbKEwAAAAAAAAAAAAAA16qPsGDYKRtMTUddr/diyWvcDazrNsAS6tEu06lIQWFfAAAAAAAAAGtlGQEAAAAACPN2tuKiK+Q9+2F4Rb7NBLFEn8+gQ/IjFOPv1eHHvnEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwAAAGJ1eQAeAAAAAAAAAKncWAAAAAAAiBMAAAAAAAC1sowAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMWltHMAAAAAFYXaxhoAAAAV2bbKEwAAAA==",
+      "decoded_bytes_sha256": "dbc9376fd1a99b93eeb93e930fe5e3068baf42cab6828089a8f4f6879f703f4f",
+      "raw_size_bytes": "358",
+      "trailing_bytes": "0",
+      "event_name": "TradeEvent",
+      "fields": {
+        "mint": "7HJCxCMTnit9rLS21e9SMdisJaaZ9A5P3N1Lq99roeTz",
+        "sol_amount": "1941218757",
+        "token_amount": "4805653913115",
+        "is_buy": true,
+        "user": "6QsmudoTFXKr6cSJwLBD3tvdFUXx2UnYhuEvTJ3k3SYs",
+        "timestamp": "1788366409",
+        "virtual_sol_reserves": "115005359381",
+        "virtual_token_reserves": "279900000000000",
+        "real_sol_reserves": "85005359381",
+        "real_token_reserves": "0",
+        "fee_recipient": "FWsW1xNtWscwNmKv6wVsU1iTzRN6wmmk3MjxRP5tT7hz",
+        "fee_basis_points": "95",
+        "fee": "18441579",
+        "creator": "bwamJzztZsepfkteWRChggmXuiiCQvpLqPietdNfSXa",
+        "creator_fee_basis_points": "0",
+        "creator_fee": "0",
+        "track_volume": false,
+        "total_unclaimed_tokens": "0",
+        "total_claimed_tokens": "0",
+        "current_sol_volume": "0",
+        "last_update_timestamp": "0",
+        "ix_name": "buy",
+        "mayhem_mode": false,
+        "cashback_fee_basis_points": "30",
+        "cashback": "5823657",
+        "buyback_fee_basis_points": "5000",
+        "buyback_fee": "9220789",
+        "shareholders": [],
+        "quote_mint": "11111111111111111111111111111111",
+        "quote_amount": "1941218757",
+        "virtual_quote_reserves": "115005359381",
+        "real_quote_reserves": "85005359381"
+      }
+    },
+    {
+      "log_index": "48",
+      "log_line": "Program data: X3JhnNQumAhQaDQx9Y9kCU6Y93hyShBYDlUrvKcB/xugXsaa4tQDPF1S3pT6FlqCdOfmKRuBxCzEb8pNq8dTZ/i0CyesL62RP6SfCOEZgFGpVWO3DsCCkhX7vG9cXQrRUsl66YrvoQVJTphqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "decoded_bytes_sha256": "01a68c5774df50627d51e0fe126b34fa0fed681435951d64270d422408830fb9",
+      "raw_size_bytes": "144",
+      "trailing_bytes": "0",
+      "event_name": "CompleteEvent",
+      "fields": {
+        "user": "6QsmudoTFXKr6cSJwLBD3tvdFUXx2UnYhuEvTJ3k3SYs",
+        "mint": "7HJCxCMTnit9rLS21e9SMdisJaaZ9A5P3N1Lq99roeTz",
+        "bonding_curve": "5HSH4BggaE4wwi2LtQRmu1x6tGyySZhGfEQRoGqELsLg",
+        "timestamp": "1788366409",
+        "quote_mint": "11111111111111111111111111111111"
+      }
+    }
+  ]
+}
