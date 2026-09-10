@@ -26,10 +26,10 @@ SOL_QUOTE: Final = "So11111111111111111111111111111111111111112"
 MAX_PAGE_SIZE: Final = 200
 MAX_BLOCK_SPAN: Final = 300_000
 
-# Hard caps reject excess work rather than silently sampling a dense market.
+# Calibrated dense-market caps retain all signers; native memory/time/spill guards still apply.
 MAX_SOURCE_ROWS: Final = 2_000_000
-MAX_PAIR_CANDIDATES: Final = 2_000_000
-MAX_SIGNERS_PER_MINT: Final = 512
+MAX_PAIR_CANDIDATES: Final = 4_000_000
+MAX_SIGNERS_PER_MINT: Final = 2_048
 MAX_SELECTED_WALLETS: Final = 128
 MAX_WINDOW_SECONDS: Final = 3_600
 

@@ -180,10 +180,13 @@ Pump.fun signing-wallet activity, shared-token purchase pairs and original
 trade evidence over immutable local snapshots. Start with the
 [wallet research guide](docs/wallet-research.md). The contract is in
 [deep dive §24.6](docs/architecture-deep-dive.md#246-on-chain-wallet-research).
-Hermetic source/CLI/API/child and browser workflows are verified. Source
-completeness and causal availability remain `UNKNOWN`; live research capacity,
-transfers, full wallet PnL, owner clustering and automatic strategy promotion
-are not claimed. This does not extend admitted Sniping source scope.
+Hermetic source/CLI/API/child and browser workflows are verified. Local analysis
+of one saved live-source cut passed with all 10,075 signers, 97,040 rows and a
+180-second window; see the scoped [capacity evidence](docs/research-capacity.md).
+Source completeness and causal availability remain `UNKNOWN`; general live
+research capacity, transfers, full wallet PnL, owner clustering and automatic
+strategy promotion are not claimed. This does not extend admitted Sniping
+source scope.
 
 ## Honest limitations
 

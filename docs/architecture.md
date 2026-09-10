@@ -19,9 +19,12 @@ apply. Signer and fee payer remain distinct roles, source-row multiplicity is
 preserved, and completeness/finality remain UNKNOWN. Research artifacts cannot
 enter replay or Strategy directly. Existing Sniping gates and identities are
 unchanged. The first slice is implemented and verified on hermetic source,
-CLI/API/child and browser workflows. Live-source fidelity/capacity, transfers,
-full wallet PnL, ownership clustering and automatic strategy promotion remain
-outside this closure. See the [wallet research guide](wallet-research.md).
+CLI/API/child and browser workflows. One saved live-source cut passed local
+analysis of all 10,075 signers and 97,040 rows at a 180-second window; scoped
+[capacity evidence](research-capacity.md) records the limits. General live-source
+fidelity/capacity, transfers, full wallet PnL, ownership clustering and automatic
+strategy promotion remain outside this closure. See the
+[wallet research guide](wallet-research.md).
 
 ## 1. The decision in one paragraph
 

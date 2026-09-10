@@ -118,8 +118,8 @@ Transfers, full balance history, wallet PnL and ownership clustering are not
 implemented. Source amount-leg sums are not wallet profit.
 
 Preparation permits at most 300,000 blocks and 2 million rows. Analysis limits
-the window to 0–3,600 seconds, each mint to 512 participants and the candidate
-join to 2 million pair/mint combinations **before** the time filter. Memory,
+the window to 0–3,600 seconds, each mint to 2,048 participants and the candidate
+join to 4 million pair/mint combinations **before** the time filter. Memory,
 spill, output and query time are bounded; source-server limits may reject a
 scan earlier. API pages allow at most 200 rows and the UI requests 25.
 
@@ -127,6 +127,12 @@ Limit failures reject the whole computation. They never drop popular tokens,
 truncate observations or silently sample a top list. Narrow the range or
 explicitly select signers and run a new analysis. A smaller time window does
 not remove the prejoin candidate check.
+
+Leave the signer field empty to analyze all observed signers. A saved
+97,040-row cut with 10,075 signers passed at 180 seconds and a minimum of two
+shared mints: 81,645 pairs and 213,851 pair/mint evidence rows. The graph still
+shows the current page. [Capacity evidence](research-capacity.md) records this
+specific workload; larger or denser snapshots can still exceed the guards.
 
 ## Move a hypothesis toward a strategy
 

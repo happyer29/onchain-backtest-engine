@@ -282,9 +282,12 @@ re-extraction or ReplayPack recompilation.
   multiplicity are preserved; completeness, finality, source consistency and
   causal availability remain `UNKNOWN`. Hermetic source contracts and isolated
   CLI/API execution are verified; the real-browser workflow and installed-wheel
-  CLI/child/API/assets gate passed. Live research-source capacity/fidelity is
-  not claimed. Transfers, full wallet PnL, owner clustering and automatic
-  strategy promotion remain unimplemented;
+  CLI/child/API/assets gate passed. Local analysis of one saved live-source
+  cut with 97,040 rows and 10,075 signers passed at a 180-second window with
+  an empty signer selection; [capacity evidence](research-capacity.md) records
+  its finite guards and resource measurements. This does not establish general
+  live-source capacity or fidelity. Transfers, full wallet PnL, owner clustering
+  and automatic strategy promotion remain unimplemented;
 - an installable Python 3.13 package, reproducible `uv.lock`, hexagonal ports,
   Import Linter/AST guardrails, and separate CLI/serve/child composition roots;
 - the current source stack uses `bounded-source-evidence/v2`, network-aware
