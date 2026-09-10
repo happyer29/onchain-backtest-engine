@@ -76,6 +76,30 @@ verified committed local files and no source connection.
 The first observed purchase is not necessarily the wallet's first-ever
 purchase. Reported block time does not prove when a strategy could know it.
 
+### What only first purchases misses
+
+The selection is independent for **each wallet/token combination**. A wallet
+has a first BUY of X and a separate first BUY of Y. It is not one first trade
+for the entire wallet. Purchases before the snapshot are unknown to this
+recipe; moving its left block boundary may change which purchases are first.
+The block range defines the full observation period; the seconds window only
+limits the gap between two first purchases of the same mint. Qualifying
+purchases of different mints can happen hours apart.
+
+Example: token X, 60-second window, all rows inside the snapshot:
+
+| Time | Wallet | Purchase | Compared? |
+|---|---|---|---|
+| 10:00:00 | A | First X | Yes |
+| 10:20:00 | A | Repeated X | No |
+| 10:20:30 | B | First X | Yes |
+
+The comparison uses 10:00:00 and 10:20:30: **1,230 seconds**, above the window.
+X contributes nothing to this pair even though the later buys are 30 seconds
+apart. If B's first buy were at 10:00:30 instead, X would contribute exactly
+one; a minimum of two still requires another qualifying token. The page
+includes this worked example beside its four-step method description.
+
 ## Inspect results and evidence
 
 Run `backtest serve --config configs/local-16gb.toml` and open `/research` at
@@ -91,6 +115,16 @@ controller.
 | Graph | Current page only: at most 25 pairs and 50 nodes |
 | Purchase evidence | Mint and both original purchases, including full signatures, signers and fee payers |
 | Lineage | The exact retained input snapshot |
+
+The bundled Cytoscape.js graph supports wheel/pinch zoom, canvas panning and
+node dragging. Use Fit to restore the viewport, Reset layout to undo manual
+positions, and Expand for more space. Select a node or choose its full address
+in the keyboard-accessible current-page selector; the inspector lists only
+its current-page neighbours. Select an edge or neighbour, then open its exact
+pair's purchase evidence. Graph page buttons use the same table cursor and
+replace, rather than accumulate, nodes. The first page is not a strongest-pair
+ranking; layout distance does not establish a cluster or statistical strength.
+The table remains available if the graph library cannot load.
 
 The evidence total sums pair/mint contributions; it is not a market-wide
 distinct-token count. Activity deliberately retains duplicate source rows.

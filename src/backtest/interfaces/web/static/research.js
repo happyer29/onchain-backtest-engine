@@ -192,6 +192,8 @@ async function openArtifact(id) {
   const version = ++state.version;
   $("#error").hidden = true;
   $("#result").hidden = true;
+  // Release the previous page before resolving a different immutable artifact.
+  ResearchGraph.clear();
   // Keep the previous view hidden until its replacement manifest is verified by the server.
   const summary = await api(`/api/v1/research/${id}`);
   // A slower request must never overwrite a more recently selected artifact.
@@ -248,6 +250,9 @@ async function selectTable(table, pair = null) {
 async function loadPage(cursor) {
   const version = ++state.version;
   const {artifact, table, pair} = state;
+  // Retire old evidence callbacks while the replacement page is being verified.
+  ResearchGraph.clear("Загружаем текущую страницу…");
+  $("#graph-next-page").disabled = true;
   const query = new URLSearchParams({limit: "25"});
   if (cursor) query.set("cursor", cursor);
   // Evidence requests name one pair ordinal in the exact selected result.
@@ -261,7 +266,11 @@ async function loadPage(cursor) {
   renderRows(page.rows, table);
   $("#next-page").disabled = !page.next_cursor;
   $("#graph-panel").hidden = table !== "pairs";
-  if (table === "pairs") renderGraph(page.rows);
+  // Canvas and table drilldown share the same exact result-local pair ordinal.
+  if (table === "pairs") ResearchGraph.render(page.rows, (rowId) => {
+    selectTable("evidence", rowId).catch(showError);
+  });
+  $("#graph-next-page").disabled = !page.next_cursor;
   // Selected tabs stay keyboard navigable and announce their active state.
   for (const button of $("#tabs").children) button.setAttribute("aria-pressed", String(button.dataset.table === table));
 }
@@ -303,47 +312,13 @@ function renderRows(rows, table) {
   }
 }
 
-// SVG construction uses a fixed namespace and renderer-owned attribute names.
-function svgElement(tag, attributes, text = "") {
-  // Attribute names and values below are owned by the renderer, never user-supplied code.
-  const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
-  for (const [key, value] of Object.entries(attributes)) node.setAttribute(key, String(value));
-  node.textContent = text;
-  return node;
-}
-
-// The graph is a presentation of loaded pair rows, not a new clustering calculation.
-function renderGraph(rows) {
-  const graph = $("#graph");
-  graph.replaceChildren();
-  const wallets = [...new Set(rows.flatMap((row) => [row.signer_a, row.signer_b]))].sort();
-  // At most 25 pair rows produce 50 nodes; no full-result graph is loaded by the browser.
-  const positions = new Map(wallets.map((wallet, index) => [wallet, {
-    x: 450 + 310 * Math.cos(index * 2 * Math.PI / wallets.length),
-    y: 190 + 140 * Math.sin(index * 2 * Math.PI / wallets.length)}]));
-  for (const row of rows) {
-    const a = positions.get(row.signer_a), b = positions.get(row.signer_b);
-    // The bounded shared-mint counter affects only visual width, never analytical values.
-    const line = svgElement("line", {x1: a.x, y1: a.y, x2: b.x, y2: b.y,
-      stroke: "#78c9b5", "stroke-opacity": .6, "stroke-width": 1 + Math.log2(1 + Number(row.shared_mints))});
-    line.append(svgElement("title", {}, `${row.signer_a} ↔ ${row.signer_b}: ${row.shared_mints} токенов`));
-    graph.append(line);
-  }
-  // Draw each observed signer once, independently of how many page pairs reference it.
-  for (const [wallet, position] of positions) {
-    // Full keys remain in accessible SVG titles; compact labels avoid visual overlap.
-    const circle = svgElement("circle", {cx: position.x, cy: position.y, r: 6, fill: "#c5f3e6"});
-    circle.append(svgElement("title", {}, wallet));
-    graph.append(circle, svgElement("text", {x: position.x, y: position.y - 14, fill: "#dce7f2",
-      "font-size": 11, "text-anchor": "middle"}, wallet.slice(0, 5) + "…" + wallet.slice(-4)));
-    // These compact labels supplement full keys in the title and evidence table.
-  }
-}
-
 // Manual navigation uses the exact server cursor; view changes discard old continuations.
 $("#open-form").addEventListener("submit", (event) => {event.preventDefault(); openArtifact($("#artifact-id").value.trim()).catch(showError);});
 $("#first-page").addEventListener("click", () => loadPage(null).catch(showError));
 $("#next-page").addEventListener("click", () => loadPage(state.next).catch(showError));
+// Graph pagination shares the table cursor without loading hidden pages or recalculating pairs.
+$("#graph-first-page").addEventListener("click", () => loadPage(null).catch(showError));
+$("#graph-next-page").addEventListener("click", () => loadPage(state.next).catch(showError));
 $("#refresh-jobs").addEventListener("click", () => refreshJobs().catch(showError));
 
 // Poll only a bounded recent-job list, pause while hidden, and let users reopen exact artifacts.

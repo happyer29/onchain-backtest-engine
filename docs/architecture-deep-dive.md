@@ -278,7 +278,11 @@ re-extraction or ReplayPack recompilation.
 - the separate §24.6 wallet-research slice: bounded successful SOL-paired
   Pump observations, immutable ResearchSnapshot/ResearchResult, local DuckDB
   activity/co-buy analysis, exact source-row evidence, durable isolated jobs,
-  CLI and same-origin `/research` dashboard. Signer/payer roles and duplicate
+  CLI and same-origin `/research` dashboard. The page explains first BUY per
+  signer/mint within the snapshot, including missed later co-buys, and ships
+  pinned local Cytoscape.js with zoom/pan/drag, accessible selection and exact
+  pair-evidence navigation for at most 25 page pairs / 50 nodes. Graph layout
+  and selection are presentation only. Signer/payer roles and duplicate
   multiplicity are preserved; completeness, finality, source consistency and
   causal availability remain `UNKNOWN`. Hermetic source contracts and isolated
   CLI/API execution are verified; the real-browser workflow and installed-wheel

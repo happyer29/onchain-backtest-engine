@@ -15,9 +15,31 @@ textarea{resize:vertical}button{font:inherit;background:#9de0cb;color:#122822;bo
 .metrics{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}.metric{padding:16px;background:#1b2630;border-radius:8px}.metric strong{display:block;font-size:28px}.metric span{font-size:12px;color:#a3b0c0}
 .table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;padding:12px 10px;border-bottom:1px solid #34404d;white-space:nowrap}th{color:#a3b0c0;font-weight:500}td code{font-size:11px}
 .pagination,nav{display:flex;gap:12px;align-items:center;margin:18px 0}.pagination{justify-content:space-between;font-size:12px}.job{display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid #303c49}.job code{flex:1;overflow:hidden;text-overflow:ellipsis}
-#error,.form-feedback.error{color:#ffd0c8;background:#422523;padding:16px;border-radius:8px}#graph{display:block;width:100%;max-height:380px}footer{border-top:1px solid #303c49;margin-top:32px}[hidden]{display:none!important}
+#error,.form-feedback.error{color:#ffd0c8;background:#422523;padding:16px;border-radius:8px}footer{border-top:1px solid #303c49;margin-top:32px}[hidden]{display:none!important}
 /* Form outcomes remain readable beside their action and wrap long durable job IDs. */
 .form-feedback{font-size:13px;color:#a9e0cf;overflow-wrap:anywhere;margin:12px 0 0}
 /* Keyboard focus and narrow layouts preserve access to every research action. */
 :focus-visible{outline:3px solid #f1ce79;outline-offset:3px}nav button[aria-pressed=true]{background:#9de0cb;color:#122822}
 @media(max-width:760px){.workflow{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(2,1fr)}.open-form{display:block}.open-form button{margin-top:12px}.job{flex-wrap:wrap}main,header,footer{padding:16px}.panel{padding:16px}}
+
+/* Method steps separate the recipe from examples and expose the missed-later-buy limitation. */
+.method{scroll-margin-top:24px}.method>p,.method details{max-width:980px}.method-steps{padding-left:24px;display:grid;grid-template-columns:1fr 1fr;gap:16px 40px}
+.method-steps li{padding-left:4px;font-size:14px}.method summary{cursor:pointer;color:#9de0cb;font-weight:600;padding:10px 0}.method details[open]{padding-bottom:12px}
+.method-example caption{text-align:left;color:#a3b0c0;font-size:12px}.method-example th,.method-example td{white-space:normal}.method .hint{margin-top:18px}
+/* Keep graph controls beside the viewport, with visible full-address keyboard navigation. */
+.graph-badge{font-size:11px;color:#86cdbc;border:1px solid #34524b;border-radius:20px;padding:4px 10px}.graph-controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:16px 0}
+.graph-controls button{font-size:12px;padding:9px 12px}#graph-zoom{font-size:12px;color:#a3b0c0;min-width:44px;text-align:center}.graph-workspace{display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:16px}
+#graph{display:block;width:100%;height:480px;position:relative;background:#10171f;border:1px solid #303c49;border-radius:8px;touch-action:none}.graph-expanded #graph{height:72vh;min-height:480px}
+.graph-inspector{min-width:0;max-height:480px;overflow:auto;padding:0 4px}.graph-expanded .graph-inspector{max-height:72vh}select{font:inherit;background:#10171f;color:inherit;border:1px solid #465362;padding:10px;border-radius:6px;width:100%;min-width:0}
+/* Public keys wrap in details; a bounded neighbour list never expands the entire page. */
+.graph-inspector h4{margin:20px 0 10px}.graph-inspector p{font-size:13px}.wallet-address{font-family:monospace;overflow-wrap:anywhere}.graph-neighbours{display:grid;gap:8px}.graph-neighbours button{font-size:11px;font-family:monospace;text-align:left;overflow-wrap:anywhere}
+#graph-selection>button{font-size:12px;width:100%}#graph-clear{font-size:12px}#graph-status{min-height:20px}
+/* On narrow screens the full graph stays above its keyboard-accessible inspector. */
+@media(max-width:900px){.graph-workspace{grid-template-columns:1fr}.graph-inspector,.graph-expanded .graph-inspector{max-height:320px}.graph-inspector label{max-width:100%}}
+@media(max-width:760px){.method-steps{grid-template-columns:1fr;gap:14px}#graph{height:380px}.graph-expanded #graph{min-height:380px}.graph-controls button{flex-grow:1}}
+
+/* Separate native labels exclude the current option text from the accessible control name. */
+.graph-inspector label{margin-bottom:6px}.graph-inspector select{margin-bottom:14px}
+
+/* Full network identities must wrap instead of widening the mobile research result. */
+#scope{overflow-wrap:anywhere}

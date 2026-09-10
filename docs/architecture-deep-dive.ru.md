@@ -267,7 +267,12 @@ Dataset/Snapshot/ReplayPack без source extraction и compile-replay.
 - отдельный wallet-research сценарий §24.6: bounded successful SOL-paired
   Pump observations, immutable ResearchSnapshot/ResearchResult, локальный
   DuckDB activity/co-buy analysis, exact source-row evidence, durable isolated
-  jobs, CLI и same-origin `/research` dashboard. Signer/payer роли и кратность
+  jobs, CLI и same-origin `/research` dashboard. Страница объясняет первую BUY
+  для каждой пары «подписант/токен» внутри снимка и пропуск поздних совпадений.
+  Локально поставляемая фиксированная версия Cytoscape.js даёт масштабирование,
+  перемещение, перетаскивание, доступный выбор и переход к покупкам точной пары
+  для максимум 25 пар / 50 узлов страницы. Раскладка и выделение — только
+  отображение. Signer/payer роли и кратность
   строк сохраняются; completeness, finality, source consistency и causal
   availability остаются `UNKNOWN`. Hermetic source contracts, isolated CLI/API,
   real-browser workflow и installed-wheel CLI/child/API/assets gate прошли.

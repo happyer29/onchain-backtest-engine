@@ -177,7 +177,10 @@ detailed examples are collected in the [CLI reference](docs/cli-reference.md).
 
 The `/research` dashboard and `backtest research` CLI implement bounded
 Pump.fun signing-wallet activity, shared-token purchase pairs and original
-trade evidence over immutable local snapshots. Start with the
+trade evidence over immutable local snapshots. The page explains first buys
+per wallet/token and missed later coincidences. Its locally bundled Cytoscape.js
+graph supports zoom, pan, node dragging, selection and purchase drilldown for
+the current page (at most 25 pairs / 50 nodes). Start with the
 [wallet research guide](docs/wallet-research.md). The contract is in
 [deep dive §24.6](docs/architecture-deep-dive.md#246-on-chain-wallet-research).
 Hermetic source/CLI/API/child and browser workflows are verified. Local analysis

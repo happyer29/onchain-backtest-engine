@@ -6,6 +6,9 @@
   <!-- The research screen is a packaged same-origin client of the existing controller. -->
   <title>Исследование кошельков · Backtest</title>
   <link rel="stylesheet" href="/static/research.css" />
+  <!-- The pinned graph library is shipped locally; deferred order keeps the client synchronous. -->
+  <script defer src="/static/vendor/cytoscape-3.34.3.min.js" integrity="sha384-qPKQxl9uMXOw7vSTUDAnpUilhLuulovw6P5Z4db4bqxW5VhumS7przEmHX0iM0Oc"></script>
+  <script defer src="/static/research-graph.js"></script>
   <script defer src="/static/research.js"></script>
 </head>
 <body>
@@ -42,7 +45,10 @@
             <label>Минимум общих токенов<input name="minimum_shared_mints" type="number" min="1" max="2000000" value="2" required /></label></div>
           <!-- An empty signer selection means all observed signers, never a sampled top list. -->
           <label>Подписанты, необязательно<textarea name="wallets" rows="2" placeholder="Адреса через пробел или с новой строки; до 128"></textarea></label>
-          <p class="hint">Первая покупка в пределах снимка. Один токен даёт паре не больше одной связи.</p>
+          <p class="hint">Сравниваем первую покупку <strong>каждого токена каждым кошельком внутри снимка</strong>.
+            Повторные покупки этого токена не участвуют. Пустой список подписантов = все в снимке.
+            <a href="#first-purchases">Как это считается и что можно пропустить ↓</a></p>
+          <!-- The method description is available before submission without changing any operands. -->
           <button type="submit" aria-describedby="analyze-feedback">Запустить анализ</button>
           <!-- Analysis has an independent outcome so source errors cannot hide its status. -->
           <p id="analyze-feedback" class="form-feedback" role="status" aria-live="polite" tabindex="-1" hidden></p>
@@ -50,6 +56,53 @@
       </section>
       <!-- The next section observes durable jobs rather than inferring completion from a click. -->
     </div>
+    <!-- A fixed worked example explains the actual recipe without simulating new research results. -->
+    <section id="first-purchases" class="panel method" aria-labelledby="method-title">
+      <p class="eyebrow">Как читать результат</p><h2 id="method-title">Что значит «только первые покупки»</h2>
+      <p><strong>Одна первая покупка на сочетание «кошелёк + токен».</strong> У кошелька может быть
+        первая покупка X и отдельно первая покупка Y. Берём самую раннюю наблюдаемую BUY по порядку
+        блоков, транзакций и инструкций в выбранном снимке.</p>
+      <!-- The comparison window is independent of the snapshot's total observation period. -->
+      <ol class="method-steps">
+        <li><strong>Выбрать первые покупки.</strong> История до начала снимка не проверяется:
+          это не обязательно первая покупка токена за всю жизнь кошелька.</li>
+        <li><strong>Сравнить время у двух кошельков.</strong> Для одного и того же токена разница
+          времён блоков должна быть не больше окна. При окне 60 с ровно 60 с тоже считается.</li>
+        <!-- Count distinct qualifying tokens after comparing all first purchases in the snapshot. -->
+        <li><strong>Посчитать общие токены.</strong> Каждый совпавший токен добавляет паре ровно 1.
+          Десять повторных покупок того же токена не увеличат счётчик.</li>
+        <li><strong>Применить минимум.</strong> При минимуме 2 пара попадёт в результат, если
+          совпадение найдено хотя бы для двух разных токенов.</li>
+      </ol>
+      <!-- Keep the main limitation visible; the longer example is optional to expand. -->
+      <p class="notice"><strong>Поздние совместные покупки можно пропустить.</strong> Если первая
+        покупка A была давно, а позже A и B купили токен почти одновременно, позднюю покупку A
+        метод не сравнит с B.</p>
+      <details><summary>Пример: почему совпадение через 30 секунд не учитывается</summary>
+        <p>Один токен X, окно 60 с. Все события ниже находятся внутри снимка.</p>
+        <!-- Explicit inclusion labels prevent the example from implying a sliding all-buy scan. -->
+        <div class="table-wrap"><table class="method-example">
+          <caption>Условные покупки одного токена</caption>
+          <thead><tr><th>Время</th><th>Кошелёк</th><th>Покупка X</th><th>В сравнении</th></tr></thead>
+          <tbody><tr><td>10:00:00</td><td>A</td><td>Первая</td><td>Да</td></tr>
+            <tr><td>10:20:00</td><td>A</td><td>Повторная</td><td>Нет</td></tr>
+            <!-- B's first purchase is compared to A's first, never to A's nearest purchase. -->
+            <tr><td>10:20:30</td><td>B</td><td>Первая</td><td>Да</td></tr></tbody>
+        </table></div>
+        <p>Сравниваются <strong>10:00:00 и 10:20:30</strong>: разница 1 230 с, больше 60 с.
+          Токен X не добавит совпадение этой паре, хотя поздние покупки разделяют всего 30 с.</p>
+        <!-- A positive counterexample makes the inclusive window and one-token contribution explicit. -->
+        <p>Если бы B впервые купил X в 10:00:30, токен добавил бы паре 1 совпадение.
+          При минимуме 2 для появления связи всё ещё нужен ещё один общий токен.</p>
+      </details>
+      <!-- Snapshot boundaries can change the selected first BUY even with an unchanged time window. -->
+      <p class="hint"><strong>Период ≠ окно.</strong> Блоки задают весь период исследования;
+        окно — допустимый разрыв между первыми покупками одного токена. Совпадения по разным
+        токенам могут происходить в разные часы. Сдвиг начала снимка может изменить первые покупки.</p>
+      <!-- Observational timing is not upgraded into causality, ownership or predictive evidence. -->
+      <p class="hint">Число общих токенов не учитывает их популярность и не является проверкой
+        статистической значимости. Связь сама по себе не доказывает координацию или прибыльность стратегии.</p>
+    </section>
     <!-- Durable job state remains visible through completion, failure and cancellation. -->
     <section class="panel"><div class="section-head"><h2>Задачи исследования</h2><button id="refresh-jobs" class="secondary">Обновить</button></div>
       <p id="job-status" role="status" aria-live="polite">Готово к исследованию</p><div id="jobs"></div>
@@ -66,7 +119,39 @@
       <p class="notice">Числа выше относятся ко всему результату. Граф и таблица показывают текущую страницу.
         Подписант и плательщик комиссии — разные роли. Суммы сделок не являются прибылью кошелька.</p>
       <nav id="tabs" aria-label="Таблицы исследования"></nav>
-      <section id="graph-panel" class="panel" hidden><h3>Совместные покупки · текущая страница</h3><svg id="graph" viewBox="0 0 900 380" role="img" aria-label="Граф пар кошельков текущей страницы"></svg><p class="hint">Толщина связи отражает число общих токенов. Для доказательств выбери пару в таблице.</p></section>
+      <!-- Canvas interactions and keyboard controls operate on the same exact bounded pair page. -->
+      <section id="graph-panel" class="panel" hidden>
+        <div class="section-head"><h3>Совместные покупки · текущая страница</h3><span class="graph-badge">Cytoscape.js</span></div>
+        <p id="graph-status" class="hint" role="status" aria-live="polite"></p>
+        <div id="graph-controls" class="graph-controls" role="group" aria-label="Управление графом">
+          <button id="graph-zoom-in" class="secondary" aria-label="Приблизить граф">＋</button>
+          <!-- Zoom is explicit and bounded; Fit restores visibility after dragging or zooming. -->
+          <button id="graph-zoom-out" class="secondary" aria-label="Отдалить граф">−</button>
+          <output id="graph-zoom" aria-label="Масштаб графа">100%</output>
+          <button id="graph-fit" class="secondary">Уместить граф</button>
+          <button id="graph-reset" class="secondary">Сбросить расположение</button>
+          <!-- Expansion changes viewport space while retaining the same bounded data page. -->
+          <button id="graph-expand" class="secondary" aria-pressed="false">Развернуть граф</button>
+        </div>
+        <!-- The page-scoped selector provides a keyboard equivalent to selecting a canvas node. -->
+        <div class="graph-workspace">
+          <div id="graph" role="img" aria-label="Граф пар текущей страницы; выбор кошелька доступен в списке рядом" aria-describedby="graph-help"></div>
+          <aside class="graph-inspector" aria-label="Выбранный элемент графа">
+            <label for="graph-wallet">Кошелёк на текущей странице</label><select id="graph-wallet" disabled><option value="">Выбери кошелёк…</option></select>
+            <button id="graph-clear" class="secondary" disabled>Снять выделение</button>
+            <!-- Details and evidence actions retain full identities beside shortened canvas labels. -->
+            <div id="graph-selection" aria-live="polite"><p class="hint">Выбери узел или связь на графе.</p></div>
+          </aside>
+        </div>
+        <p id="graph-help" class="hint">Колесо или жест двумя пальцами — масштаб; перетаскивание фона — перемещение;
+          узла — его положение. Нажми связь, чтобы открыть покупки. Толщина и подпись связи — число общих токенов.</p>
+        <!-- Layout must not be mistaken for a cluster, a rank or a complete market network. -->
+        <p class="hint">До 25 пар и 50 кошельков. Следующая страница заменяет граф; это не весь граф рынка
+          и не топ связей. Расстояния и положение узлов не имеют аналитического смысла.</p>
+        <!-- Page navigation is also available beside the graph, using the same exact table cursors. -->
+        <div class="pagination"><button id="graph-first-page" class="secondary">К первым парам</button>
+          <button id="graph-next-page" disabled>Следующие пары →</button></div>
+      </section>
       <!-- Empty states never imply a failed computation was a successful empty result. -->
       <section class="panel"><h3 id="table-title"></h3><div class="table-wrap"><table id="rows"></table></div>
         <div class="pagination"><button id="first-page" class="secondary">Первая страница</button><span>До 25 строк на странице</span><button id="next-page" disabled>Далее →</button></div>

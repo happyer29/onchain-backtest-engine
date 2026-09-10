@@ -15,7 +15,10 @@ defines a separate observational research consumer: bounded `research prepare`
 creates a verified immutable participant snapshot; local `research analyze`
 builds activity, shared-mint pairs and exact observation evidence in DuckDB.
 The same durable job/publication lifecycle and same-origin bounded dashboard
-apply. Signer and fee payer remain distinct roles, source-row multiplicity is
+apply. The page explains first purchases and their limitations; locally bundled
+Cytoscape.js adds zoom/pan/drag and accessible exact-pair evidence navigation
+within 25 page pairs / 50 nodes, without changing research identity.
+Signer and fee payer remain distinct roles, source-row multiplicity is
 preserved, and completeness/finality remain UNKNOWN. Research artifacts cannot
 enter replay or Strategy directly. Existing Sniping gates and identities are
 unchanged. The first slice is implemented and verified on hermetic source,
