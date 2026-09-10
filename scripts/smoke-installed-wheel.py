@@ -102,7 +102,10 @@ def _verify_http(port: int, package_root: Path) -> None:
     static = package_root / "interfaces/web/static"
     routes = {"/": "index.html", "/sniping-results": "sniping-results.html"}
     routes.update(
-        {f"/static/{name}": name for name in ("app.js", "sniping-results.js", "styles.css")}
+        {
+            f"/static/{name}": name
+            for name in ("app.js", "sniping-results.js", "theme.js", "styles.css")
+        }
     )
     # Byte equality catches a missing, stale or incorrectly routed packaged asset.
     for route, name in routes.items():
