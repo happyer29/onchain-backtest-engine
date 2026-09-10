@@ -10,7 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 
 # Import datetime at the visible module dependency boundary.
 from datetime import UTC, datetime
@@ -39,9 +39,14 @@ from backtest.domain.identifiers import (
 from backtest.domain.roundtrips import (
     ROUNDTRIP_RESULT_SCHEMA_V3,
     ROUNDTRIP_RESULT_SCHEMA_V4,
+    # Legacy row schemas retain their original meaning beside the new copy family.
 )
+from backtest.engine.copytrading_results import COPY_POSITION_SCHEMA
+from backtest.engine.copytrading_run import CopyFinancialTotals, CopyRunSummary
 from backtest.engine.reference import RunSummary
 from backtest.engine.sniping import SnipingRunSummary, SnipingValuationStatus
+
+# Mode-specific liquidity policies remain validated independently of summary projection.
 from backtest.engine.sniping_contracts import liquidity_policy_id_for_execution_mode
 
 SUCCESSFUL_RUN_SCHEMA: Final = "successful-run/v3"
@@ -72,6 +77,8 @@ class RunBackend(StrEnum):
     NUMPY_MMAP_FIRST_SWAP_EXACT = "numpy-mmap-first-swap-exact-v1"
     REFERENCE_PUMPFUN_SNIPING = "reference-pumpfun-sniping-v1"
     NUMPY_MMAP_PUMPFUN_SNIPING = "numpy-mmap-pumpfun-sniping-v1"
+    # Copy admission is reference-only until its own optimized equivalence/performance gate.
+    REFERENCE_PUMPFUN_COPY_BUY = "reference-pumpfun-copy-buy-v1"
 
     @property
     # Define run backend is pumpfun sniping as one focused operation with an explicit
@@ -121,6 +128,7 @@ class ResultTableDescriptor:
         if self.role is RunResultTableRole.ROUNDTRIPS:
             # The reader preserves committed v3 descriptors while all new writes use v4.
             supported_schemas.add(ROUNDTRIP_RESULT_SCHEMA_V3)
+            supported_schemas.add(COPY_POSITION_SCHEMA)
         if self.relative_name != expected_name or self.schema_id not in supported_schemas:
             raise ValueError("result table descriptor differs from its fixed v1 contract")
         # Invoke _require_result_row_count for result table row count and row count as a
@@ -274,11 +282,16 @@ class RunComparisonProjection:
     @classmethod
     def from_summary(
         cls,
-        summary: RunSummary | SnipingRunSummary | SuccessfulRunSummary,
+        summary: RunSummary | SnipingRunSummary | CopyRunSummary | SuccessfulRunSummary,
     ) -> RunComparisonProjection:
         # Execute the run comparison projection from summary workflow in explicit,
         # reviewable steps.
-        if isinstance(summary, (FirstSwapSummaryMetadata, PumpfunSnipingSummaryMetadata)):
+        if isinstance(summary, CopyRunSummary):
+            return _copy_summary_metadata(summary).comparison
+        if isinstance(
+            summary, (FirstSwapSummaryMetadata, PumpfunSnipingSummaryMetadata, CopySummaryMetadata)
+        ):
+            # Already normalized summaries preserve their immutable comparison projection.
             return summary.comparison
         balances = validate_final_balances(summary.final_balances)
         balance_domain = (
@@ -814,7 +827,88 @@ class PumpfunSnipingSummaryMetadata:
         return document
 
 
-SuccessfulRunSummary = FirstSwapSummaryMetadata | PumpfunSnipingSummaryMetadata
+@dataclass(frozen=True, slots=True)
+class CopySummaryMetadata:
+    """Bounded copy summary; full positions and final balances remain external tables."""
+
+    dataset_logical_content_hash: ContentDigest
+    replay_semantics_id: ContentDigest
+    engine_bundle_id: BundleId
+    strategy_bundle_id: BundleId
+    protocol_bundle_id: BundleId
+    # The same network/account economics retain an independent copy execution identity.
+    network_cost_bundle_id: BundleId
+    execution_mode: ExecutionMode
+    comparison: RunComparisonProjection
+    totals: CopyFinancialTotals
+    roundtrip_digest: ContentDigest
+
+    def __post_init__(self) -> None:
+        """Cross-check common counters against copy-specific terminal outcomes."""
+        totals = self.totals
+        if self.comparison.fill_count != totals.filled_buy_count + totals.closed_position_count:
+            raise ValueError("copy summary fill counts differ from position outcomes")
+        if self.comparison.failed_order_count != totals.failed_buy_count + totals.failed_sell_count:
+            raise ValueError("copy summary failed order counts differ from position outcomes")
+        # Pre-submit rejects are distinct from submitted instructions and their fees.
+        if (
+            self.comparison.rejected_order_count
+            != totals.rejected_buy_count + totals.rejected_sell_count
+        ):
+            raise ValueError("copy summary rejected order counts differ from position outcomes")
+        # Accepted orders are exactly filled plus landed-failed instructions.
+        expected = self.comparison.fill_count + self.comparison.failed_order_count
+        if self.comparison.accepted_order_count != expected:
+            raise ValueError("copy summary accepted order counts do not reconcile")
+        # Strict execution cannot manufacture spendable sell funding.
+        if (
+            self.execution_mode is ExecutionMode.EXOGENOUS_REPLAY
+            and totals.synthetic_funded_sell_atomic
+        ):
+            raise ValueError("strict copy execution cannot contain synthetic proceeds")
+        # Unknown execution modes cannot pass through zero synthetic funding as a fallback.
+        liquidity_policy_id_for_execution_mode(self.execution_mode)
+
+    @property
+    def result_hash(self) -> ContentDigest:
+        """Common run interfaces expose the same canonical result digest."""
+        return self.comparison.canonical_result_hash
+
+    @property
+    def audit_hash(self) -> ContentDigest:
+        """Audit framing is copy-specific while the manifest projection stays bounded."""
+        return self.comparison.audit_hash
+
+    @property
+    def roundtrip_count(self) -> int:
+        """The common external table role contains one actual copy position per mint."""
+        return self.totals.position_count
+
+    def document(self) -> dict[str, object]:
+        """No developer, cooldown or single-sale Sniping fields are fabricated."""
+        return {
+            "schema": "pumpfun-copy-run-summary/v1",
+            "dataset_logical_content_hash": self.dataset_logical_content_hash.hex,
+            "replay_semantics_id": self.replay_semantics_id.hex,
+            "engine_bundle_id": self.engine_bundle_id.hex,
+            # Strategy, protocol and costs are checked against the resolved spec.
+            "strategy_bundle_id": self.strategy_bundle_id.hex,
+            "protocol_bundle_id": self.protocol_bundle_id.hex,
+            "network_cost_bundle_id": self.network_cost_bundle_id.hex,
+            "execution_mode": self.execution_mode.value,
+            "settlement_policy_id": liquidity_policy_id_for_execution_mode(self.execution_mode),
+            # Common comparison scalars and specialized economics have separate fixed schemas.
+            "comparison": self.comparison.document(),
+            "totals": self.totals.document(),
+            "position_count": self.roundtrip_count,
+            "position_digest": self.roundtrip_digest.hex,
+        }
+
+
+# One successful-run container carries exactly one closed summary family.
+SuccessfulRunSummary = (
+    FirstSwapSummaryMetadata | PumpfunSnipingSummaryMetadata | CopySummaryMetadata
+)
 
 
 def normalize_comparison_metrics(
@@ -997,7 +1091,7 @@ class SuccessfulRunManifest:
     execution_attempt_id: ExecutionAttemptId
     # Declare input artifact ids explicitly in the successful run manifest contract.
     input_artifact_ids: tuple[ArtifactId, ...]
-    summary: SuccessfulRunSummary | RunSummary | SnipingRunSummary
+    summary: SuccessfulRunSummary | RunSummary | SnipingRunSummary | CopyRunSummary
     physical_settings: RunPhysicalSettings
     started_at: datetime
     completed_at: datetime
@@ -1009,7 +1103,7 @@ class SuccessfulRunManifest:
         # Execute the successful run manifest post init workflow in explicit, reviewable
         # steps.
         raw_summary = self.summary
-        if isinstance(raw_summary, (RunSummary, SnipingRunSummary)):
+        if isinstance(raw_summary, (RunSummary, SnipingRunSummary, CopyRunSummary)):
             object.__setattr__(self, "summary", _summary_metadata(raw_summary))
         summary = self.bounded_summary
         if not self.result_tables:
@@ -1059,7 +1153,7 @@ class SuccessfulRunManifest:
         attempt_nonce: ContentDigest,
         execution_attempt_id: ExecutionAttemptId,
         input_artifact_ids: tuple[ArtifactId, ...],
-        summary: RunSummary | SnipingRunSummary,
+        summary: RunSummary | SnipingRunSummary | CopyRunSummary,
         physical_settings: RunPhysicalSettings,
         # Keep the started at input explicit in the create contract.
         started_at: datetime,
@@ -1108,8 +1202,11 @@ class SuccessfulRunManifest:
         # Execute the successful run manifest bounded summary workflow in explicit,
         # reviewable steps.
         summary = self.summary
-        if not isinstance(summary, (FirstSwapSummaryMetadata, PumpfunSnipingSummaryMetadata)):
+        if not isinstance(
+            summary, (FirstSwapSummaryMetadata, PumpfunSnipingSummaryMetadata, CopySummaryMetadata)
+        ):
             raise TypeError("successful Run summary was not normalized")
+        # Only a recognized normalized summary may leave the manifest boundary.
         return summary
 
     def result_table(self, role: RunResultTableRole) -> ResultTableDescriptor:
@@ -1270,8 +1367,93 @@ def successful_run_manifest_from_bytes(payload: bytes) -> SuccessfulRunManifest:
 
 
 # Define summary metadata as one focused operation with an explicit boundary.
-def _summary_metadata(summary: RunSummary | SnipingRunSummary) -> SuccessfulRunSummary:
+def _copy_summary_metadata(summary: CopyRunSummary) -> CopySummaryMetadata:
+    """Discard unbounded in-memory balance rows when constructing the manifest projection."""
+    balances = validate_final_balances(summary.final_balances)
+    digest = _stream_digest("backtest.copy-final-balances.v1", [list(row) for row in balances])
+    if digest != summary.final_balances_digest:
+        raise ValueError("copy final balance rows differ from the engine digest")
+    # Scalar comparison data is materialized only after independently checking balance bytes.
+    totals = summary.totals
+    failed = totals.failed_buy_count + totals.failed_sell_count
+    comparison = RunComparisonProjection(
+        canonical_result_hash=summary.result_hash,
+        audit_hash=summary.audit_hash,
+        # Each stream has an independently verified digest and count in the output writer.
+        ledger_hash=summary.ledger_hash,
+        fill_hash=summary.fill_hash,
+        historical_group_count=summary.historical_group_count,
+        historical_event_count=summary.historical_event_count,
+        delivered_event_count=summary.delivered_event_count,
+        # Accepted order counts include paid landed failures but exclude free rejections.
+        accepted_order_count=summary.fill_count + failed,
+        # Rejections carry no fee; failed accepted orders paid their network costs.
+        rejected_order_count=totals.rejected_buy_count + totals.rejected_sell_count,
+        filled_order_count=summary.fill_count,
+        failed_order_count=failed,
+        ledger_transaction_count=summary.ledger_transaction_count,
+        fill_count=summary.fill_count,
+        # Final balances are external content with their own bounded descriptor count.
+        final_balances_count=len(summary.final_balances),
+        final_balances_digest=summary.final_balances_digest,
+    )
+    # Copy metadata pins every runtime component beside its exact stream digests.
+    return CopySummaryMetadata(
+        summary.dataset_logical_content_hash,
+        summary.replay_semantics_id,
+        summary.config.engine_bundle_id,
+        summary.config.strategy_bundle_id,
+        # Preserve all code identities while excluding physical batching and paths.
+        summary.config.protocol_bundle_id,
+        summary.config.network_cost_bundle_id,
+        summary.config.execution_mode,
+        comparison,
+        totals,
+        # Position framing remains independent of scalar financial totals.
+        summary.roundtrip_digest,
+    )
+
+
+def copy_summary_from_document(document: dict[str, object]) -> CopySummaryMetadata:
+    """Reconstruct the closed copy schema and reject altered counters or unknown fields."""
+    raw_totals = _object(document.get("totals"), "copy totals")
+    totals = CopyFinancialTotals(
+        **{
+            field.name: _integer(raw_totals.get(field.name), field.name)
+            for field in fields(CopyFinancialTotals)
+            # Construct only the declared integer aggregate fields; extra fields fail round-trip
+            # equality.
+        }
+    )
+    # The constructor checks fee/funding/count conservation; exact roundtrip checks schema extras.
+    summary = CopySummaryMetadata(
+        ContentDigest(
+            _string(document.get("dataset_logical_content_hash"), "copy logical content")
+        ),
+        ContentDigest(_string(document.get("replay_semantics_id"), "copy replay semantics")),
+        # Runtime bundle identities remain explicit in decoded committed metadata.
+        BundleId(_string(document.get("engine_bundle_id"), "copy engine bundle")),
+        BundleId(_string(document.get("strategy_bundle_id"), "copy strategy bundle")),
+        # Bundle and mode tags remain mandatory for a verified result reader.
+        BundleId(_string(document.get("protocol_bundle_id"), "copy protocol bundle")),
+        BundleId(_string(document.get("network_cost_bundle_id"), "copy cost bundle")),
+        ExecutionMode(_string(document.get("execution_mode"), "copy mode")),
+        RunComparisonProjection.from_document(document.get("comparison")),
+        totals,
+        # The position digest binds all immutable terminal rows independently of the summary.
+        ContentDigest(_string(document.get("position_digest"), "copy position digest")),
+    )
+    if summary.document() != document:
+        raise ValueError("copy summary does not round-trip exactly")
+    return summary
+
+
+def _summary_metadata(
+    summary: RunSummary | SnipingRunSummary | CopyRunSummary,
+) -> SuccessfulRunSummary:
     # Execute the summary metadata workflow in explicit, reviewable steps.
+    if isinstance(summary, CopyRunSummary):
+        return _copy_summary_metadata(summary)
     comparison = RunComparisonProjection.from_summary(summary)
     if isinstance(summary, RunSummary):
         # Handle the summary metadata isinstance(summary, RunSummary) branch as a distinct
@@ -1354,6 +1536,8 @@ def _summary_metadata_from_document(value: object) -> SuccessfulRunSummary:
     # Execute the summary metadata from document workflow in explicit, reviewable steps.
     document = _object(value, "run summary")
     schema = document.get("schema")
+    if schema == "pumpfun-copy-run-summary/v1":
+        return copy_summary_from_document(document)
     if schema == FIRST_SWAP_SUMMARY_SCHEMA:
         # Handle the summary metadata from document schema == FIRST_SWAP_SUMMARY_SCHEMA
         # branch as a distinct logical block.
@@ -1725,7 +1909,7 @@ def _validate_result_tables(
     expected_digest = _empty_stream_digest(_FIRST_SWAP_ROUNDTRIP_DIGEST_DOMAIN)
     # Evaluate the complete validate result tables summary pumpfun sniping summary
     # metadata type condition before guarded effects.
-    if isinstance(summary, PumpfunSnipingSummaryMetadata):
+    if isinstance(summary, (PumpfunSnipingSummaryMetadata, CopySummaryMetadata)):
         # Handle the validate result tables summary pumpfun sniping summary metadata type
         # condition as a distinct block.
         expected_count = summary.roundtrip_count
@@ -1744,7 +1928,7 @@ def _result_tables_for_summary(
     # Execute the result tables for summary workflow in explicit, reviewable steps.
     roundtrip_count = 0
     roundtrip_digest = _empty_stream_digest(_FIRST_SWAP_ROUNDTRIP_DIGEST_DOMAIN)
-    if isinstance(summary, PumpfunSnipingSummaryMetadata):
+    if isinstance(summary, (PumpfunSnipingSummaryMetadata, CopySummaryMetadata)):
         # Handle the result tables for summary summary pumpfun sniping summary metadata
         # type condition as a distinct block.
         roundtrip_count = summary.roundtrip_count
@@ -1792,9 +1976,12 @@ def _result_descriptor(
 def _roundtrip_schema_for_summary(summary: SuccessfulRunSummary) -> str:
     """Select a table generation without upgrading committed legacy manifests."""
 
+    if isinstance(summary, CopySummaryMetadata):
+        return COPY_POSITION_SCHEMA
     if (
         isinstance(summary, PumpfunSnipingSummaryMetadata)
         and summary.source_schema_id == PUMPFUN_SNIPING_SUMMARY_SCHEMA
+        # Old Sniping roots continue to select their original v3 or v4 row codec.
     ):
         return ROUNDTRIP_RESULT_SCHEMA_V4
     return ROUNDTRIP_RESULT_SCHEMA_V3

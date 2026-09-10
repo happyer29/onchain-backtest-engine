@@ -81,10 +81,13 @@ from backtest.application.use_cases.query_artifacts import (
 from backtest.application.use_cases.query_run_results import (
     # Include pumpfun sniping run summary view so the query run results dependency remains
     # explicit.
-    PumpfunSnipingRunSummaryView,
+    CopyRunSummaryView,
     RunResultQueryError,
+    RunResultSummaryView,
 )
 from backtest.application.use_cases.query_runs import RunIndexQueryError, RunSummaryView
+
+# The CLI calls the same execution use case as the control API.
 from backtest.application.use_cases.run_backtest import (
     # Include run backtest request so the run backtest dependency remains explicit.
     RunBacktestRequest,
@@ -106,11 +109,15 @@ from backtest.domain.identifiers import (
     SourceId,
 )
 from backtest.domain.roundtrips import (
+    # Copy uses a distinct immutable result shape on the same bounded paging transport.
     ROUNDTRIP_RESULT_SCHEMA_V3,
     QuoteLiquidityEvidenceRecord,
     RoundTripLegRecord,
     RoundTripRecord,
 )
+
+# Copy positions retain their own immutable row model.
+from backtest.engine.copytrading_results import CopyPositionRecord
 
 # Import ml schemas at the visible module dependency boundary.
 from backtest.interfaces.api.ml_schemas import (
@@ -123,6 +130,9 @@ from backtest.interfaces.api.ml_schemas import (
     TrainModelJobForm,
 )
 from backtest.interfaces.api.schemas import (
+    CopyPositionResponse,
+    # Copy JSON uses the same lossless response codec as the browser API.
+    CopyRunSummaryResponse,
     DatasetPlanResponse,
     # Include job list response so the schemas dependency remains explicit.
     JobListResponse,
@@ -213,7 +223,7 @@ class CliBackend(Protocol):
 
     def describe_run_contract(self, schema: str) -> RunContractDescriptor: ...
 
-    def show_run_summary(self, artifact_id: ArtifactId) -> PumpfunSnipingRunSummaryView: ...
+    def show_run_summary(self, artifact_id: ArtifactId) -> RunResultSummaryView: ...
 
     # Define cli backend list roundtrips as one focused operation with an explicit
     # boundary.
@@ -1834,8 +1844,11 @@ def _run_summary_document(value: RunSummaryView) -> dict[str, object]:
     }
 
 
-def _sniping_summary_document(value: PumpfunSnipingRunSummaryView) -> dict[str, object]:
+def _sniping_summary_document(value: RunResultSummaryView) -> dict[str, object]:
     # Execute the sniping summary document workflow in explicit, reviewable steps.
+    if isinstance(value, CopyRunSummaryView):
+        return CopyRunSummaryResponse.from_domain(value).model_dump(mode="json")
+    # The established Sniping document remains unchanged for its original summary family.
     return {
         "accepted_buy_count": value.accepted_buy_count,
         "accepted_order_count": value.accepted_order_count,
@@ -1969,8 +1982,11 @@ def _roundtrip_page_document(value: RoundTripPage) -> dict[str, object]:
 
 
 # Define roundtrip document as one focused operation with an explicit boundary.
-def _roundtrip_document(value: RoundTripRecord) -> dict[str, object]:
+def _roundtrip_document(value: RoundTripRecord | CopyPositionRecord) -> dict[str, object]:
     # Execute the roundtrip document workflow in explicit, reviewable steps.
+    if isinstance(value, CopyPositionRecord):
+        return CopyPositionResponse.from_domain(value).model_dump(mode="json")
+    # Legacy Sniping row fields are emitted only for an actual Sniping record.
     return {
         "acquired_token_amount_atomic": str(value.acquired_token_amount_atomic),
         "account_components": [

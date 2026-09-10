@@ -17,14 +17,17 @@ from itertools import pairwise
 # Import typing at the visible module dependency boundary.
 from typing import Any, Protocol
 
+from backtest.adapters.source.clickhouse.pumpfun_copybuy import PumpfunCopyBuyQueryProfile
 from backtest.adapters.source.clickhouse.pumpfun_indexer_v1 import (
     PumpfunIndexerV1Profile,
     PumpfunIndexerV1Query,
+    # Pinned source profiles keep query reconstruction independent of caller SQL.
     registered_pumpfun_indexer_v1_profile,
 )
 from backtest.adapters.source.clickhouse.query import (
     BoundedQuery,
     ClickHouseCapability,
+    # Hard query limits apply before the driver can begin streaming results.
     ClickHouseQueryPolicy,
     # Include build evidence query so the query dependency remains explicit.
     build_evidence_query,
@@ -35,8 +38,10 @@ from backtest.adapters.source.clickhouse.query import (
     # Close the query import after its required symbols are visible.
 )
 from backtest.adapters.source.common import SourceAdapterError, SourceBatch
+from backtest.application.copy_source import CopySourceSelection
 from backtest.application.models import (
     BoundedSourceEvidenceReceipt,
+    # Evidence and extraction use distinct typed request contracts.
     BoundedSourceEvidenceRequest,
     # Include capability cut evidence so the models dependency remains explicit.
     CapabilityCutEvidence,
@@ -408,6 +413,131 @@ class ClickHouseSourceReader:
             operation="evidence-query",
         )
 
+    def stream_pumpfun_copybuy_evidence(
+        self,
+        request: BoundedSourceEvidenceRequest,
+        *,
+        selection: CopySourceSelection,
+        # Each candidate or market query carries its own explicit capability and block range.
+        capability_id: CapabilityId,
+        block_range: BlockRange,
+        query: PumpfunIndexerV1Query,
+        # Candidate enumeration uses a separate fixed query on the same physical source.
+        candidates: bool = False,
+    ) -> Iterator[SourceBatch]:
+        """Read one bounded copy evidence shard after rebuilding its exact fixed query."""
+        self._require_source(request.source_id)
+        _require_contained_subrange(block_range, request.block_range)
+        if (
+            selection.decision_range != request.decision_range
+            or selection.history_range.from_block_ordinal != request.block_range.from_block_ordinal
+            # A different lookback cannot reuse the decision range as a substitute for initial
+            # state.
+        ):
+            raise ValueError("copy evidence selection differs from request ranges")
+        # Hard query span and row/memory/time limits apply to the independent enumeration too.
+        if block_range.span > min(
+            _PUMPFUN_INDEXER_V1_EVIDENCE_MAX_BLOCK_SPAN, self._policy.evidence_max_block_span
+        ):
+            raise ValueError("copy evidence subrange exceeds its hard span limit")
+        # Rebuild the query from fixed operands before accepting its SQL or fingerprint.
+        profile = self._validate_pumpfun_copybuy_query(
+            selection, capability_id, block_range, query, candidates=candidates
+        )
+        mapping = clickhouse_capability_mapping_digest(tuple(self._capabilities.values()))
+        if (
+            # Both physical mapping and query profile must match the requested evidence.
+            request.capability_mapping_digest != mapping
+            or request.query_template_digest != profile.template_digest
+        ):
+            raise ValueError("copy evidence mapping or query template differs from reader")
+        # Only secret-free operation labels enter query IDs and error messages.
+        settings = self._policy.evidence_settings(request.query_limits)
+        yield from self._stream_batches(
+            query,
+            capability_id=capability_id,
+            block_range=block_range,
+            # Every bounded read receives a safe query identifier and a hard returned-row cap.
+            settings=settings,
+            query_id=self._safe_query_id("copy_evidence"),
+            max_rows=int(settings["max_result_rows"]),
+            operation="copy-evidence-query",
+        )
+
+    def scan_pumpfun_copybuy(
+        self,
+        request: ExtractionRequest,
+        query: PumpfunIndexerV1Query,
+        selection: CopySourceSelection,
+        # Extraction accepts only the copy selection already bound to its DatasetSpec.
+    ) -> Iterator[SourceBatch]:
+        """Prepare a planned copy shard through the same bounded streaming source adapter."""
+        if request.decision_range != selection.decision_range:
+            raise ValueError("copy extraction decision range differs from its selection")
+        self._validate_pumpfun_copybuy_query(
+            selection,
+            request.shard.capability_id,
+            # The exact shard bounds are checked again when reconstructing the extraction query.
+            request.shard.block_range,
+            query,
+            candidates=False,
+        )
+        # Reader policy enforces its own limits independently of composition input.
+        settings = self._policy.scan_settings(request.query_limits)
+        yield from self._stream_batches(
+            query,
+            capability_id=request.shard.capability_id,
+            block_range=request.shard.block_range,
+            # Extraction settings retain row and memory limits independently of evidence reads.
+            settings=settings,
+            query_id=self._safe_query_id("copy_scan"),
+            max_rows=int(settings["max_result_rows"]),
+            operation="copy-scan",
+        )
+
+    def _validate_pumpfun_copybuy_query(
+        self,
+        selection: CopySourceSelection,
+        capability_id: CapabilityId,
+        block_range: BlockRange,
+        # Caller-supplied SQL is accepted only if it equals the rebuilt fixed query.
+        query: PumpfunIndexerV1Query,
+        *,
+        candidates: bool,
+    ) -> PumpfunCopyBuyQueryProfile:
+        """No arbitrary or caller-modified SQL can pass this strategy-specific source seam."""
+        capability = self._capabilities.get(capability_id)
+        physical = registered_pumpfun_indexer_v1_profile(tuple(self._capabilities.values()))
+        if capability is None or physical is None:
+            raise ValueError("copy source requires the exact audited physical profile")
+        # A numeric slot range from another chain cannot query this Solana source.
+        if (capability.network_id, capability.position_schema_id) != (
+            block_range.network_id,
+            block_range.position_schema_id,
+        ):
+            raise ValueError("copy source range has a different network or position schema")
+        # The query profile is instantiated only after immutable chain compatibility is established.
+        profile = PumpfunCopyBuyQueryProfile(selection, physical)
+        if candidates:
+            if capability.descriptor.stream is not CapabilityStream.PUMP_CURVE_TRADE:
+                raise ValueError("copy candidate enumeration requires the trade capability")
+            # The independent query has no creation JOIN or inferred actor mapping.
+            expected = profile.build_candidates(
+                database=capability.database, block_range=block_range, policy=self._policy
+            )
+        else:
+            expected = profile.build_query(
+                # Non-candidate reads retain the authoritative stream and exact history interval.
+                stream=capability.descriptor.stream,
+                database=capability.database,
+                block_range=block_range,
+                policy=self._policy,
+            )
+        # Any SQL, column or parameter drift rejects the call before network access.
+        if query != expected:
+            raise ValueError("copy query does not match exact reader operands")
+        return profile
+
     # Define click house source reader inspect bounded evidence as one focused operation
     # with an explicit boundary.
     def inspect_bounded_evidence(
@@ -647,7 +777,7 @@ class ClickHouseSourceReader:
             # before explicit failure handling.
             context = self._client.query_row_block_stream(
                 bounded_query.sql,
-                parameters=dict(bounded_query.parameters),
+                parameters=_stream_driver_parameters(bounded_query),
                 settings=settings,
                 query_tz="UTC",
                 # Pass query id explicitly so query_row_block_stream receives a reviewable
@@ -803,6 +933,18 @@ class ClickHouseSourceReader:
         # reviewable steps.
         if source_id != self._source_id:
             raise ValueError(f"unknown source {source_id}")
+
+
+def _stream_driver_parameters(query: _StreamingQuery) -> dict[str, Any]:
+    """Immutable copy wallet tuples need the driver's Array(String) wire representation."""
+    parameters = dict(query.parameters)
+    wallets = parameters.get("copy_signing_wallets")
+    if wallets is not None:
+        # The fixed query builder validates these addresses before fingerprinting them.
+        if not isinstance(wallets, tuple) or not all(isinstance(value, str) for value in wallets):
+            raise ValueError("copy signing wallets require an immutable tuple")
+        parameters["copy_signing_wallets"] = list(wallets)
+    return parameters
 
 
 def _parse_columns(rows: Sequence[Sequence[Any]]) -> tuple[SourceColumn, ...]:

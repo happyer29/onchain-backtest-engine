@@ -1194,3 +1194,103 @@ button.sort-direction {
     justify-content: flex-start;
   }
 }
+
+/* A strategy-specific hidden label must override the field-grid display declaration. */
+#sniping-form label[hidden] {
+  display: none;
+}
+
+/* Copy summary fits six independently meaningful whole-run metrics. */
+.copy-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.copy-kpis + .dashboard-notice { margin-top: 14px; }
+.copy-token-address { display: block; overflow-wrap: anywhere; max-width: 390px; }
+#copy-table { min-width: 880px; }
+#copy-table td:first-child { min-width: 230px; }
+#copy-table td { vertical-align: top; }
+#copy-table small { display: block; margin-top: 7px; color: var(--muted); }
+
+/* A modal stays within the viewport, with its own vertical scroll on small screens. */
+.copy-chart-dialog {
+  --dialog-padding: 24px;
+  width: min(1220px, calc(100vw - 32px));
+  max-height: calc(100dvh - 40px);
+  box-sizing: border-box;
+  /* Inherit both themes without inline styles or a second palette. */
+  padding: var(--dialog-padding);
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  /* Rounded corners distinguish the token detail from the underlying signal table. */
+  border-radius: 18px;
+  overscroll-behavior: contain;
+}
+.copy-chart-dialog::backdrop { background: rgba(0, 0, 0, 0.65); }
+.copy-chart-dialog > .section-heading {
+  position: sticky;
+  top: calc(-1 * var(--dialog-padding));
+  z-index: 2;
+  margin: calc(-1 * var(--dialog-padding)) calc(-1 * var(--dialog-padding)) 16px;
+  padding: 16px var(--dialog-padding);
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+.copy-chart-dialog .copy-token-address { max-width: none; }
+.copy-chart-dialog table { min-width: 760px; }
+.copy-chart-dialog th, .copy-chart-dialog td { padding: 12px 9px; }
+.copy-chart-dialog th,
+.copy-chart-dialog td:first-child,
+.copy-chart-dialog td:nth-child(2) { white-space: nowrap; }
+
+.copy-table-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.copy-table-controls > label:first-child { flex: 1 1 230px; }
+.copy-table-controls > label { flex: 0 1 170px; }
+.copy-table-controls > button { min-height: 42px; }
+
+.copy-chart-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.copy-chart-controls > button { min-height: 42px; }
+.copy-chart-controls > .notice { flex: 1 1 280px; min-width: 0; margin: 0; }
+
+/* SVG markers use redundant shapes and colors for successful and failed outcomes. */
+.copy-chart-legend { display: flex; flex-wrap: wrap; gap: 18px; font-size: 0.82rem; }
+.copy-signal { color: var(--info); }
+.copy-buy { color: var(--positive); }
+.copy-sell { color: var(--danger); }
+.copy-failed { color: var(--warning); }
+
+/* A scrollable minimum plot width retains readable UTC labels on mobile screens. */
+.copy-market-svg { width: 100%; min-width: 660px; display: block; }
+.copy-market-line { fill: none; stroke: var(--accent); stroke-width: 2; }
+.copy-grid { stroke: var(--border); stroke-width: 1; }
+.copy-terminal { stroke: var(--warning); stroke-width: 1.5; stroke-dasharray: 4 4; }
+.copy-history-dot { fill: var(--accent); cursor: pointer; }
+
+/* Hover and keyboard focus expose exact point information without a crosshair price estimate. */
+.copy-history-dot:hover { r: 6px; }
+.copy-marker { fill: currentColor; stroke: currentColor; stroke-width: 2; cursor: pointer; }
+.copy-marker.copy-failed { fill: none; stroke-width: 3; }
+.copy-marker:focus { outline: 2px solid var(--text); }
+.copy-marker-number { font: bold 13px ui-monospace, monospace; fill: currentColor; stroke: none; }
+
+/* Native hidden attributes override shared grid/flex display declarations. */
+#copy-content[hidden], #copy-chart-content[hidden] { display: none; }
+@media (max-width: 760px) {
+  .copy-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .copy-chart-dialog { --dialog-padding: 14px; }
+}
+
+@media (max-width: 480px) {
+  .copy-kpis { grid-template-columns: minmax(0, 1fr); }
+}

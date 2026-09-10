@@ -16,6 +16,7 @@ from concurrent.futures import ProcessPoolExecutor
 
 # Import dataclasses at the visible module dependency boundary.
 from dataclasses import dataclass, replace
+from multiprocessing.synchronize import Barrier
 from pathlib import Path
 from types import CodeType
 from typing import Protocol
@@ -541,29 +542,31 @@ class _CapacityTarget:
 
 
 _WORKER_TARGET: _CapacityTarget | None = None
+# A pool round needs every admitted worker, even when spawn times differ substantially.
+_WORKER_START_BARRIER: Barrier | None = None
+_WORKER_START_TIMEOUT_SECONDS = 60.0
 
 
-def _initialize_worker(config: _WorkerConfig) -> None:
-    # Execute the initialize worker workflow in explicit, reviewable steps.
-    global _WORKER_TARGET
+def _initialize_worker(config: _WorkerConfig, start_barrier: Barrier | None = None) -> None:
+    """Open the exact target and retain this pool's shared readiness barrier."""
+    global _WORKER_TARGET, _WORKER_START_BARRIER
     apply_thread_limits(config.spec.native_threads_per_process)
+    # Each process opens its own target; the barrier shares only operational readiness.
     target = config.target_factory.create(
-        config.spec,
-        Path(config.data_root),
-        # Pass config explicitly so create receives a reviewable spec and data root input
-        # in initialize worker.
-        config.attempt_nonce,
-        config.phase,
+        config.spec, Path(config.data_root), config.attempt_nonce, config.phase
     )
     _WORKER_TARGET = _CapacityTarget(target, config.spec.capacity_days)
+    _WORKER_START_BARRIER = start_barrier
 
 
 def _close_worker_target() -> None:
-    # Execute the close worker target workflow in explicit, reviewable steps.
-    global _WORKER_TARGET
+    """Release retained inputs and synchronization state after completion or failure."""
+    global _WORKER_TARGET, _WORKER_START_BARRIER
     target = _WORKER_TARGET
     _WORKER_TARGET = None
+    _WORKER_START_BARRIER = None
     if target is not None:
+        # Clear worker authority before releasing the target's retained artifact handles.
         target.close()
 
 
@@ -579,7 +582,10 @@ def _execute_worker(
         raise RuntimeError("benchmark worker was not initialized")
     succeeded = False
     try:
-        # Perform the protected execute worker operation before explicit failure handling.
+        # One task stays on each worker until every peer has entered this same round.
+        if _WORKER_START_BARRIER is not None:
+            _WORKER_START_BARRIER.wait()
+        # Readiness waits precede sampling and measured execution; timeout still closes inputs.
         while (remaining := release_at_ns - time.perf_counter_ns()) > 0:
             time.sleep(min(remaining / 1_000_000_000, 0.005))
         gc.collect()
@@ -743,13 +749,15 @@ class LocalReplayBenchmarkRunner:
         # one value.
         context = multiprocessing.get_context("spawn")
         samples: list[BenchmarkSample] = []
+        # A fixed release timestamp cannot prevent one fast worker from draining the queue.
+        start_barrier = context.Barrier(spec.process_count, timeout=_WORKER_START_TIMEOUT_SECONDS)
         with ProcessPoolExecutor(
             max_workers=spec.process_count,
             mp_context=context,
             # Pass initializer explicitly so ProcessPoolExecutor receives a reviewable
             # process count and spec input in local replay benchmark runner run.
             initializer=_initialize_worker,
-            initargs=(worker_config,),
+            initargs=(worker_config, start_barrier),
         ) as executor:
             # Keep process pool executor, process count and context active only for the
             # bounded local replay benchmark runner run operation.

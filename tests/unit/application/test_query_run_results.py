@@ -80,16 +80,18 @@ def test_dashboard_uses_one_reader_for_summary_and_page(monkeypatch: pytest.Monk
     factory = _Factory(reader)
     projected = cast(PumpfunSnipingRunSummaryView, object())
 
-    # Isolate orchestration from the deliberately large summary field projection.
+    # Isolate reader orchestration from the family-aware immutable summary projection.
     def project(
         received_id: ArtifactId,
         manifest: SuccessfulRunManifest,
     ) -> PumpfunSnipingRunSummaryView:
+        # The orchestration stub verifies exact artifact and already-open manifest forwarding.
         assert received_id == artifact_id
         assert manifest is reader.manifest
         return projected
 
-    monkeypatch.setattr(query_module, "_project_sniping_summary", project)
+    # Patch the common family dispatcher while preserving dashboard verification assertions.
+    monkeypatch.setattr(query_module, "_project_run_summary", project)
     query = QueryRunResults(cast(RunResultReaderFactory, factory))
     result = query.dashboard(artifact_id, limit=25)
 
@@ -110,12 +112,13 @@ def test_dashboard_preserves_safe_result_failure_semantics(
     factory = _Factory(reader)
     projected = cast(PumpfunSnipingRunSummaryView, object())
 
-    # Let the page failure cross the same projection path as a successful dashboard.
+    # Both result families must expose the same safe failure when their page cannot be read.
     monkeypatch.setattr(
         query_module,
-        "_project_sniping_summary",
+        "_project_run_summary",
         lambda received_id, manifest: projected,
     )
+    # Reader failures must still be redacted by the shared application query boundary.
     query = QueryRunResults(cast(RunResultReaderFactory, factory))
     with pytest.raises(RunResultQueryError, match="RUN_RESULT_UNAVAILABLE") as raised:
         query.dashboard(artifact_id, limit=25)

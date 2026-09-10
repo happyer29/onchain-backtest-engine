@@ -124,13 +124,40 @@ BUILD_TOOL_DECLARATIONS: Final = (
                 (
                     *_CANONICAL_EVENT_CONTRACT,
                     "bootstrap/configured_projector.py",
+                    # Source composition and query selection are transitive projector dependencies.
                     "bootstrap/pumpfun_live_source.py",
+                    "bootstrap/pumpfun_copy_source.py",
+                    "adapters/source/clickhouse/pumpfun_copybuy.py",
+                    # Independent enumeration and source proof binding affect admitted content.
+                    "application/copy_source.py",
+                    "application/copy_source_contracts.py",
+                    "application/models.py",
+                    "application/source_evidence.py",
+                    "domain/copytrading.py",
+                    # Snapshot validation shares the exact four-attempt clock and state reducer.
+                    "engine/copytrading.py",
+                    "engine/copytrading_contracts.py",
+                    "engine/copytrading_execution.py",
+                    # Shared financial helpers imported by validation are pinned transitively.
+                    "engine/sniping.py",
+                    "engine/sniping_contracts.py",
+                    "engine/wallet_accounts.py",
+                    "engine/copytrading_state.py",
+                    "plugins/protocols/pumpfun/copybuy.py",
+                    # Copy signal coverage and full settlement validation are pinned before snapshot
+                    # publication.
+                    "plugins/protocols/pumpfun/copybuy_coverage.py",
+                    "plugins/protocols/pumpfun/copybuy_validator.py",
                     # Pass bootstrap projector config py explicitly so sorted receives a
                     # reviewable py and canonical event contract input in module.
                     "bootstrap/projector_config.py",
+                    # Signer transport is an exact input to projected content identity.
+                    "plugins/protocols/pumpfun/copybuy_normalizer.py",
+                    "plugins/protocols/pumpfun/copybuy_payload.py",
                     "plugins/protocols/pumpfun/live_normalizer.py",
                     "plugins/protocols/pumpfun/model.py",
                     "plugins/protocols/pumpfun/projector.py",
+                    # The shared curve codec remains pinned with both payload schemas.
                     "plugins/protocols/pumpfun/sniping.py",
                     "plugins/protocols/reference/projector.py",
                     # Complete sorted only after its py and canonical event contract inputs

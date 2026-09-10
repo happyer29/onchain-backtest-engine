@@ -321,6 +321,11 @@ Dataset/Snapshot/ReplayPack без source extraction и compile-replay.
 - loopback Control API и packaged same-origin Web UI с typed prepare,
   backtest/sweep, ML и Pump.fun Sniping forms, cursor-based progress polling,
   run comparison, artifact/lineage queries и resource status;
+- общий выбор темы «Тёплый закат» (по умолчанию) или исходной тёмной темы на
+  страницах Control и Sniping result. Закрытая browser-local настройка применяется
+  до первой отрисовки и синхронизируется между вкладками; если browser storage
+  недоступен, UI явно сообщает о выборе только для вкладки. Тема не входит в
+  API commands, execution identity, result values или pagination;
 - controller identity и strict loopback CLI client: health возвращает только
   digest, выведенный из конкретного controller instance и canonical local data
   root, но не сам path;
@@ -480,6 +485,38 @@ Cold-cache и 7/30-day/deployment measurements остаются отдельны
 
 Объём внешнего источника не ограничен локальной ёмкостью. Full mirror не
 входит в архитектуру; extraction ограничивается конкретными экспериментами.
+
+Отдельный reference-срез Pump.fun copy-buy по §23.5 реализован целиком:
+независимое покрытие signer, ограниченная инициализация старых кривых и полная
+история рынка, проверка хвоста четырёх продаж до публикации snapshot,
+целочисленные ценовые TP/SL и таймер удержания, общий wallet/account/ledger,
+неизменяемые внешние таблицы позиций, resolver, Direct CLI, Control API и Web UI.
+Copy-only receipt v3, inspection v6, DatasetSpec v6 и plan v5 используются с
+`pumpfun-copy-buy-run-draft/v1`, `pumpfun-copy-run-summary/v1` и
+`pumpfun-copy-position/v1`. Оба exogenous-режима прошли hermetic execution и
+accounting gates. Reference-результаты Parquet и ReplayPack совпадают; fixtures
+проверяют реальные изменения batch/readahead Parquet и независимые повторы.
+
+Read-only дашборд Copy Buy на `/copy-results` показывает диаграммы сводки всего
+прогона и таблицу сигналов с ручной пагинацией. У каждой позиции открывается
+график маркеткапа из точного сохранённого canonical snapshot через application
+query port. Pump-проекция использует полную эмиссию и маржинальную цену virtual
+reserves после целых транзакционных групп, с округлением вниз до лампорта SOL.
+Сигнал лидера, исполненные вход/выход и неудачные/отклонённые попытки отмечены
+отдельно с точными chain coordinates. Линия заканчивается при completion или
+migration; история PumpSwap и USD отсутствует. Интерактивное чтение ограничено
+50 000 входных строк, 64 partitions, 64 MiB Parquet, 4 000 точек и шестью
+маркерами; одновременно допускается один scan с deadline пять секунд.
+Недоступная или слишком большая история возвращает явную ошибку, без усечения
+графика, новых сохранённых артефактов, запросов к индексеру и изменения replay.
+
+Live-допуск copy требует exact evidence для выбранных кошельков и среза
+источника. CLI и browser/API/queue прошли небольшой локальный технический
+прогон; его evidence относится только к точным кошелькам и срезу и не
+доказывает прибыльность или production performance.
+Optimized copy, materialized delivery schedules, ML overlays, переход на
+PumpSwap и любой новый срез без собственных exact evidence остаются закрытыми.
+Семантика, версии артефактов и допуск существующего Sniping не меняются.
 
 ## 4. Почему модульный монолит
 
@@ -2429,6 +2466,188 @@ SuccessfulRun v3 не встраивает unbounded balance rows: root manifest
 descriptors, row counts и canonical content digests, а exact rows лежат в
 referenced verified Parquet. Manifest остаётся меньше 1 MiB и обязан публиковать
 не менее 16 385 open positions без прежнего лимита embedded final balances.
+
+### 23.5 Стратегия копирования покупок Pump.fun v1
+
+Это отдельный согласованный контракт. Он не меняет фиксированные правила
+Sniping §§23.3–23.4 и не наследует их реализацию или допуск live-данных. До
+прохождения сквозных проверок подготовки, эталонного исполнения, результатов
+и интерфейсов запуск копитрейдинга остаётся недоступным.
+
+#### Сигналы и однократный вход
+
+Неизменяемая конфигурация содержит канонически отсортированный непустой список
+уникальных Solana-адресов. Сигнал — успешный Pump `BUY`, у которого точное
+исходное поле `signing_wallet` входит в этот список, а историческая позиция
+лежит в decision range. Подмена на `fee_payer`, creator, creation user или
+предполагаемого владельца запрещена. Продажи лидера не вызывают выход. Signer
+и точная идентичность исходного события сохраняются в нормализаторе,
+каноническом Parquet и ReplayPack; старые данные без signer требуют новой
+подготовки, а не обогащения во время replay.
+
+Допустимы поддерживаемые SOL-пары с доказанным non-Mayhem при создании. Токен
+может быть создан до decision range: ограниченная подготовка доказывает его
+начальное состояние и все дальнейшие переходы, не исключая старый токен
+молча. Нужны покрытие покупок лидеров, классификация при создании, все сделки
+рынка независимо от signer, lifecycle и authoritative clock всех транзакций.
+Нет создания, signer/mode неизвестен, порядок неоднозначен или переход
+пропущен — fail closed. Известный Mayhem исключается с bounded counts/digests
+в evidence, без execution events. Creation-range evidence Sniping недостаточно.
+
+Наблюдение сигнала происходит после всей исторической транзакции, включая
+другие сделки и terminal lifecycle. Первый допустимый наблюдённый сигнал
+помечает mint использованным на весь прогон до котировки, проверки средств/
+риска и отправки. Попытка входа ровно одна, в том числе при отказе до отправки,
+неудачном landing или последующем закрытии. Следующие покупки любого лидера
+игнорируются. Внутри транзакции действует доказанный канонический порядок
+событий; повторная доставка не создаёт сигнал и не меняет выбранного лидера.
+
+Кошелёк общий, gross SOL budget входа фиксирован. Pump fees внутри бюджета,
+network fees и deposits дополнительно по §22. Усреднение, частичный выход и
+копирование продаж в v1 запрещены. Бюджет, начальный баланс, TP/SL, максимальное
+удержание, slippage и отдельные задержки наблюдения/покупки/продажи — явные
+валидируемые входы. Наблюдение задерживается на неотрицательное число глобальных
+транзакций, каждая заявка — минимум на одну. Секундная точность источника не
+становится измеренной субсекундной задержкой. Историческая позиция сигнала
+отдельна от delayed decision: сигнал из decision range может прийти в tail.
+
+#### Ценовые условия и причинный выход
+
+TP/SL считают изменение цены без комиссий. Цена входа — фактический curve SOL
+input покупки, делённый на полученные токены, без Pump/network fees, rent и
+cashback. Текущая цена — `virtual_sol_reserves / virtual_token_reserves`
+последнего причинно доставленного активного состояния кривой. Это положительные
+целочисленные отношения atomic units тех же активов; сравнение выполняется
+перемножением целых, без float. TP: цена не ниже
+`entry_price * (10000 + take_profit_bps) / 10000`; SL: цена не выше
+`entry_price * (10000 - stop_loss_bps) / 10000`. TP положителен, SL в
+`(0, 10000]`. Цены триггеров отделены от execution quotes с учётом размера.
+Фактический cash/economic PnL учитывает комиссии и аккаунты через ledger.
+
+Максимальное удержание начинается с успешного landing нашей покупки. Таймер
+работает по authoritative clock даже без новых Pump-сделок: первая непустая
+transaction boundary не раньше deadline. При одновременных условиях приоритет
+SL, затем TP, затем timeout. Проверка после fill допускается только после
+committed execution notification; sell landing всегда позже решения. Callback
+не видит частично применённую историческую транзакцию.
+
+Первое условие выхода фиксируется. У позиции максимум одна pending sell;
+новые цены и покупки лидеров не отменяют выход и не создают ещё одну продажу.
+Каждая попытка продаёт все фактически удерживаемые токены. Свежая reference
+quote использует наблюдённое состояние, landing — историческое состояние на
+границе исполнения с независимыми slippage/lifecycle/fee/account/liquidity
+проверками. Собственные заявки не меняют историю. Существующие strict/virtual
+режимы settlement и их asset-tagged ledger правила остаются явной частью
+идентичности и результатов.
+
+#### Четыре ограниченные попытки продажи
+
+Лимит — четыре попытки всего: первая и максимум три повтора. Начало sell
+decision расходует попытку, включая отказ до отправки из-за недоступной
+котировки или нехватки SOL на network fee. Такой отказ бесплатен. Неудача
+отправленной инструкции на landing оплачивает base и priority fees, без Pump
+fee и изменения account state.
+
+После неудачи новое решение — на первой подходящей непустой transaction
+boundary минимум через две модельные секунды; затем отдельно действует
+обычная sell-order delay. Reference/minimum output, costs и доступность кривой
+пересчитываются. Исходная причина выхода сохраняется при восстановлении цены.
+Успех завершает выход; четыре неудачи оставляют exhausted open position с
+фактическими токенами, deposits, cashback и всеми понесёнными комиссиями.
+Пятой попытки, повторной покупки и сброса использованного mint нет.
+
+Completion/migration не дают выхода задним числом или маршрута PumpSwap. Они
+могут вызвать landing failure или отказ следующей попытки до отправки; лимит
+четырёх сохраняется. Неподдерживаемая семантика источника/протокола — ошибка
+контракта всего прогона, а не повторяемый отказ заявки.
+
+#### Подготовка, идентичность, результаты и допуск
+
+Версионированное copytrading settlement requirement ограничивает полный путь
+каждого сигнала: observation delay, buy delay, максимальное удержание,
+четыре sell delays и три ожидания по две секунды. До публикации snapshot
+валидатор доказывает путь по точному compact clock, включая округление границ
+и lifecycle/group order. Tail извлекается один раз с hard block cap, без новых
+entry targets в tail. Недостаточная история/clock закрывают запуск; обрезание
+повторов и принудительная последняя продажа не дают successful run. Bounded
+creation/initial-state evidence и signer coverage входят в точную source
+mapping/query/projector closure и не объявляются статическим `PROVEN`.
+
+Отдельные версии strategy, draft/config, signal/position/order identities и
+result schemas несут этот контракт. Wallet list, price policy, delays,
+four-attempt/two-second policy, once-per-mint consumption, settlement requirement,
+fee/account policies, source evidence, network и position schema входят в
+semantic identity. Старые Sniping artifacts сохраняют значение. Backend,
+batch size и readahead остаются attempt provenance.
+
+Buffered внешние columnar results содержат signal wallet/event/position,
+observation/buy boundaries, фактическую цену входа без fees, exit reason/trigger
+price и до четырёх попыток с decision/landing positions, reference/landing
+amounts, failure stage/code и fees. Также сохраняются closed/exhausted status,
+остаток токенов/deposits, cashback, correlated cash PnL и квалификация valuation.
+Bounded summary/descriptors сверяются со строками и ledger; manifest меньше
+1 MiB. Synthetic funding явно отмечено и не называется on-chain executable.
+
+CLI и API разрешают один typed draft и immutable dependency closure; UI идёт
+через API и bounded result projections. Допуск требует canonical/ReplayPack
+эквивалентности с signer, atomic delayed observation, once-per-mint failures,
+точных TP/SL границ, quiet-market timeout, четырёх pre-submit/landing/retry
+путей, tail proof, lifecycle, shared-wallet ledger/accounts и Sniping regression
+gates. Для optimized copy backend отдельно нужны reference oracle, profiler,
+three-way equivalence и representative performance/resource gate §§27, 33.
+Sniping benchmark и его one-day live cut копитрейдинг автоматически не допускают.
+
+#### Представление входных данных с сохранением signer
+
+`pumpfun-copybuy-trade-payload-v1` сохраняет точный `signing_wallet` вместе
+со `state_after` — существующим целочисленным состоянием кривой Pump.
+Signer — канонический base58 Solana public key длиной 32 байта. Payload
+хранится в существующем generic поле protocol payload; новые event kind,
+предполагаемый владелец и подмена идентичности события не вводятся.
+Точные source occurrence, transaction group и координаты события сохраняются.
+Изменение signer меняет канонические байты и content identity, но не
+идентичность исходного source occurrence.
+
+`pumpfun-copybuy-live-normalizer/v1` использует существующие преобразования
+резервов, комиссий, sentinel и lifecycle, добавляет строгое сохранение signer
+и связывает политику классификации
+`successful-sol-paired-non-mayhem-pumpfun-copy-buys-v1` со своим config digest.
+Исходный signer обязателен даже при наличии payer. Старые payload/normalizer
+без signer сохраняют прежний смысл и не проходят входную проверку copy-buy.
+Сам транспорт не доказывает покрытие кандидатов, начальное состояние старых
+кривых или settlement: полный gate подготовки, описанный выше, обязателен.
+
+#### Контракт ограниченной подготовки copy-buy
+
+Подготовка задаёт отсортированный список кошельков, decision range,
+ограниченный lookback создания/истории и один settlement tail с жёстким
+пределом. Отдельный фиксированный запрос перечисляет успешные SOL-парные BUY
+лидеров в decision range, не отбрасывая через JOIN токены с отсутствующим
+созданием. Создания, все рыночные сделки независимо от signer и lifecycle
+читаются только для этих mint от начала lookback до конца tail. Каждый
+кандидат требует единственного доказанного создания и полной цепочки
+начального состояния и переходов. Отсутствующее старое создание закрывает
+весь cut. Известный Mayhem исключается с явными счётчиками кандидатов/mint
+и упорядоченным digest.
+
+`pumpfun-copybuy-coverage-evidence/v1` связывает кошельки, history/decision
+ranges, количества candidate/eligible/excluded, digest канонических eligible
+сигналов, digest исключений и fingerprint фиксированного запроса кандидатов.
+Независимое перечисление кандидатов сверяется с полным рыночным потоком.
+Snapshot validator заново считает eligible сигналы и digest по каноническим
+событиям с signer. Одного количества или запроса с первоначальным INNER JOIN
+только доступных созданий недостаточно для доказательства полноты кандидатов.
+
+Copy-only bounded receipt v3 и source inspection v6 сохраняют это покрытие
+вместе с прежними точными доказательствами clock/order, неизменности создания,
+переходов, комиссий и lifecycle. Они используют отдельные identity запросов,
+normalizer и projector. DatasetSpec v6 и dataset plan v5 связывают покрытие и
+`global-transaction-duration-four-attempt-copybuy/v1`: observation delay,
+buy delay, maximum hold, четыре sell delay и три ожидания retry по две секунды.
+Его trade target stream одновременно является settlement stream. Прежний
+single-roundtrip v1 по-прежнему запрещает такое пересечение. Sniping receipt
+v2, inspection v5, DatasetSpec v5 и plan v4 сохраняют исходные байты и смысл.
+Copy-версии не проходят admission Sniping, и наоборот.
 
 ## 24. Features, labels, universe и ML
 

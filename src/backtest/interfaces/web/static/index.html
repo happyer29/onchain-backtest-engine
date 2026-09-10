@@ -90,11 +90,11 @@
         <div class="section-heading">
           <div>
             <p class="eyebrow">Typed strategy contract</p>
-            <h2 id="pumpfun-sniping-heading">Pump.fun Sniping</h2>
+            <h2 id="pumpfun-sniping-heading">Pump.fun strategies</h2>
           </div>
           <span id="sniping-contract-status" class="status">Загрузка contract…</span>
         </div>
-        <p class="notice">
+        <p id="pumpfun-strategy-notice" class="notice">
           Фиксированные cooldown 600 секунд, buy latency 500 транзакций, ожидание
           sell decision 2 секунды и sell-all загружаются из API. Execution mode
           выбирается из закрытого API contract. Atomic amounts передаются как decimal strings.
@@ -106,8 +106,24 @@
           исполнимой on-chain оценкой ликвидности.
         </p>
         <details open>
-          <summary>Создать exact sniping run</summary>
+          <summary>Создать прогон Pump.fun</summary>
           <form id="sniping-form" class="compact-form">
+            <!-- Both strategy families resolve through the same typed API and durable queue. -->
+            <label>Стратегия<select id="pumpfun-strategy"><option value="sniping">Sniping</option><option value="copy">Copy Buy</option></select></label>
+            <fieldset id="copy-buy-fields" hidden disabled>
+              <legend>Копировать покупки, продавать по своим правилам</legend>
+              <label>signing_wallet (один кошелёк на строку)<textarea name="signing_wallets" rows="3" maxlength="6000" required></textarea></label>
+              <!-- Thresholds compare token prices without trading or network fees. -->
+              <div class="field-grid">
+                <label>Take profit, bps<input name="take_profit_bps" type="number" min="1" value="2000" required /></label>
+                <label>Stop loss, bps<input name="stop_loss_bps" type="number" min="1" max="10000" value="1000" required /></label>
+                <label>Maximum hold, seconds<input name="maximum_hold_seconds" type="number" min="1" value="60" required /></label>
+                <!-- Observation delay may be zero, but own entry always has a later landing. -->
+                <label>Observation delay, transactions<input name="observation_delay_transactions" type="number" min="0" value="0" required /></label>
+                <label>Buy delay, transactions<input name="buy_delay_transactions" type="number" min="1" value="500" required /></label>
+              </div>
+            </fieldset>
+            <!-- Both strategies use the same exact prepared dataset and financial profiles. -->
             <div class="field-grid">
               <label>Dataset revision ID<input name="dataset_revision_id" minlength="64" maxlength="71" required /></label>
               <label>Snapshot ID<input name="snapshot_id" minlength="64" maxlength="71" required /></label>
@@ -182,7 +198,7 @@
 
       <section class="panel" aria-labelledby="sniping-results-heading">
         <div class="section-heading">
-          <div><p class="eyebrow">Exact result artifact</p><h2 id="sniping-results-heading">Sniping summary и сделки</h2></div>
+          <div><p class="eyebrow">Exact result artifact</p><h2 id="sniping-results-heading">Pump.fun: результаты и сделки</h2></div>
         </div>
         <form id="sniping-results-form" class="compact-form">
           <div class="field-grid">
@@ -222,7 +238,7 @@
             <thead>
               <tr>
                 <th>Target</th>
-                <th>Asset / developer</th>
+                <th>Asset / developer or signer</th>
                 <th>Lifecycle</th>
                 <th>Buy quote</th>
                 <th>Sell quote</th>

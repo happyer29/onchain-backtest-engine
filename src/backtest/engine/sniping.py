@@ -19,9 +19,14 @@ from backtest.domain.account_requirements import (
     AccountComponentRecord,
     AccountRequirementScope,
 )
+
+# Shared posting helpers accept typed copy intents without changing Sniping scheduling.
 from backtest.domain.chain import ChainIdentityMismatchError, ChainPosition
+from backtest.domain.copytrading import CopyBuyIntent
 from backtest.domain.execution import ExecutionMode, Fill
 from backtest.domain.hashing import domain_digest
+
+# Content identity and asset-tagged accounting remain independent of strategy family.
 from backtest.domain.identifiers import (
     # Include account id so the identifiers dependency remains explicit.
     AccountId,
@@ -2223,7 +2228,7 @@ def _require_sell_network(state: _RoundTripState) -> NetworkCostQuote:
     return state.sell_network_cost
 
 
-def _validate_buy_quote(intent: RoundTripIntent, quote: ProtocolQuote) -> None:
+def _validate_buy_quote(intent: RoundTripIntent | CopyBuyIntent, quote: ProtocolQuote) -> None:
     # Execute the validate buy quote workflow in explicit, reviewable steps.
     if (
         quote.side is not ProtocolQuoteSide.BUY
@@ -2237,7 +2242,7 @@ def _validate_buy_quote(intent: RoundTripIntent, quote: ProtocolQuote) -> None:
 
 
 def _validate_sell_quote(
-    intent: RoundTripIntent,
+    intent: RoundTripIntent | CopyBuyIntent,
     tokens_atomic: int,
     # Keep the quote input explicit in the validate sell quote contract.
     quote: ProtocolQuote,
@@ -2387,7 +2392,7 @@ def _canonical_asset_amounts(*components: tuple[AssetId, int]) -> _AssetAmounts:
 
 
 def _buy_reservation(
-    intent: RoundTripIntent,
+    intent: RoundTripIntent | CopyBuyIntent,
     # Keep the network input explicit in the buy reservation contract.
     network: NetworkCostQuote,
     account_plan: AccountReservationPlan,
@@ -2401,7 +2406,7 @@ def _buy_reservation(
 
 
 def _sell_reservation(
-    intent: RoundTripIntent,
+    intent: RoundTripIntent | CopyBuyIntent,
     # Close the sell reservation signature after its explicit inputs.
     *,
     tokens_atomic: int,
@@ -2481,7 +2486,7 @@ def _reserve_buy(
 
 
 def _reserve_sell(
-    intent: RoundTripIntent,
+    intent: RoundTripIntent | CopyBuyIntent,
     # Close the reserve sell signature after its explicit inputs.
     *,
     tokens_atomic: int,
@@ -2545,7 +2550,7 @@ def _settle_reserved_amounts(
 
 
 def _failed_buy_settlement(
-    intent: RoundTripIntent,
+    intent: RoundTripIntent | CopyBuyIntent,
     *,
     # Keep the boundary input explicit in the failed buy settlement contract.
     boundary: int,
@@ -2586,7 +2591,7 @@ def _failed_buy_settlement(
 
 
 def _successful_buy_settlement(
-    intent: RoundTripIntent,
+    intent: RoundTripIntent | CopyBuyIntent,
     *,
     boundary: int,
     # Keep the quote input explicit in the successful buy settlement contract.
@@ -2696,7 +2701,7 @@ def _successful_buy_settlement(
 
 
 def _failed_sell_settlement(
-    intent: RoundTripIntent,
+    intent: RoundTripIntent | CopyBuyIntent,
     *,
     # Keep the boundary input explicit in the failed sell settlement contract.
     boundary: int,
@@ -2738,7 +2743,7 @@ def _failed_sell_settlement(
 
 
 def _successful_sell_settlement(
-    intent: RoundTripIntent,
+    intent: RoundTripIntent | CopyBuyIntent,
     *,
     boundary: int,
     # Keep the quote input explicit in the successful sell settlement contract.
@@ -2860,7 +2865,7 @@ def _successful_sell_settlement(
 
 def _cashback_postings(
     postings: list[Posting],
-    intent: RoundTripIntent,
+    intent: RoundTripIntent | CopyBuyIntent,
     # Keep the quote input explicit in the cashback postings contract.
     quote: ProtocolQuote,
 ) -> None:

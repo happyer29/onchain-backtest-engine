@@ -43,7 +43,9 @@ from backtest.application.code_bundles import (
 from backtest.application.delivery_schedules import DeliveryBuildManifest
 from backtest.application.ml_contracts import ModelCanonicality, ModelUnavailableError
 from backtest.application.run_drafts import (
+    PumpfunCopyBuyRunDraft,
     PumpfunSnipingRunDraft,
+    # Draft families dispatch explicitly without reinterpreting old Sniping defaults.
     ReferenceRunDraft,
     # Include run draft so the run drafts dependency remains explicit.
     RunDraft,
@@ -56,6 +58,9 @@ from backtest.application.run_specs import (
     ResolvedReplayInput,
     ResolvedRunSpec,
 )
+from backtest.bootstrap.copy_run_resolver import PumpfunCopyBuyRunSpecResolver
+
+# Copy bundle resolution is isolated from the existing reference registry.
 from backtest.bootstrap.reference_bundles import (
     # Include reference bundle integrity error so the reference bundles dependency remains
     # explicit.
@@ -146,10 +151,22 @@ class ReferenceRunSpecResolver:
             # Complete LocalNumpyCausalOverlayFactory only after its build tools and artifacts
             # inputs are visible in reference run spec resolver init.
         )
+        # Copy drafts verify their own signer-bearing source and four-attempt timing contract.
+        self._copy_resolver = PumpfunCopyBuyRunSpecResolver(
+            artifacts,
+            runtime_lock_id,
+            parquet_memory_limit_mb=parquet_memory_limit_mb,
+            threads=threads,
+            # Both resolvers verify exact source projector and build-tool identity.
+            expected_projector_bundle_id=expected_projector_bundle_id,
+            build_tools=self._build_tools,
+        )
 
     def resolve(self, draft: RunDraft) -> ResolvedRunSpec:
         # Execute the reference run spec resolver resolve workflow in explicit, reviewable
         # steps.
+        if isinstance(draft, PumpfunCopyBuyRunDraft):
+            return self._copy_resolver.resolve(draft)
         if isinstance(draft, PumpfunSnipingRunDraft):
             return self._sniping_resolver.resolve(draft)
         if not isinstance(draft, ReferenceRunDraft):

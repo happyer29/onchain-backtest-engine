@@ -20,8 +20,6 @@ from backtest.adapters.delivery_schedule.numpy.compiler import (
 from backtest.adapters.delivery_schedule.numpy.layout import (
     COMPILER_VERSION as DELIVERY_COMPILER_VERSION,
 )
-
-# Import build tool roles at the visible module dependency boundary.
 from backtest.application.build_tool_roles import (
     CANONICAL_WRITER_ROLE,
     DELIVERY_COMPILER_ROLE,
@@ -37,6 +35,9 @@ from backtest.application.code_bundles import (
 
 # Import delivery schedules at the visible module dependency boundary.
 from backtest.application.delivery_schedules import DeliveryBuildManifest
+
+# Import build tool roles at the visible module dependency boundary.
+from backtest.application.models import SettlementRequirement
 from backtest.application.ports.sniping_runs import SnipingHistoricalEventSource
 from backtest.application.run_drafts import PumpfunSnipingRunDraft
 from backtest.application.run_specs import (
@@ -218,7 +219,10 @@ class PumpfunSnipingRunSpecResolver:
                     )
                 require_pumpfun_sniping_source_contract(typed_source.dataset_spec)
                 settlement_requirement = typed_source.dataset_spec.settlement_requirement
-                if settlement_requirement is None:  # pragma: no cover - contract proves it
+                # The Sniping resolver must reject the separate four-attempt copy settlement family.
+                if not isinstance(
+                    settlement_requirement, SettlementRequirement
+                ):  # contract proves it
                     raise AssertionError("sniping source contract lost settlement requirement")
                 if (
                     draft.sell_delay_transactions

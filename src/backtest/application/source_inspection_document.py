@@ -10,9 +10,12 @@ from hashlib import sha256
 # Import typing at the visible module dependency boundary.
 from typing import Any, cast
 
+from backtest.application.copy_source import copy_coverage_from_document
 from backtest.application.errors import ReprepareRequiredError
 from backtest.application.models import (
     CAPABILITY_PROOF_FIELDS,
+    # Copy receipts decode only under their separately versioned inspection family.
+    COPYBUY_SOURCE_EVIDENCE_SCHEMA,
     BoundedSourceEvidenceReceipt,
     # Include capability cut evidence so the models dependency remains explicit.
     CapabilityCutEvidence,
@@ -62,6 +65,17 @@ SOURCE_INSPECTION_DOCUMENT_VERSION = 5
 _BUILD_KEY_DOMAIN = b"backtest.source-inspection.build-key.v5\x00"
 
 
+def _inspection_version(metadata: SourceMetadata) -> int:
+    """A copy inspection contains only v3 receipts; source families cannot be merged."""
+    schemas = {receipt.schema for receipt in metadata.evidence_receipts}
+    if COPYBUY_SOURCE_EVIDENCE_SCHEMA in schemas:
+        if schemas != {COPYBUY_SOURCE_EVIDENCE_SCHEMA}:
+            raise ValueError("mixed source receipt families are forbidden")
+        return 6
+    # The original source inspection version is retained when copy coverage is absent.
+    return SOURCE_INSPECTION_DOCUMENT_VERSION
+
+
 def canonical_json(value: object) -> bytes:
     # Execute the canonical json workflow in explicit, reviewable steps.
     return json.dumps(
@@ -106,7 +120,7 @@ def source_inspection_payload(inspection: SourceInspection) -> bytes:
             "source_id": metadata.source_id.value,
             # Include tables in the completed source inspection payload result.
             "tables": [_table_payload(item) for item in metadata.tables],
-            "version": SOURCE_INSPECTION_DOCUMENT_VERSION,
+            "version": _inspection_version(metadata),
         }
     )
 
@@ -121,7 +135,7 @@ def source_inspection_manifest(inspection: SourceInspection) -> bytes:
     # Return the completed source inspection manifest result without a hidden fallback.
     return canonical_json(
         {
-            "artifact_schema": SOURCE_INSPECTION_ARTIFACT_SCHEMA,
+            "artifact_schema": f"source-inspection/v{_inspection_version(metadata)}",
             "capability_mapping_digest": mapping_digest.hex,
             "evidence_receipt_ids": [item.receipt_id.hex for item in metadata.evidence_receipts],
             # Include inspected at in the completed source inspection manifest result.
@@ -156,7 +170,7 @@ def source_inspection_build_key(inspection: SourceInspection) -> ContentDigest:
             # evidence receipt ids payload passed to canonical_json remains self-
             # describing within source inspection build key.
             "query_template_digest": query_digest.hex,
-            "schema": SOURCE_INSPECTION_ARTIFACT_SCHEMA,
+            "schema": f"source-inspection/v{_inspection_version(metadata)}",
             "schema_fingerprint": inspection.schema_fingerprint.hex,
             "network_id": metadata.network_id.value,
             "position_schema_id": metadata.position_schema_id.value,
@@ -166,7 +180,11 @@ def source_inspection_build_key(inspection: SourceInspection) -> ContentDigest:
             "source_id": metadata.source_id.value,
         }
     )
-    return ContentDigest(sha256(_BUILD_KEY_DOMAIN + material).hexdigest())
+    # Copy receipts cannot collide with or reinterpret the old inspection build identity.
+    domain = _BUILD_KEY_DOMAIN
+    if _inspection_version(metadata) == 6:
+        domain = b"backtest.source-inspection.build-key.v6\x00"
+    return ContentDigest(sha256(domain + material).hexdigest())
 
 
 def decode_source_inspection(manifest_bytes: bytes, inspection_bytes: bytes) -> SourceInspection:
@@ -205,7 +223,11 @@ def decode_source_inspection(manifest_bytes: bytes, inspection_bytes: bytes) -> 
         },
         label="source inspection manifest",
     )
-    if raw_manifest["artifact_schema"] != SOURCE_INSPECTION_ARTIFACT_SCHEMA:
+    if raw_manifest["artifact_schema"] not in (
+        # Only known inspection artifact schemas may proceed to payload verification.
+        SOURCE_INSPECTION_ARTIFACT_SCHEMA,
+        "source-inspection/v6",
+    ):
         # Fail the decode source inspection path with ValueError for unsupported source
         # inspection artifact schema when source inspection artifact schema, raw manifest
         # and artifact schema is true; do not continue ambiguously.
@@ -243,7 +265,7 @@ def decode_source_inspection(manifest_bytes: bytes, inspection_bytes: bytes) -> 
         },
         label="source inspection payload",
     )
-    if raw["version"] != SOURCE_INSPECTION_DOCUMENT_VERSION:
+    if type(raw["version"]) is not int or raw["version"] not in (5, 6):
         raise ValueError("unsupported source inspection document version")
 
     # Assemble source id once so the decode source inspection workflow shares one value.
@@ -348,16 +370,18 @@ def _cut_evidence_payload(evidence: CapabilityCutEvidence) -> dict[str, object]:
 # Define evidence receipt payload as one focused operation with an explicit boundary.
 def _evidence_receipt_payload(receipt: BoundedSourceEvidenceReceipt) -> dict[str, object]:
     # Execute the evidence receipt payload workflow in explicit, reviewable steps.
-    return {
+    document: dict[str, object] = {
         "capability_id": receipt.capability_id.value,
         "capability_schema_version": receipt.capability_schema_version,
         "capability_mapping_digest": receipt.capability_mapping_digest.hex,
         "cut_evidence": _cut_evidence_payload(receipt.cut_evidence),
+        # Decision and classification evidence stay explicit in the serialized receipt.
         "decision_range": _block_range_payload(receipt.decision_range),
         "launch_universe": (
             None if receipt.launch_universe is None else receipt.launch_universe.identity_document()
         ),
         "normalizer_digest": receipt.normalizer_digest.hex,
+        # Transform identity remains distinct from observation timestamps and counts.
         # Include observed rows in the completed evidence receipt payload result.
         "observed_rows": receipt.observed_rows,
         "proofs": _proofs_payload(receipt.proofs),
@@ -382,6 +406,11 @@ def _evidence_receipt_payload(receipt: BoundedSourceEvidenceReceipt) -> dict[str
             else receipt.terminal_lifecycle_ordering.identity_document()
         ),
     }
+
+    # V2 omits this key entirely, preserving all existing canonical receipt bytes.
+    if receipt.copy_coverage is not None:
+        document["copy_coverage"] = receipt.copy_coverage.identity_document()
+    return document
 
 
 # Define block range payload as one focused operation with an explicit boundary.
@@ -571,7 +600,9 @@ def _parse_evidence_receipt(raw: Mapping[str, Any]) -> BoundedSourceEvidenceRece
             "source_id",
             "source_fidelity",
             "terminal_lifecycle_ordering",
-        },
+        }
+        | ({"copy_coverage"} if raw.get("schema") == COPYBUY_SOURCE_EVIDENCE_SCHEMA else set()),
+        # Copy coverage is the only additive field allowed by the new receipt schema.
         label="bounded source evidence receipt",
     )
     schema = _string(raw, "schema")
@@ -606,6 +637,12 @@ def _parse_evidence_receipt(raw: Mapping[str, Any]) -> BoundedSourceEvidenceRece
         ),
         # Include schema in the completed parse evidence receipt result.
         schema=schema,
+        # Copy v3 always carries typed coverage; the receipt verifies all bound operands.
+        copy_coverage=(
+            copy_coverage_from_document(raw["copy_coverage"])
+            if schema == COPYBUY_SOURCE_EVIDENCE_SCHEMA
+            else None
+        ),
         # Complete BoundedSourceEvidenceReceipt only after its receipt id and source id inputs
         # are visible in parse evidence receipt.
     )

@@ -8,6 +8,8 @@ from typing import Annotated, Any, Literal, Self, cast
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+# Copy financial integers use lossless decimal strings across the browser boundary.
+from backtest.application.copy_result_codec import copy_decimal_document
 from backtest.application.dataset_plans import dataset_plan_bytes
 
 # Import job commands at the visible module dependency boundary.
@@ -30,9 +32,11 @@ from backtest.application.models import (
     CapabilityStream,
     # Include committed artifact so the models dependency remains explicit.
     CommittedArtifact,
+    CopyBuySettlementRequirement,
     DataRequirement,
     DatasetPlan,
     EvidenceStatus,
+    # Job state and evidence metadata remain distinct from executable run drafts.
     JobEventRecord,
     # Include job progress details so the models dependency remains explicit.
     JobProgressDetails,
@@ -60,8 +64,10 @@ from backtest.application.run_contracts import RunContractDescriptor, RunContrac
 from backtest.application.run_drafts import (
     PUMPFUN_SNIPING_EXECUTION_MODES,
     PUMPFUN_SNIPING_LEGACY_RUN_DRAFT_SCHEMA,
+    # Old draft versions retain their existing explicit re-resolution boundary.
     PUMPFUN_SNIPING_RUN_DRAFT_SCHEMA,
     PumpFeeProfileDraft,
+    PumpfunCopyBuyRunDraft,
     # Include pumpfun sniping run draft so the run drafts dependency remains explicit.
     PumpfunSnipingRunDraft,
     ReferenceRunDraft,
@@ -100,8 +106,14 @@ from backtest.application.use_cases.query_artifacts import (
     ArtifactLineage,
 )
 from backtest.application.use_cases.query_run_results import (
+    # Dashboard views are already verified application projections, not filesystem handles.
+    CopyDashboardView,
+    CopyRunSummaryView,
     PumpfunSnipingDashboardView,
     PumpfunSnipingRunSummaryView,
+    RunResultDashboardView,
+    # Transport dispatch returns one exact result family without synthetic fields.
+    RunResultSummaryView,
 )
 
 # Import query runs at the visible module dependency boundary.
@@ -110,11 +122,15 @@ from backtest.application.use_cases.resolve_sweep_spec import SweepDraftEntry
 from backtest.application.use_cases.store_source_inspection import StoredSourceInspection
 from backtest.domain.account_requirements import (
     AccountComponentLifecycle,
+    # Account lifecycle and release policy remain explicit in result projections.
     AccountComponentRecord,
     AccountReleasePolicy,
     AccountRequirementScope,
 )
 from backtest.domain.chain import UINT32_MAX, ChainPosition
+
+# Copy price and retry rules are validated by pure domain policy.
+from backtest.domain.copytrading import CopyBuyPolicy
 from backtest.domain.execution import ExecutionMode
 
 # Import fidelity at the visible module dependency boundary.
@@ -133,7 +149,9 @@ from backtest.domain.fidelity import (
 )
 from backtest.domain.hashing import canonical_json_bytes
 from backtest.domain.identifiers import (
+    AccountId,
     ArtifactId,
+    # Artifact and asset identifiers remain separate typed values in transport conversion.
     AssetId,
     # Include capability id so the identifiers dependency remains explicit.
     CapabilityId,
@@ -167,6 +185,7 @@ from backtest.domain.roundtrips import (
     RoundTripStatus,
 )
 from backtest.domain.time import BlockRange
+from backtest.engine.copytrading_results import CopyPositionRecord
 
 # Import sniping at the visible module dependency boundary.
 from backtest.engine.sniping import SnipingValuationStatus
@@ -866,8 +885,25 @@ class RoundTripCursorResponse(ApiModel):
 
 
 # Keep the round trip page response contract and validation rules together.
+class CopyPositionResponse(ApiModel):
+    """Bounded copy row with exact decimal strings for browser-visible atomic integers."""
+
+    contract_schema: Literal["pumpfun-copy-position/v1"] = "pumpfun-copy-position/v1"
+    record: dict[str, object]
+
+    @classmethod
+    def from_domain(cls, value: CopyPositionRecord) -> Self:
+        """Only immutable validated rows may populate this output-only transport object."""
+        record = copy_decimal_document(value.document())
+        if not isinstance(record, dict):
+            raise TypeError("copy position document must be an object")
+        return cls(record=record)
+
+
 class RoundTripPageResponse(ApiModel):
-    items: tuple[RoundTripResponse, ...] = Field(max_length=MAX_ROUNDTRIP_PAGE_SIZE)
+    items: tuple[RoundTripResponse | CopyPositionResponse, ...] = Field(
+        max_length=MAX_ROUNDTRIP_PAGE_SIZE
+    )
     next_cursor: RoundTripCursorResponse | None
 
     @classmethod
@@ -875,7 +911,14 @@ class RoundTripPageResponse(ApiModel):
         # Execute the round trip page response from domain workflow in explicit,
         # reviewable steps.
         return cls(
-            items=tuple(RoundTripResponse.from_domain(item) for item in value.items),
+            items=tuple(
+                CopyPositionResponse.from_domain(item)
+                if isinstance(item, CopyPositionRecord)
+                else RoundTripResponse.from_domain(item)
+                # Row family dispatch preserves canonical page order without mixing record
+                # semantics.
+                for item in value.items
+            ),
             next_cursor=(
                 None
                 if value.next_cursor is None
@@ -886,6 +929,51 @@ class RoundTripPageResponse(ApiModel):
 
 
 # Keep the pumpfun sniping run summary response contract and validation rules together.
+class CopyRunSummaryResponse(ApiModel):
+    """Explicit copy summary family with precision-safe bounded monetary values."""
+
+    contract_schema: Literal["pumpfun-copy-run-summary/v1"] = "pumpfun-copy-run-summary/v1"
+    run_artifact_id: str
+    logical_run_id: str
+    execution_attempt_id: str
+    network_id: str
+    # Full immutable metadata is bounded by the successful-run manifest contract.
+    position_schema_id: str
+    summary: dict[str, object]
+
+    @classmethod
+    def from_domain(cls, value: CopyRunSummaryView) -> Self:
+        """The API exposes validated metadata and never fetches raw artifacts directly."""
+        summary = copy_decimal_document(value.metadata.document())
+        if not isinstance(summary, dict):
+            raise TypeError("copy summary document must be an object")
+        # Bounded copy metadata is converted without lossy JavaScript numeric values.
+        return cls(
+            run_artifact_id=value.run_artifact_id.hex,
+            logical_run_id=value.logical_run_id.hex,
+            # Exact IDs make provenance accessible without source credentials or filesystem paths.
+            execution_attempt_id=value.execution_attempt_id.hex,
+            network_id=value.network_id.value,
+            position_schema_id=value.position_schema_id.value,
+            summary=summary,
+        )
+
+
+class CopyDashboardResponse(ApiModel):
+    """One copy summary and one bounded page share the same authenticated reader."""
+
+    summary: CopyRunSummaryResponse
+    roundtrips: RoundTripPageResponse
+
+    @classmethod
+    def from_domain(cls, value: CopyDashboardView) -> Self:
+        """A copy dashboard never passes through the Sniping field mapper."""
+        return cls(
+            summary=CopyRunSummaryResponse.from_domain(value.summary),
+            roundtrips=RoundTripPageResponse.from_domain(value.roundtrips),
+        )
+
+
 class PumpfunSnipingRunSummaryResponse(ApiModel):
     run_artifact_id: _DigestHex
     logical_run_id: _DigestHex
@@ -1057,6 +1145,15 @@ class PumpfunSnipingRunSummaryResponse(ApiModel):
         )
 
 
+def run_result_summary_response(
+    value: RunResultSummaryView,
+) -> PumpfunSnipingRunSummaryResponse | CopyRunSummaryResponse:
+    """Dispatch the two separately versioned summary schemas at the transport boundary."""
+    if isinstance(value, CopyRunSummaryView):
+        return CopyRunSummaryResponse.from_domain(value)
+    return PumpfunSnipingRunSummaryResponse.from_domain(value)
+
+
 class PumpfunSnipingDashboardResponse(ApiModel):
     """Bounded first-paint projection for the dedicated result dashboard."""
 
@@ -1069,6 +1166,15 @@ class PumpfunSnipingDashboardResponse(ApiModel):
             summary=PumpfunSnipingRunSummaryResponse.from_domain(value.summary),
             roundtrips=RoundTripPageResponse.from_domain(value.roundtrips),
         )
+
+
+def run_result_dashboard_response(
+    value: RunResultDashboardView,
+) -> PumpfunSnipingDashboardResponse | CopyDashboardResponse:
+    """Preserve each strategy's result contract while sharing the bounded dashboard route."""
+    if isinstance(value, CopyDashboardView):
+        return CopyDashboardResponse.from_domain(value)
+    return PumpfunSnipingDashboardResponse.from_domain(value)
 
 
 class RunBacktestCommand(ApiModel):
@@ -1409,7 +1515,74 @@ class PumpfunSnipingRunDraftCommand(ApiModel):
         )
 
 
-RunDraftCommand = ReferenceRunDraftCommand | PumpfunSnipingRunDraftCommand
+class PumpfunCopyBuyRunDraftCommand(ApiModel):
+    """Typed copy input shared byte-for-byte by CLI and Control API resolution."""
+
+    contract_schema: Literal["pumpfun-copy-buy-run-draft/v1"] = "pumpfun-copy-buy-run-draft/v1"
+    dataset_revision_id: str = Field(min_length=64, max_length=71)
+    snapshot_id: str = Field(min_length=64, max_length=71)
+    replay_pack_id: str | None = Field(default=None, min_length=64, max_length=71)
+    signing_wallets: tuple[str, ...] = Field(min_length=1, max_length=128)
+    # Atomic SOL budgets use decimal strings without browser floating-point conversion.
+    initial_sol_balance_lamports: str = Field(min_length=1, max_length=40)
+    gross_buy_budget_lamports: str = Field(min_length=1, max_length=40)
+    take_profit_bps: int = Field(gt=0)
+    stop_loss_bps: int = Field(gt=0, le=10_000)
+    maximum_hold_seconds: int = Field(gt=0)
+    # Observation and the two order delays are separate explicit global transaction counts.
+    observation_delay_transactions: int = Field(ge=0)
+    buy_delay_transactions: int = Field(gt=0)
+    sell_delay_transactions: int = Field(gt=0)
+    buy_slippage_bps: int = Field(ge=0, le=10_000)
+    sell_slippage_bps: int = Field(ge=0, le=10_000)
+    # Domain validation admits only the two explicit exogenous funding contracts.
+    execution_mode: ExecutionMode
+    wallet_account_profile: WalletAccountProfileCommand
+    pump_fee_profile: PumpFeeProfileCommand
+    buy_solana_fee_profile: SolanaFeeProfileCommand
+    sell_solana_fee_profile: SolanaFeeProfileCommand
+    # The seed is serialized as canonical integer text rather than an unsafe JSON number.
+    root_seed: str = Field(min_length=1, max_length=78)
+
+    def to_domain(self) -> PumpfunCopyBuyRunDraft:
+        """Materialize canonical wallet order and typed policy before application resolution."""
+        policy = CopyBuyPolicy(
+            _positive_atomic_decimal(self.gross_buy_budget_lamports),
+            self.take_profit_bps,
+            self.stop_loss_bps,
+            self.maximum_hold_seconds,
+            # Observation and own-order latencies remain separate integer policy operands.
+            self.observation_delay_transactions,
+            self.buy_delay_transactions,
+            # Slippage thresholds affect execution; TP/SL remains a fee-free price test.
+            self.sell_delay_transactions,
+            self.buy_slippage_bps,
+            self.sell_slippage_bps,
+        )
+        wallets = tuple(AccountId(value) for value in sorted(set(self.signing_wallets)))
+        # Canonical wallet ordering precedes construction of the immutable application draft.
+        return PumpfunCopyBuyRunDraft(
+            DatasetRevisionId(self.dataset_revision_id),
+            SnapshotId(self.snapshot_id),
+            None if self.replay_pack_id is None else ReplayPackId(self.replay_pack_id),
+            # The DTO contains no endpoint, SQL, source password or executable JSON.
+            wallets,
+            _atomic_decimal(self.initial_sol_balance_lamports),
+            policy,
+            self.execution_mode,
+            self.wallet_account_profile.to_domain(),
+            # All account and fee profiles remain explicit resolved inputs.
+            self.pump_fee_profile.to_domain(),
+            self.buy_solana_fee_profile.to_domain(),
+            self.sell_solana_fee_profile.to_domain(),
+            _atomic_decimal(self.root_seed),
+        )
+
+
+# Schema dispatch is closed over the three installed draft families.
+RunDraftCommand = (
+    ReferenceRunDraftCommand | PumpfunSnipingRunDraftCommand | PumpfunCopyBuyRunDraftCommand
+)
 
 
 class RunDraftReresolveRequiredError(ValueError):
@@ -1495,8 +1668,11 @@ def run_draft_command_from_bytes(payload: bytes) -> RunDraftCommand:
         # Return the completed run draft command from bytes result without a hidden
         # fallback.
         return PumpfunSnipingRunDraftCommand.model_validate_json(payload)
+    if schema == "pumpfun-copy-buy-run-draft/v1":
+        return PumpfunCopyBuyRunDraftCommand.model_validate_json(payload)
     if schema is not None:
         raise ValueError("unknown run draft contract_schema")
+    # Only an absent schema selects the original reference draft format.
     return ReferenceRunDraftCommand.model_validate_json(payload)
 
 
@@ -1635,6 +1811,34 @@ class SettlementRequirementInput(ApiModel):
 
 
 # Keep the requirement input contract and validation rules together.
+class CopyBuySettlementInput(ApiModel):
+    """Closed copy timing DTO shared by plan requests and their resolved response."""
+
+    schema_: Literal["global-transaction-duration-four-attempt-copybuy/v1"] = Field(
+        alias="schema", serialization_alias="schema"
+    )
+    observation_delay_transactions: int = Field(ge=0)
+    buy_delay_transactions: int = Field(gt=0)
+    # Holding duration is positive even when observation delay is zero.
+    maximum_hold_seconds: int = Field(gt=0)
+    # Retries are fixed semantics; transport cannot quietly change their count or wait.
+    sell_delay_transactions: int = Field(gt=0)
+    maximum_tail_blocks: int = Field(gt=0)
+    maximum_sell_attempts: Literal[4] = 4
+    retry_delay_ns: Literal[2_000_000_000] = 2_000_000_000
+
+    def to_domain(self) -> CopyBuySettlementRequirement:
+        """Transport validation delegates timing invariants to the application contract."""
+        return CopyBuySettlementRequirement(
+            observation_delay_transactions=self.observation_delay_transactions,
+            buy_delay_transactions=self.buy_delay_transactions,
+            maximum_hold_seconds=self.maximum_hold_seconds,
+            # The acquisition cap limits source reads, not the proven path length.
+            sell_delay_transactions=self.sell_delay_transactions,
+            maximum_tail_blocks=self.maximum_tail_blocks,
+        )
+
+
 class RequirementInput(ApiModel):
     origin: RequirementOrigin
     origin_id: str = Field(min_length=1, max_length=256)
@@ -1657,7 +1861,7 @@ class RequirementInput(ApiModel):
     evidence_contracts: tuple[str, ...] = ()
     warmup_blocks: int = Field(default=0, ge=0)
     settlement_tail_blocks: int = Field(default=0, ge=0)
-    settlement_requirement: SettlementRequirementInput | None = None
+    settlement_requirement: SettlementRequirementInput | CopyBuySettlementInput | None = None
 
     def to_domain(self) -> DataRequirement:
         # Execute the requirement input to domain workflow in explicit, reviewable steps.
@@ -2144,6 +2348,27 @@ class SettlementRequirementResponse(ApiModel):
 
 
 # Keep the budget issue response contract and validation rules together.
+def _settlement_response(
+    value: SettlementRequirement | CopyBuySettlementRequirement | None,
+) -> SettlementRequirementResponse | CopyBuySettlementInput | None:
+    """Expose the exact family that was resolved by the shared planning use case."""
+    if value is None:
+        return None
+    if isinstance(value, CopyBuySettlementRequirement):
+        return CopyBuySettlementInput.model_validate(value.identity_document())
+    # Sniping responses keep the original explicit single-round-trip shape.
+    return SettlementRequirementResponse(
+        schema=value.schema,
+        target_stream=value.target_stream,
+        settlement_streams=value.settlement_streams,
+        initial_delay_transactions=value.initial_delay_transactions,
+        # Duration and subsequent latency remain distinct causal operands.
+        minimum_duration_ns=value.minimum_duration_ns,
+        maximum_followup_delay_transactions=value.maximum_followup_delay_transactions,
+        maximum_tail_blocks=value.maximum_tail_blocks,
+    )
+
+
 class BudgetIssueResponse(ApiModel):
     code: str
     kind: str
@@ -2192,7 +2417,7 @@ class DatasetPlanResponse(ApiModel):
     # Declare decision range explicitly in the dataset plan response contract.
     decision_range: BlockRangeResponse
     settlement_tail: BlockRangeResponse | None
-    settlement_requirement: SettlementRequirementResponse | None
+    settlement_requirement: SettlementRequirementResponse | CopyBuySettlementInput | None
     warmup_blocks: int
     evidence_contracts: tuple[str, ...]
     # Declare capabilities explicitly in the dataset plan response contract.
@@ -2232,31 +2457,7 @@ class DatasetPlanResponse(ApiModel):
                 if spec.settlement_tail is None
                 else _block_range_response(spec.settlement_tail)
             ),
-            settlement_requirement=(
-                None
-                # Pass spec explicitly so cls receives a reviewable spec version and value
-                # input in dataset plan response from domain.
-                if spec.settlement_requirement is None
-                else SettlementRequirementResponse(
-                    schema=spec.settlement_requirement.schema,
-                    target_stream=spec.settlement_requirement.target_stream,
-                    settlement_streams=spec.settlement_requirement.settlement_streams,
-                    # Pass initial delay transactions explicitly so
-                    # SettlementRequirementResponse receives a reviewable schema and
-                    # settlement requirement input in dataset plan response from domain.
-                    initial_delay_transactions=(
-                        spec.settlement_requirement.initial_delay_transactions
-                    ),
-                    minimum_duration_ns=spec.settlement_requirement.minimum_duration_ns,
-                    maximum_followup_delay_transactions=(
-                        # Pass spec explicitly so SettlementRequirementResponse receives a
-                        # reviewable schema and settlement requirement input in dataset
-                        # plan response from domain.
-                        spec.settlement_requirement.maximum_followup_delay_transactions
-                    ),
-                    maximum_tail_blocks=spec.settlement_requirement.maximum_tail_blocks,
-                )
-            ),
+            settlement_requirement=_settlement_response(spec.settlement_requirement),
             # Pass warmup blocks explicitly so cls receives a reviewable spec version and
             # value input in dataset plan response from domain.
             warmup_blocks=spec.warmup_blocks,
