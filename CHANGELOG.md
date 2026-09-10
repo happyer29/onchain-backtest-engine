@@ -12,6 +12,10 @@ Notable user-facing changes are recorded here. The format follows
   optional ReplayPack acceleration.
 - Pump.fun Sniping with strict source-evidence admission and separate
   `EXOGENOUS_REPLAY` and `EXOGENOUS_VIRTUAL_SETTLEMENT` execution modes.
+- Pump.fun Copy Buy reference execution through CLI/API/Web UI: exact
+  `signing_wallet` purchases, one entry per token, fee-free price TP/SL and
+  maximum holding time, four sale attempts with two-second retry waits, and
+  separately verified source coverage and immutable position results.
 - Typed CLI and same-origin Web UI over a durable job queue with isolated child
   processes, cancellation, retry, and restart recovery.
 - Linux x86_64, macOS arm64, and Windows 11 through WSL2/Ubuntu profiles.

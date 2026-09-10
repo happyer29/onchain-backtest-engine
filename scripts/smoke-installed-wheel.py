@@ -98,12 +98,14 @@ def _wait_for_health(process: subprocess.Popen[bytes], port: int) -> dict[str, o
 
 
 def _verify_http(port: int, package_root: Path) -> None:
-    """Prove both packaged pages and every runtime UI asset are actually served."""
+    """Prove each packaged dashboard and its runtime UI assets are actually served."""
     static = package_root / "interfaces/web/static"
     routes = {"/": "index.html", "/sniping-results": "sniping-results.html"}
-    routes.update(
-        {f"/static/{name}": name for name in ("app.js", "sniping-results.js", "styles.css")}
-    )
+    routes["/copy-results"] = "copy-results.html"
+    # Each dashboard must be self-contained after installation, outside the editable checkout.
+    assets = ("app.js", "sniping-results.js", "theme.js", "styles.css")
+    assets += ("copy-results.js", "copy-market-chart.js")
+    routes.update({f"/static/{name}": name for name in assets})
     # Byte equality catches a missing, stale or incorrectly routed packaged asset.
     for route, name in routes.items():
         status, body = _request(port, route)

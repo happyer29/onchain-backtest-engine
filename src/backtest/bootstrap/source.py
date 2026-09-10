@@ -32,15 +32,21 @@ from backtest.application.models import (
 from backtest.application.ports.source import IndexedBatch
 from backtest.application.sniping_run_contract import PUMPFUN_SNIPING_UNIVERSE_POLICY_ID
 from backtest.application.source_evidence import (
+    # Source normalization policies are fixed independently of transport configuration.
     PUMPFUN_TERMINAL_LIFECYCLE_ORDERING_POLICY_ID,
     SOLANA_SKIPPED_SLOT_SENTINEL_POLICY_ID,
 )
 from backtest.bootstrap.config import Settings
+from backtest.bootstrap.pumpfun_copy_source import PumpfunCopySourceComposition
+
+# The copy composition carries an explicit signer-selection contract.
 from backtest.bootstrap.pumpfun_live_source import (
     PumpfunLiveSourceComposition,
     PumpfunLiveSourceError,
     PumpfunLiveSourceErrorCode,
 )
+
+# Network identity uses the immutable chain reference rather than source address.
 from backtest.domain.identifiers import ContentDigest, NetworkId, PositionSchemaId, SourceId
 from backtest.domain.time import BlockRange
 
@@ -305,18 +311,32 @@ class ConfiguredClickHouseSource:
         projector_digest = self._projector_digest
         if composition is None or projector_digest is None:
             raise ValueError("bounded Pump.fun evidence requires the installed live source profile")
+        # The bounded request records exact installed mapping and transform operands.
         return BoundedSourceEvidenceRequest(
             source_id=source_id,
             block_range=block_range,
             decision_range=decision_range,
             capability_mapping_digest=composition.capability_mapping_digest,
+            # Query, projector and normalizer identities all participate in proof binding.
             query_template_digest=composition.query_template_digest,
             projector_digest=projector_digest,
             normalizer_digest=composition.normalizer_digest,
-            launch_universe_policy_id=PUMPFUN_SNIPING_UNIVERSE_POLICY_ID,
+            launch_universe_policy_id=(
+                composition.normalizer.launch_universe_policy_id
+                # Only an explicit copy composition may change the launch-classification policy.
+                if isinstance(composition, PumpfunCopySourceComposition)
+                else PUMPFUN_SNIPING_UNIVERSE_POLICY_ID
+            ),
             skipped_slot_sentinel_policy_id=SOLANA_SKIPPED_SLOT_SENTINEL_POLICY_ID,
             terminal_lifecycle_ordering_policy_id=(PUMPFUN_TERMINAL_LIFECYCLE_ORDERING_POLICY_ID),
+            # Query limits constrain the read while selection identifies its semantic candidate set.
             query_limits=query_limits,
+            copy_selection=(
+                composition.selection
+                if isinstance(composition, PumpfunCopySourceComposition)
+                else None
+                # Ordinary Sniping requests preserve an absent copy selection.
+            ),
         )
 
 

@@ -98,7 +98,7 @@ from backtest.application.use_cases.manage_retention import (
 )
 from backtest.application.use_cases.query_artifacts import ArtifactDetails, ArtifactLineage
 from backtest.application.use_cases.query_jobs import GetJobRequest
-from backtest.application.use_cases.query_run_results import PumpfunSnipingRunSummaryView
+from backtest.application.use_cases.query_run_results import RunResultSummaryView
 from backtest.application.use_cases.query_runs import RunSummaryView
 
 # Import retry job at the visible module dependency boundary.
@@ -341,7 +341,7 @@ class ControlApiCliBackend(CliBackend):
     def describe_run_contract(self, schema: str) -> RunContractDescriptor:
         return self._call(lambda: self.client.run_contract(schema))
 
-    def show_run_summary(self, artifact_id: ArtifactId) -> PumpfunSnipingRunSummaryView:
+    def show_run_summary(self, artifact_id: ArtifactId) -> RunResultSummaryView:
         # Return the completed control api cli backend show run summary result without a
         # hidden fallback.
         return self._call(lambda: self.client.sniping_run_summary(artifact_id))
@@ -885,7 +885,7 @@ class RuntimeCliBackend(CliBackend):
 
     # Define runtime cli backend show run summary as one focused operation with an
     # explicit boundary.
-    def show_run_summary(self, artifact_id: ArtifactId) -> PumpfunSnipingRunSummaryView:
+    def show_run_summary(self, artifact_id: ArtifactId) -> RunResultSummaryView:
         # Execute the runtime cli backend show run summary workflow in explicit,
         # reviewable steps.
         queries = self.container.control.query_run_results

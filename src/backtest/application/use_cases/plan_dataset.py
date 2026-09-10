@@ -4,8 +4,15 @@ from __future__ import annotations
 
 from collections import defaultdict
 
+from backtest.application.copy_source import COPYBUY_SOURCE_CONTRACT
+from backtest.application.copy_source_contracts import (
+    # Copy planning requires independent signer coverage and its exact receipt binding.
+    require_copy_inspection_receipts,
+    resolve_copy_source_binding,
+)
 from backtest.application.errors import (
     BudgetExceededError,
+    # Missing capability evidence remains a typed planning failure.
     CapabilityAmbiguousError,
     # Include capability not found error so the errors dependency remains explicit.
     CapabilityNotFoundError,
@@ -31,6 +38,8 @@ from backtest.application.models import (
     CapabilityDescriptor,
     CapabilityExtractionRange,
     CapabilityStream,
+    CopyBuySettlementRequirement,
+    # Declared copy settlement is distinct from ordinary single-sale settlement.
     DataRequirement,
     # Include dataset plan so the models dependency remains explicit.
     DatasetPlan,
@@ -57,6 +66,12 @@ from backtest.application.source_contracts import (
     require_pumpfun_sniping_inspection_receipts,
     require_pumpfun_sniping_source_contract,
     resolve_pumpfun_sniping_source_evidence_binding,
+)
+
+# The binding type fixes the dataset source family before identity is computed.
+from backtest.application.source_evidence import (
+    PumpfunCopyBuySourceEvidenceBinding,
+    PumpfunSnipingSourceEvidenceBinding,
 )
 from backtest.domain.fidelity import (
     # Include chain finality so the fidelity dependency remains explicit.
@@ -187,8 +202,11 @@ class PlanDataset:
         # Assemble unsupported evidence contracts once so the plan dataset execute
         # workflow shares one value.
         unsupported_evidence_contracts = tuple(
-            item for item in evidence_contracts if item != PUMPFUN_SNIPING_SOURCE_CONTRACT
+            item
+            for item in evidence_contracts
+            if item not in (PUMPFUN_SNIPING_SOURCE_CONTRACT, COPYBUY_SOURCE_CONTRACT)
         )
+        # Unknown evidence contracts cannot be ignored as optional annotations.
         if unsupported_evidence_contracts:
             # Handle the plan dataset execute unsupported_evidence_contracts branch as a
             # distinct logical block.
@@ -275,20 +293,27 @@ class PlanDataset:
             )
         )
         resolved_shards = tuple(shards)
-        source_evidence_binding = (
-            resolve_pumpfun_sniping_source_evidence_binding(
-                metadata,
-                planned,
-                request.decision_range,
+        # Source families resolve through distinct proof contracts before computing any ID.
+        source_evidence_binding: (
+            PumpfunCopyBuySourceEvidenceBinding | PumpfunSnipingSourceEvidenceBinding | None
+        ) = None
+        spec_version = DATASET_SPEC_VERSION
+        if COPYBUY_SOURCE_CONTRACT in evidence_contracts:
+            # A copy plan requires coverage for the exact selected wallets and decision cut.
+            source_evidence_binding = resolve_copy_source_binding(
+                metadata, planned, request.decision_range
             )
-            if PUMPFUN_SNIPING_SOURCE_CONTRACT in evidence_contracts
-            else None
-        )
+            spec_version = 6
+        elif PUMPFUN_SNIPING_SOURCE_CONTRACT in evidence_contracts:
+            # The original Sniping family retains its established binding and schema version.
+            source_evidence_binding = resolve_pumpfun_sniping_source_evidence_binding(
+                metadata, planned, request.decision_range
+            )
         spec_id = dataset_spec_identity_digest(
             # Pass spec version explicitly so dataset_spec_identity_digest receives a
             # reviewable source id and source inspection artifact id input in plan dataset
             # execute.
-            spec_version=DATASET_SPEC_VERSION,
+            spec_version=spec_version,
             source_id=request.source_id,
             source_inspection_artifact_id=request.source_inspection_artifact_id,
             source_schema_fingerprint=inspection.schema_fingerprint,
@@ -315,8 +340,9 @@ class PlanDataset:
             settlement_requirement=settlement_requirement,
             source_evidence_binding=source_evidence_binding,
         )
+        # Construct the immutable spec from the same operands used for its identity.
         spec = DatasetSpec(
-            spec_version=DATASET_SPEC_VERSION,
+            spec_version=spec_version,
             # Pass spec id explicitly so DatasetSpec receives a reviewable source id and
             # source inspection artifact id input in plan dataset execute.
             spec_id=spec_id,
@@ -344,6 +370,9 @@ class PlanDataset:
             settlement_requirement=settlement_requirement,
             source_evidence_binding=source_evidence_binding,
         )
+        if COPYBUY_SOURCE_CONTRACT in evidence_contracts:
+            # Final receipt checks prevent mismatched source evidence from escaping the planner.
+            require_copy_inspection_receipts(metadata, spec)
         if PUMPFUN_SNIPING_SOURCE_CONTRACT in evidence_contracts:
             # Handle the plan dataset execute pumpfun sniping source contract and evidence
             # contracts condition as a distinct block.
@@ -446,7 +475,7 @@ def _required_range(
 
 def _combine_settlement_requirements(
     requirements: tuple[DataRequirement, ...],
-) -> SettlementRequirement | None:
+) -> SettlementRequirement | CopyBuySettlementRequirement | None:
     # Execute the combine settlement requirements workflow in explicit, reviewable steps.
     declared = tuple(
         item.settlement_requirement
@@ -457,7 +486,18 @@ def _combine_settlement_requirements(
     if not declared:
         return None
     try:
-        return SettlementRequirement.combine(declared)
+        # A copy dataset binds one explicit path; incompatible strategy families cannot merge.
+        first = declared[0]
+        if isinstance(first, CopyBuySettlementRequirement):
+            if any(item != first for item in declared):
+                raise ValueError("conflicting copy settlement paths")
+            return first
+        # Other strategy families retain their own settlement-merging rules.
+        legacy = tuple(item for item in declared if isinstance(item, SettlementRequirement))
+        # Preserve the existing conservative merge only for the legacy family.
+        if len(legacy) != len(declared):
+            raise ValueError("mixed settlement contract families")
+        return SettlementRequirement.combine(legacy)
     except ValueError as error:
         # Translate the ValueError failure through the combine settlement requirements
         # boundary.
@@ -472,7 +512,7 @@ def _combine_settlement_requirements(
 def _settlement_tail_guard(
     request: PlanDatasetRequest,
     *,
-    settlement_requirement: SettlementRequirement | None,
+    settlement_requirement: SettlementRequirement | CopyBuySettlementRequirement | None,
 ) -> int:
     # Execute the settlement tail guard workflow in explicit, reviewable steps.
     declared = max(

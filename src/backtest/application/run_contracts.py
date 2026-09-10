@@ -5,7 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
+from backtest.application.copy_run_contract import COPY_RUN_CONTRACT
 from backtest.application.run_drafts import (
+    # Discovery exposes separate copy and Sniping draft families.
     PUMPFUN_SNIPING_EXECUTION_MODES,
     PUMPFUN_SNIPING_RUN_DRAFT_SCHEMA,
 )
@@ -22,6 +24,9 @@ class RunFieldKind(StrEnum):
     CLOSED_ENUM = "CLOSED_ENUM"
     TYPED_PROFILE = "TYPED_PROFILE"
     ROOT_SEED_DECIMAL = "ROOT_SEED_DECIMAL"
+    # Copy observation can be immediate; leaders are a bounded canonical wallet list.
+    NON_NEGATIVE_INTEGER = "NON_NEGATIVE_INTEGER"
+    SIGNING_WALLETS = "SIGNING_WALLETS"
 
 
 # Keep the run contract field contract and validation rules together.
@@ -157,6 +162,46 @@ PUMPFUN_SNIPING_CONTRACT = RunContractDescriptor(
 )
 
 
+def _copy_contract() -> RunContractDescriptor:
+    """Share financial inputs while exposing only the separate copy timing policy."""
+    shared = tuple(
+        item
+        for item in PUMPFUN_SNIPING_CONTRACT.editable_fields
+        if item.name != "delivery_schedule_id"
+    )
+    # A copy draft adds independent observation/entry timing and fee-free price exits.
+    added = (
+        RunContractField("signing_wallets", RunFieldKind.SIGNING_WALLETS, True),
+        RunContractField("take_profit_bps", RunFieldKind.POSITIVE_INTEGER, True),
+        RunContractField("stop_loss_bps", RunFieldKind.BASIS_POINTS, True),
+        RunContractField("maximum_hold_seconds", RunFieldKind.POSITIVE_INTEGER, True),
+        # Zero observation delay is valid; a simulated order must still land in the future.
+        RunContractField("observation_delay_transactions", RunFieldKind.NON_NEGATIVE_INTEGER, True),
+        RunContractField("buy_delay_transactions", RunFieldKind.POSITIVE_INTEGER, True),
+    )
+    # Fixed one-entry and four-attempt rules are not editable UI parameters.
+    fixed = (
+        ("maximum_sell_attempts", "4"),
+        ("mint_entry_limit", "1"),
+        # Discovery explains consumed rejected entries and the exact retry clock.
+        ("price_basis", "TOKEN_PRICE_WITHOUT_FEES"),
+        ("quote_asset", "SOL"),
+        ("sell_all", "true"),
+        ("sell_retry_seconds", "2"),
+    )
+    # No Sniping cooldown or fixed entry latency is inherited into the copy descriptor.
+    return RunContractDescriptor(
+        COPY_RUN_CONTRACT,
+        "Pump.fun Copy Buy v1",
+        tuple(sorted((*shared, *added), key=lambda item: item.name)),
+        fixed,
+        # Field order is canonical so CLI and browser discovery agree byte for byte.
+    )
+
+
+PUMPFUN_COPY_BUY_CONTRACT = _copy_contract()
+
+
 class RunContractNotFoundError(LookupError):
     # Keep this explicitly supported no-op branch visible.
     pass
@@ -166,15 +211,18 @@ class QueryRunContracts:
     """Read-only use case shared by CLI and Control API discovery."""
 
     def list(self) -> tuple[RunContractDescriptor, ...]:
-        return (PUMPFUN_SNIPING_CONTRACT,)
+        """Canonical schema order is identical for local and delegated discovery."""
+        return (PUMPFUN_COPY_BUY_CONTRACT, PUMPFUN_SNIPING_CONTRACT)
 
     def get(self, schema: str) -> RunContractDescriptor:
-        # Execute the query run contracts get workflow in explicit, reviewable steps.
-        if schema != PUMPFUN_SNIPING_CONTRACT.schema:
-            raise RunContractNotFoundError(schema)
-        return PUMPFUN_SNIPING_CONTRACT
+        """Only implemented versioned draft families can be selected."""
+        for contract in self.list():
+            if contract.schema == schema:
+                return contract
+        raise RunContractNotFoundError(schema)
 
 
+# Only advertised installed contracts are exported for transport discovery.
 __all__ = [
     "PUMPFUN_SNIPING_CONTRACT",
     # Keep the query run contracts component named inside the all contract.

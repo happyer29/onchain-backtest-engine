@@ -43,11 +43,12 @@ from backtest.adapters.performance import (
     # Include physical core count so the performance dependency remains explicit.
     physical_core_count,
 )
+
+# The composition root connects generic chart reads to Pump-owned display math.
+from backtest.adapters.results.market_charts import LocalCopyMarketChartReader
 from backtest.adapters.results.parquet import LocalParquetRunResultReaderFactory
 from backtest.adapters.source.clickhouse import load_clickhouse_capabilities
 from backtest.adapters.system import LocalSystemResourceProbe
-
-# Import build tool roles at the visible module dependency boundary.
 from backtest.application.build_tool_roles import (
     ML_FEATURE_BUILDER_ROLE,
     ML_FROZEN_INFERENCE_ROLE,
@@ -64,6 +65,9 @@ from backtest.application.models import (
     DatasetPlanningPolicy,
     QueryLimits,
 )
+
+# Import build tool roles at the visible module dependency boundary.
+from backtest.application.ports.projectors import ProtocolProjector
 from backtest.application.run_contracts import QueryRunContracts
 from backtest.application.use_cases.cancel_job import CancelJob
 
@@ -76,6 +80,7 @@ from backtest.application.use_cases.prepare_dataset import PrepareDataset
 
 # Import query artifacts at the visible module dependency boundary.
 from backtest.application.use_cases.query_artifacts import QueryArtifacts
+from backtest.application.use_cases.query_copy_market_chart import QueryCopyMarketChart
 from backtest.application.use_cases.query_job_events import ListJobEvents
 from backtest.application.use_cases.query_jobs import GetJob, ListJobs
 from backtest.application.use_cases.query_run_results import QueryRunResults
@@ -101,16 +106,22 @@ from backtest.bootstrap.canonical_reconciliation import (
     CanonicalShardIndexReconciler,
     ReconciledPrepareDatasetSubmitJob,
 )
+
+# Only bootstrap assembles concrete source, execution and maintenance adapters.
 from backtest.bootstrap.config import ResourceSettings, Settings
 from backtest.bootstrap.configured_projector import build_configured_projector
 from backtest.bootstrap.execution_container import build_execution_container
 from backtest.bootstrap.maintenance import MaintenanceServices, build_maintenance_services
+from backtest.bootstrap.pumpfun_copy_source import build_pumpfun_copy_source_composition
+
+# The source family is selected explicitly before wiring application ports.
 from backtest.bootstrap.pumpfun_live_source import build_pumpfun_live_source_composition
 
 # Import reference run resolver at the visible module dependency boundary.
 from backtest.bootstrap.reference_run_resolver import ReferenceRunSpecResolver
 from backtest.bootstrap.source import ConfiguredClickHouseSource, select_clickhouse_query_profile
 from backtest.interfaces.api import ControlUseCases
+from backtest.plugins.protocols.pumpfun.market_charts import pump_market_cap_state
 from backtest.runtime.host_resources import (
     HostMemoryReserves,
     derive_host_memory_budget,
@@ -191,18 +202,28 @@ def build_runtime_container(
     capabilities = (
         () if selected_capabilities is None else load_clickhouse_capabilities(selected_capabilities)
     )
+    build_tools = BuildToolBundleRegistry().pin()
+    # A recognized live source profile supplies the pinned normalization contract.
     pumpfun_live = (
         build_pumpfun_live_source_composition(capabilities)
         if capabilities and select_clickhouse_query_profile(capabilities) is not None
         else None
     )
+    # Copy source configuration selects a separate fixed projector and evidence family.
+    copy_source = None
+    if settings.source.copy_selection is not None:
+        copy_source = build_pumpfun_copy_source_composition(
+            capabilities, settings.source.copy_selection, build_tools=build_tools
+        )
+        # The selected composition is the sole authoritative source for the prepared snapshot.
+        pumpfun_live = copy_source
+    # Projection uses only the one selected authoritative source composition.
     projection_capabilities = (
         capabilities if pumpfun_live is None else pumpfun_live.projection_capabilities
     )
-    build_tools = BuildToolBundleRegistry().pin()
     # Assemble projector once so the build runtime container workflow shares one value.
-    projector = None
-    if settings.source.projections_file is not None:
+    projector: ProtocolProjector | None = None if copy_source is None else copy_source.projector
+    if copy_source is None and settings.source.projections_file is not None:
         # Handle the build runtime container projections file, source and settings
         # condition as a distinct block.
         projector = build_configured_projector(
@@ -404,6 +425,10 @@ def build_runtime_container(
             prepare_job_resolver,
             canonical_reconciler,
         )
+    # Results and chart selection share one bounded semantic-verification cache.
+    result_readers = LocalParquetRunResultReaderFactory(artifacts)
+    chart_reader = LocalCopyMarketChartReader(artifacts, pump_market_cap_state, build_tools)
+    # Inject the protocol projector only at bootstrap; the query remains infrastructure-neutral.
     control = ControlUseCases(
         inspect_source=inspect_source,
         plan_dataset=plan_dataset,
@@ -418,7 +443,9 @@ def build_runtime_container(
         # Keep the artifact queries QueryRuns step visible while building control.
         # The same SQLite adapter supplies a manifest-bound, rebuildable Run index.
         query_runs=QueryRuns(artifact_queries, catalog),
-        query_run_results=QueryRunResults(LocalParquetRunResultReaderFactory(artifacts)),
+        query_run_results=QueryRunResults(result_readers),
+        query_copy_market_chart=QueryCopyMarketChart(result_readers, chart_reader),
+        # Read-only chart admission does not alter queued job resource or resolution policy.
         system_resources=resource_probe,
         resolve_run_spec=resolve_run_spec,
         resolve_sweep_spec=resolve_sweep_spec,

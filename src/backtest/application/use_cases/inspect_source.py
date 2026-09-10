@@ -7,6 +7,9 @@ from contextlib import suppress
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 
+# Universe policy distinguishes creation-triggered Sniping from copy selection.
+from backtest.application.copy_source import COPYBUY_UNIVERSE_POLICY_ID
+
 # Import errors at the visible module dependency boundary.
 from backtest.application.errors import (
     SourceEvidenceValidationError,
@@ -99,11 +102,19 @@ class InspectSource:
                 evidence_request.block_range.network_id != metadata.network_id
                 or evidence_request.block_range.position_schema_id != metadata.position_schema_id
                 or evidence_request.capability_mapping_digest != metadata.capability_mapping_digest
+                # The request must use the inspected source mapping and exact query template.
                 or evidence_request.query_template_digest != metadata.query_template_digest
-                or evidence_request.launch_universe_policy_id != PUMPFUN_SNIPING_UNIVERSE_POLICY_ID
+                or evidence_request.launch_universe_policy_id
+                != (
+                    PUMPFUN_SNIPING_UNIVERSE_POLICY_ID
+                    if evidence_request.copy_selection is None
+                    # Only an explicit copy selection may choose the separate copy universe policy.
+                    else COPYBUY_UNIVERSE_POLICY_ID
+                )
                 or evidence_request.skipped_slot_sentinel_policy_id
                 != SOLANA_SKIPPED_SLOT_SENTINEL_POLICY_ID
                 or evidence_request.terminal_lifecycle_ordering_policy_id
+                # Atomic terminal ordering stays pinned independently of source selection.
                 != PUMPFUN_TERMINAL_LIFECYCLE_ORDERING_POLICY_ID
                 or self._evidence_reader is None
                 # Evaluate the complete inspect source execute network id, position schema id
@@ -234,31 +245,41 @@ def _require_receipts_match_request(
     request: BoundedSourceEvidenceRequest,
 ) -> None:
     for receipt in receipts:
+        # The same explicit signer selection must survive bounded evidence promotion.
+        selection = None if receipt.copy_coverage is None else receipt.copy_coverage.selection
+        if selection != request.copy_selection:
+            raise ValueError("bounded evidence uses another copy selection")
+        # Validate every request operand before promoting a returned bounded receipt.
         if (
             receipt.source_id != request.source_id
             or receipt.cut_evidence.block_range != request.block_range
             or receipt.decision_range != request.decision_range
             or receipt.capability_mapping_digest != request.capability_mapping_digest
+            # Template, projector and normalizer digests must all match the requested proof.
             or receipt.query_template_digest != request.query_template_digest
             or receipt.projector_digest != request.projector_digest
             or receipt.normalizer_digest != request.normalizer_digest
         ):
             raise ValueError("bounded evidence receipt uses different request operands")
+        # Legacy launch classification remains bound to its declared universe policy.
         if (
             receipt.launch_universe is not None
             and receipt.launch_universe.policy_id != request.launch_universe_policy_id
         ):
             raise ValueError("launch evidence uses another universe policy")
+        # Sentinel evidence cannot substitute an unrecognized skipped-slot convention.
         if (
             receipt.skipped_slot_sentinel is not None
             and receipt.skipped_slot_sentinel.profile_id != request.skipped_slot_sentinel_policy_id
         ):
             raise ValueError("skipped-slot evidence uses another sentinel policy")
+        # Lifecycle proof must retain the exact ordered terminal normalization policy.
         if (
             receipt.terminal_lifecycle_ordering is not None
             and receipt.terminal_lifecycle_ordering.profile_id
             != request.terminal_lifecycle_ordering_policy_id
         ):
+            # A policy mismatch invalidates the entire receipt before publication.
             raise ValueError("terminal lifecycle evidence uses another ordering policy")
 
 

@@ -335,6 +335,11 @@ re-extraction or ReplayPack recompilation.
 - a loopback Control API and packaged same-origin Web UI with typed prepare,
   backtest/sweep, ML, and Pump.fun Sniping forms, cursor-based progress polling,
   run comparison, artifact/lineage queries, and resource status;
+- shared warm-sunset (default) and original dark appearance choices on the
+  Control and Sniping result pages. A closed browser-local preference applies
+  before first paint and synchronizes across tabs; unavailable browser storage
+  leaves an explicitly tab-only choice. Appearance does not enter API commands,
+  execution identity, result values, or pagination;
 - controller identity and a strict loopback CLI client: health returns only a
   digest derived from the concrete controller instance and canonical local
   data root, not the path itself. The CLI first checks the owner of
@@ -496,6 +501,39 @@ runs are outside this slice and fail closed.
 
 External source volume is not bounded by local capacity. Full mirrors are
 outside the architecture; extraction is limited to specific experiments.
+
+The separate §23.5 Pump.fun copy-buy reference slice is implemented end to end:
+independent signer coverage, bounded older-curve initialization and all-market
+history, pre-root four-attempt settlement validation, integer price TP/SL and
+holding timer, shared wallet/account/ledger execution, immutable external
+position results, resolver, Direct CLI, Control API and Web UI. Copy-only
+receipt v3, inspection v6, DatasetSpec v6 and plan v5 feed
+`pumpfun-copy-buy-run-draft/v1`, `pumpfun-copy-run-summary/v1` and
+`pumpfun-copy-position/v1`. Both exogenous modes pass the hermetic execution
+and accounting gates. Canonical Parquet and ReplayPack reference outputs
+match, including actual Parquet batch/readahead variation and independent
+repeat runs in the integration fixtures.
+
+The read-only Copy Buy dashboard at `/copy-results` shows whole-run summary
+charts and a manually paged signal table. Each position opens a market-cap
+chart from the run's exact retained canonical snapshot through an application
+query port. The Pump projection uses full supply times the virtual-reserve
+marginal price, floored in SOL lamports, after complete transaction groups.
+Leader signals, actual filled entries/exits and failed/rejected attempts keep
+separate markers and exact chain coordinates. The curve line ends at completion
+or migration; there is no PumpSwap or USD history. Interactive reads admit at
+most 50,000 input rows, 64 partitions, 64 MiB of Parquet, 4,000 output points
+and six markers, with one active history scan and a five-second scan deadline.
+Oversized or unavailable history fails explicitly; no truncated chart, new
+persisted artifact, external-source request or replay-semantic change is made.
+
+Live copy admission requires exact evidence for the selected wallets and
+source cut. The CLI and browser/API/queue paths passed a small local technical
+trial; that evidence applies only to its exact wallets and cut and does not
+establish profitability or production performance. Optimized copy execution,
+materialized delivery schedules, ML overlays, PumpSwap routing and any source
+cut without its own exact evidence remain unavailable. Existing Sniping
+semantics, artifact versions and cut-scoped admission are unchanged.
 
 ## 4. Why a modular monolith
 
@@ -2529,6 +2567,200 @@ descriptors, row counts, and canonical content digests, while exact rows live
 in referenced verified Parquet. The manifest remains under 1 MiB and MUST
 publish at least 16 385 open positions without the old embedded final-balance
 limit.
+
+### 23.5 Pump.fun copy-buy strategy v1
+
+This is a separate approved strategy contract. It does not change the fixed
+Sniping rules in §§23.3–23.4 and does not inherit their implementation or live
+source admission. Until its complete preparation, reference execution, result,
+and interface gates pass, copytrading remains unavailable for execution.
+
+#### Signals and one-time entry
+
+The immutable run configuration contains a canonical sorted, unique, nonempty
+list of Solana wallet addresses. A signal is a successful Pump `BUY` whose
+exact source `signing_wallet` belongs to that list and whose historical
+position lies in the decision range. `fee_payer`, creator, creation user, and
+an inferred beneficial owner MUST NOT replace `signing_wallet`. Leader sales
+do not trigger an exit. The signer and exact source event identity must survive
+normalization, canonical Parquet, and ReplayPack; older signerless artifacts
+require new preparation and cannot be enriched during replay.
+
+Only supported SOL-paired, creation-time non-Mayhem curves are eligible.
+Creation may precede the decision range: bounded preparation must prove the
+initial state and all subsequent transitions, not silently exclude an older
+token. The source contract must prove coverage of candidate leader purchases,
+creation-time classification, every required market trade regardless of signer,
+lifecycle, and the authoritative all-transaction clock. A missing creation,
+unknown signer/mode, ambiguous order, or missing transition fails closed.
+Known Mayhem remains excluded with bounded evidence counts/digests and no
+execution events. Existing Sniping creation-range evidence is insufficient.
+
+Signals are observed after the complete historical transaction, including any
+other trades and terminal lifecycle transitions. After observation, the first
+eligible signal consumes the mint for the entire run, before quotation,
+balance/risk checks, or submission. There is one attempted entry per mint,
+including when that entry is rejected, fails on landing, or later closes.
+Later purchases by the same or another tracked wallet are ignored. Signals
+sharing a transaction use proven canonical event order; duplicate source
+delivery must not create another signal or change the winning wallet.
+
+The strategy uses one shared wallet and a fixed gross SOL budget per entry;
+Pump fees are inside this budget, while network fees and account deposits are
+additional under §22. No averaging, partial exit, or leader-sale copying is
+allowed in v1. Budget, initial balance, TP/SL, maximum holding time, slippage,
+observation delay, and buy/sell order delays are explicit validated run inputs.
+Observation delay is a nonnegative number of global transactions; each order
+delay is at least one. Source second-resolution time is not promoted to a
+measured subsecond feed delay. Historical signal range and delayed decision
+position remain distinct; a signal in range may be delivered in the tail.
+
+#### Price triggers and causal exits
+
+TP/SL measures token price change without fees. The entry price is the actual
+buy's curve SOL input divided by tokens received, excluding Pump/network fees,
+rent, and cashback. The current price is the marginal curve price
+`virtual_sol_reserves / virtual_token_reserves` of the latest causally delivered
+active state. Both prices are positive integer ratios of atomic units of the
+same assets; thresholds use exact cross multiplication, never floats.
+TP triggers at or above `entry_price * (10000 + take_profit_bps) / 10000`;
+SL triggers at or below `entry_price * (10000 - stop_loss_bps) / 10000`.
+TP is positive; SL is in `(0, 10000]`. Trigger prices are separate from the
+size-aware reference and landing execution quotes. Fees and account effects
+still enter actual cash/economic PnL through the correlated ledger.
+
+Maximum holding time starts at the successful own buy landing. Its timer is
+driven by the authoritative clock even without further Pump trades, at the
+first nonempty transaction boundary no earlier than the deadline. On a
+boundary where both a price condition and timeout are true, SL takes priority,
+then TP, then timeout. A buy fill can make the position eligible for evaluation
+only after its committed execution notification; every resulting sell lands
+strictly later. No callback observes a partial historical transaction.
+
+The first exit condition is latched. A position has at most one pending sell;
+later prices or leader buys cannot cancel the exit or enqueue another sale.
+Each sell attempts to close all actually held tokens. Its fresh reference quote
+uses the causally observed state, while landing uses the historical state at
+the delayed execution boundary, with independently enforced slippage, lifecycle,
+fee, account, and liquidity checks. Historical state is never changed by own
+orders. Existing strict/virtual settlement modes and their asset-tagged ledger
+funding rules remain applicable and explicit in identity and results.
+
+#### Four bounded sell attempts
+
+The limit is four attempts total: the first attempt plus at most three retries.
+Starting a sell decision consumes an attempt, including a pre-submit rejection
+for unavailable quotation or insufficient network-fee SOL. Such a rejection
+pays no fee. A submitted instruction that fails on landing pays the applicable
+base and priority network fees, with no Pump fee and no account-state change.
+
+After an unsuccessful attempt, the next sell decision is at the first suitable
+nonempty transaction boundary at least two modeled seconds after the failure;
+its ordinary sell-order delay follows separately. Reference output, minimum
+output, costs, and curve availability are recomputed for every attempt. The
+original exit reason stays latched even if the price recovers. A success ends
+the sequence; four failures leave an exhausted open position with its actual
+tokens, locked deposits, cashback, and all incurred fees. There is no fifth
+attempt, no buy retry, and no reset of the mint's consumed state.
+
+Completion/migration cannot cause a retroactive exit or PumpSwap reroute.
+It can make a submitted instruction fail, or a later attempt fail before
+submission. The same four-attempt rules apply. Unsupported source/protocol
+semantics are run-level contract failures, not retryable order rejections.
+
+#### Preparation, identity, results, and admission
+
+A versioned copytrading settlement requirement must bound the complete path of
+every possible signal: observation delay, buy delay, maximum holding time,
+four sell delays, and three two-second retry waits. Before snapshot publication,
+the validator proves this path on the exact compact clock, including boundary
+rounding and lifecycle/group ordering. It extracts a bounded settlement tail
+once, respects the hard block cap, and creates no new entry targets in the tail.
+Insufficient clock/history fails closed; truncating retries or forcing a final
+sale does not make a successful run. Bounded creation/initial-state evidence
+and signer coverage are part of the exact source mapping/query/projector
+closure. They cannot be asserted by static `PROVEN` configuration.
+
+Separate versioned strategy, draft/config, signal/position/order identities,
+and result schemas carry this contract. Wallet list, price policy, latencies,
+four-attempt/two-second policy, once-per-mint consumption, settlement requirement,
+fee/account policies, source evidence, network, and position schema enter
+semantic identity. Existing Sniping artifacts retain their exact interpretation.
+Physical backend, batch size, and readahead remain attempt provenance.
+
+Buffered external columnar results record signal wallet/event/position,
+observation and buy boundaries, actual fee-free entry price, exit reason and
+trigger price, and each of the at most four attempts with its decision/landing
+positions, reference/landing amounts, failure stage/code, and fees. They also
+record closed/exhausted status, remaining tokens/deposits, cashback, correlated
+cash PnL, and separately qualified valuation. Summary counters and bounded
+descriptors reconcile with these rows and the ledger; the root manifest remains
+below 1 MiB. Synthetic funding is explicit and never called on-chain executable.
+
+CLI and Control API resolve the same typed draft and immutable dependency
+closure; Web UI submits through that API and uses bounded result projections.
+Admission requires signer-preserving canonical/ReplayPack equivalence,
+transaction-atomic delayed observation, once-per-mint failure tests, exact TP/SL
+boundaries, quiet-market timeout, all four rejection/landing/retry paths,
+tail proof, lifecycle, shared-wallet ledger/account reconciliation, and existing
+Sniping regression gates. Any dedicated optimized copy backend additionally
+requires its own readable reference oracle, profiler, three-way equivalence,
+and representative performance/resource gate under §§27 and 33. Neither the
+Sniping benchmark nor its one-day live cut admits copytrading automatically.
+
+#### Signer-preserving input representation
+
+`pumpfun-copybuy-trade-payload-v1` stores the exact `signing_wallet` together
+with `state_after`, the existing integer Pump curve state. The signer is a
+canonical base58 32-byte Solana public key. This payload uses the existing
+generic protocol-payload storage field; it introduces no inferred actor,
+physical event kind, or replacement event identity. The original exact
+source occurrence, transaction group, and event coordinates remain intact.
+Signer changes alter canonical event bytes and content identity, not the
+identity of the underlying source occurrence.
+
+`pumpfun-copybuy-live-normalizer/v1` reuses the existing reserve, fee, sentinel,
+and lifecycle transformations, adds strict signer preservation, and binds the
+copy-buy classification policy
+`successful-sol-paired-non-mayhem-pumpfun-copy-buys-v1` into its own config
+digest. A mapped source signer is required even when the payer is present.
+The existing signerless payload/normalizer retain their original meaning and
+cannot satisfy copy-buy input validation. This transport representation alone
+does not prove candidate coverage, older-curve initialization, or settlement;
+the complete preparation gate above remains mandatory.
+
+#### Bounded copy-buy preparation contract
+
+Copy preparation uses an explicit sorted wallet set, decision range, bounded
+creation/history lookback, and one hard-capped settlement tail. A separate
+fixed source query enumerates successful SOL-paired leader BUY occurrences in
+the decision range without joining away tokens whose creation is missing.
+Creation, full market trades from every signer, and lifecycle are then read
+for those candidate mints only, from the bounded history start through the
+required tail. Every candidate must have exactly one proven creation and a
+complete initial-state/transition path. Missing older creation rejects the cut;
+it is not an exclusion. Known creation-time Mayhem is excluded with explicit
+candidate and mint counts and an ordered digest.
+
+`pumpfun-copybuy-coverage-evidence/v1` binds the exact wallets, history and
+decision ranges, candidate/eligible/excluded counts, canonical eligible signal
+digest, exclusion digest, and fixed candidate-query fingerprint. Coverage is
+proved by reconciling the independent candidate enumeration with the complete
+market stream. Snapshot validation recomputes the eligible signal count/digest
+from signer-bearing canonical events. A count alone or a query that starts by
+inner-joining available creations cannot prove candidate completeness.
+
+Copy-only bounded receipt v3 and source inspection v6 carry this coverage in
+addition to the existing exact clock, order, immutable creation, transition,
+fee, and lifecycle proofs. They use separate copy query/normalizer/projector
+identities. DatasetSpec v6 and dataset plan v5 bind the copy coverage and a
+`global-transaction-duration-four-attempt-copybuy/v1` settlement requirement.
+The requirement explicitly includes observation delay, buy delay, maximum hold,
+four sell delays and three two-second retry waits; its trade target stream is
+also a settlement stream. This does not relax the v1 single-roundtrip contract
+that forbids this overlap. Existing Sniping receipt v2, inspection v5,
+DatasetSpec v5 and plan v4 retain their original bytes and interpretation.
+Copy-specific versions cannot satisfy Sniping admission, or vice versa.
 
 ## 24. Features, labels, universe, and ML
 

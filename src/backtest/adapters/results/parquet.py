@@ -15,7 +15,12 @@ from threading import Lock
 from typing import IO, Any, cast
 
 import pyarrow as pa
+
+# Parquet serialization remains outside core execution and uses bounded output buffers.
 import pyarrow.parquet as pq
+
+from backtest.adapters.results.copy_reconciliation import CopyLedgerReconciler
+from backtest.application.copy_result_codec import copy_position_from_document
 
 # Import models at the visible module dependency boundary.
 from backtest.application.models import ArtifactDraft, ArtifactKind, CommittedArtifact
@@ -34,7 +39,11 @@ from backtest.application.ports.run_results import (
 from backtest.application.run_results import (
     MAX_COMPARISON_LABEL_LENGTH,
     MAX_SUCCESSFUL_RUN_MANIFEST_BYTES,
+    CopySummaryMetadata,
+    # Sniping metadata retains its original summary validation independently of copy totals.
     PumpfunSnipingSummaryMetadata,
+    # Copy summaries are a separate bounded family under the common immutable manifest.
+    RunBackend,
     # Include run physical settings so the run results dependency remains explicit.
     RunPhysicalSettings,
     RunResultTableRole,
@@ -77,6 +86,18 @@ from backtest.engine.audit import (
     # Include ledger document so the audit dependency remains explicit.
     ledger_document,
 )
+from backtest.engine.copytrading_results import (
+    COPY_AUDIT_STREAM,
+    COPY_BALANCE_STREAM,
+    # Copy streams retain distinct canonical framing for fills, ledger and position rows.
+    COPY_FILL_STREAM,
+    COPY_LEDGER_STREAM,
+    COPY_POSITION_SCHEMA,
+    COPY_POSITION_STREAM,
+    CopyPositionRecord,
+    # Scalar copy totals are recomputed during verified columnar reads.
+)
+from backtest.engine.copytrading_run import CopyTotalsAccumulator
 from backtest.engine.sniping_contracts import synthetic_liquidity_account_id
 
 
@@ -596,7 +617,10 @@ class _LocalParquetRunResultReader:
         # reviewable steps.
         if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 200:
             raise ValueError("round-trip page limit must be between 1 and 200")
-        if not isinstance(self._manifest.bounded_summary, PumpfunSnipingSummaryMetadata):
+        if not isinstance(
+            self._manifest.bounded_summary, (PumpfunSnipingSummaryMetadata, CopySummaryMetadata)
+        ):
+            # Unsupported result families cannot expose misleading Pump position pages.
             raise RunOutputIntegrityError("Run has no Pump.fun Sniping results")
         if self._is_semantically_verified():
             return self._read_roundtrip_page(after=after, limit=limit)
@@ -641,8 +665,12 @@ class _LocalParquetRunResultReader:
         if self._balances_verified:
             return
         descriptor = self._manifest.result_table(RunResultTableRole.FINAL_BALANCES)
+        # Final balances use the selected result family framing without changing their asset
+        # semantics.
         hasher = CanonicalStreamHasher(
-            "backtest.sniping-final-balances.v1"
+            COPY_BALANCE_STREAM
+            if isinstance(self._manifest.bounded_summary, CopySummaryMetadata)
+            else "backtest.sniping-final-balances.v1"
             # Keep the bounded summary isinstance step visible while building hasher.
             if isinstance(self._manifest.bounded_summary, PumpfunSnipingSummaryMetadata)
             else "backtest.final-balances.v1"
@@ -651,10 +679,14 @@ class _LocalParquetRunResultReader:
             None
             # Keep the bounded summary isinstance step visible while building first swap
             # rows.
-            if isinstance(self._manifest.bounded_summary, PumpfunSnipingSummaryMetadata)
+            if isinstance(
+                self._manifest.bounded_summary, (PumpfunSnipingSummaryMetadata, CopySummaryMetadata)
+            )
             else []
         )
+        # Balance verification tracks prior keys without retaining the complete table.
         previous: tuple[str, str, str, int] | None = None
+        # Key ordering prevents duplicate balance rows from hiding behind a valid row count.
         previous_key: tuple[str, str, str] | None = None
         # Acquire open binary, relative name and handle at an explicit local parquet run
         # result reader verify final balances context boundary so cleanup remains scoped.
@@ -710,7 +742,8 @@ class _LocalParquetRunResultReader:
         row: dict[str, object],
         *,
         schema_id: str,
-    ) -> tuple[bytes, RoundTripRecord, tuple[int, str]]:
+        # The schema selects the strict position decoder and its canonical paging key.
+    ) -> tuple[bytes, RoundTripRecord | CopyPositionRecord, tuple[int, str]]:
         """Decode and reconcile every logical field exposed by a returned row."""
 
         encoded = _required_bytes(row.get("record_json"), "round-trip record")
@@ -723,7 +756,12 @@ class _LocalParquetRunResultReader:
         if canonical_json_bytes(document) != encoded:
             raise RunOutputIntegrityError("round-trip row is not canonical JSON")
         try:
-            record = roundtrip_record_from_document(document, schema_id=schema_id)
+            record: RoundTripRecord | CopyPositionRecord
+            if schema_id == COPY_POSITION_SCHEMA:
+                # Copy positions cannot pass through a legacy Sniping record constructor.
+                record = copy_position_from_document(document)
+            else:
+                record = roundtrip_record_from_document(document, schema_id=schema_id)
         except (KeyError, TypeError, ValueError) as error:
             raise RunOutputIntegrityError("round-trip row contract is invalid") from error
         # Indexed columns must be exact projections of the authenticated record payload.
@@ -753,7 +791,7 @@ class _LocalParquetRunResultReader:
         cursor_key = (
             None if after is None else (after.target_boundary_ordinal, after.roundtrip_id.hex)
         )
-        selected: list[RoundTripRecord] = []
+        selected: list[RoundTripRecord | CopyPositionRecord] = []
 
         # The file is reopened under its artifact read lease for every bounded request.
         with self._handle.open_binary(descriptor.relative_name) as stream:
@@ -853,7 +891,16 @@ class _LocalParquetRunResultReader:
         # explicit, reviewable steps.
         descriptor = self._manifest.result_table(RunResultTableRole.ROUNDTRIPS)
         is_sniping = isinstance(self._manifest.bounded_summary, PumpfunSnipingSummaryMetadata)
+        copy_totals = (
+            CopyTotalsAccumulator()
+            if isinstance(self._manifest.bounded_summary, CopySummaryMetadata)
+            # Only the copy family accumulates the separate copy financial totals.
+            else None
+        )
         roundtrip_domain = "backtest.first-swap-roundtrip-stream.v1"
+        if copy_totals is not None:
+            roundtrip_domain = COPY_POSITION_STREAM
+        # Sniping records retain their version-specific digest domains.
         if is_sniping:
             # Hash committed rows in their original generation-specific domain.
             roundtrip_domain = (
@@ -861,11 +908,13 @@ class _LocalParquetRunResultReader:
                 if descriptor.schema_id == ROUNDTRIP_RESULT_SCHEMA_V4
                 else "backtest.sniping-roundtrip-stream.v3"
             )
+        # Hashing and bounded paging share one verified sequential table traversal.
         hasher = CanonicalStreamHasher(roundtrip_domain)
         previous: tuple[int, str] | None = None
         page_checkpoints: list[tuple[int, _RoundTripKey]] = []
-        selected: list[RoundTripRecord] = []
+        selected: list[RoundTripRecord | CopyPositionRecord] = []
         cursor_key = (
+            # The cursor key is physical paging state, not a new semantic result identity.
             None if after is None else (after.target_boundary_ordinal, after.roundtrip_id.hex)
             # Complete the cursor key group only after its semantic components are visible.
         )
@@ -893,10 +942,20 @@ class _LocalParquetRunResultReader:
                             row,
                             schema_id=descriptor.schema_id,
                         )
+                        # Every decoded copy row must belong to the same family as the root summary.
+                        if copy_totals is not None:
+                            if not isinstance(record, CopyPositionRecord):
+                                raise RunOutputIntegrityError(
+                                    "copy table contains a different result family"
+                                )
+                            # Aggregate only validated records before comparing the recomputed
+                            # scalar summary.
+                            copy_totals.append(record)
                         if previous is not None and key <= previous:
                             raise RunOutputIntegrityError("round-trip table is not keyset ordered")
                         hasher.append_canonical_bytes(encoded)
                         previous = key
+                        # Keyset paging skips verified prior rows without using SQL OFFSET.
                         if cursor_key is not None and key <= cursor_key:
                             continue
                         if limit > 0 and len(selected) <= limit:
@@ -910,10 +969,23 @@ class _LocalParquetRunResultReader:
         # count and digest condition before guarded effects.
         if hasher.count != descriptor.row_count or hasher.digest != descriptor.canonical_digest:
             raise RunOutputIntegrityError("round-trip table differs from its descriptor")
+        if copy_totals is not None:
+            summary = self._manifest.bounded_summary
+            if (
+                # The recomputed position totals must equal the immutable bounded summary.
+                not isinstance(summary, CopySummaryMetadata)
+                or copy_totals.finish() != summary.totals
+            ):
+                raise RunOutputIntegrityError(
+                    "copy position totals differ from the bounded summary"
+                    # A valid stream digest alone cannot legitimize inconsistent aggregate money
+                    # fields.
+                )
         if len(page_checkpoints) > _MAX_ROUNDTRIP_PAGE_CHECKPOINTS:
             raise RunOutputIntegrityError("round-trip page index exceeds its memory bound")
         self._roundtrip_page_index = tuple(page_checkpoints)
         self._roundtrips_verified = True
+        # Mark semantic verification complete only after counts, hashes and totals reconcile.
         self._mark_semantically_verified()
         has_more = len(selected) > limit
         items = tuple(selected[:limit])
@@ -967,7 +1039,20 @@ class _LocalParquetRunOutputSession:
         self._last_roundtrip_key: tuple[int, str] | None = None
         self._first_swap_balance_rows: list[list[object]] | None = None
         self._sniping_ledger_reconciler: _SnipingLedgerReconciler | None = None
-        if physical_settings.backend.is_pumpfun_sniping:
+        self._copy_ledger_reconciler: CopyLedgerReconciler | None = None
+        # Output framing is selected once from the admitted backend before any row is written.
+        if physical_settings.backend is RunBackend.REFERENCE_PUMPFUN_COPY_BUY:
+            audit_domain, ledger_domain, fill_domain = (
+                COPY_AUDIT_STREAM,
+                COPY_LEDGER_STREAM,
+                COPY_FILL_STREAM,
+                # Copy framing cannot collide with the pre-existing Sniping audit domains.
+            )
+            # Copy positions keep their own logical schema inside the common external table role.
+            roundtrip_domain, final_balance_domain = COPY_POSITION_STREAM, COPY_BALANCE_STREAM
+            self._roundtrip_schema_id = COPY_POSITION_SCHEMA
+            self._copy_ledger_reconciler = CopyLedgerReconciler()
+        elif physical_settings.backend.is_pumpfun_sniping:
             # Handle the local parquet run output session init is pumpfun sniping, backend
             # and physical settings condition as a distinct block.
             audit_domain = "backtest.sniping-audit-stream.v1"
@@ -1140,8 +1225,11 @@ class _LocalParquetRunOutputSession:
         # Execute the local parquet run output session append ledger workflow in explicit,
         # reviewable steps.
         self._require_open()
+        if self._copy_ledger_reconciler is not None:
+            self._copy_ledger_reconciler.append_ledger(transaction)
         if self._sniping_ledger_reconciler is not None:
             self._sniping_ledger_reconciler.append_ledger(transaction)
+        # The canonical ledger stream records the same postings used by family reconciliation.
         document = ledger_document(transaction)
         self._ledger_hash.append(document)
         # Invoke append for value and reason as a visible local parquet run output session
@@ -1188,6 +1276,44 @@ class _LocalParquetRunOutputSession:
         # rows, fill values and settings condition before guarded effects.
         if len(self._fill_values) >= self._settings.output_buffer_rows:
             self._flush_fills()
+
+    def append_copy_position(self, record: CopyPositionRecord) -> None:
+        """Publish the real BUY target and bounded retry history without Sniping-only fields."""
+        self._require_open()
+        if self._copy_ledger_reconciler is None:
+            raise RunOutputIntegrityError("copy positions require the copy output contract")
+        if (
+            record.network_id != self._spec.network_id
+            # A position cannot introduce another chain into a resolved single-network run.
+            or record.position_schema_id != self._spec.position_schema_id
+        ):
+            raise RunOutputIntegrityError("copy position chain differs from the resolved run")
+        # Semantic row validation and strict keyset ordering precede the buffered write.
+        document = record.document()
+        if copy_position_from_document(document) != record:
+            raise RunOutputIntegrityError("copy position failed immutable roundtrip validation")
+        key = (record.target_position.boundary_ordinal, record.roundtrip_id.hex)
+        if self._last_roundtrip_key is not None and key <= self._last_roundtrip_key:
+            # Canonical source-position ordering is required for stable result keyset paging.
+            raise RunOutputIntegrityError("copy positions must be strictly keyset ordered")
+        self._copy_ledger_reconciler.append_position(record)
+        # The verified publication protocol is shared; no new artifact commit path is introduced.
+        encoded = canonical_json_bytes(document)
+        self._roundtrip_hash.append_canonical_bytes(encoded)
+        self._roundtrip_values.append(
+            {
+                "record_json": encoded,
+                # The row index retains bounded keys alongside the complete canonical record bytes.
+                "roundtrip_id": bytes.fromhex(record.roundtrip_id.hex),
+                "status": record.status.value,
+                "target_boundary_ordinal": record.target_position.boundary_ordinal,
+            }
+        )
+        # Advance the paging key only after the immutable record has entered the output buffer.
+        self._last_roundtrip_key = key
+        # At most output_buffer_rows encoded records are retained by the physical writer.
+        if len(self._roundtrip_values) >= self._settings.output_buffer_rows:
+            self._flush_roundtrips()
 
     def append_roundtrip(self, record: RoundTripRecord) -> None:
         """Append one canonical target lifecycle in strict keyset order."""
@@ -1259,6 +1385,14 @@ class _LocalParquetRunOutputSession:
             # before explicit failure handling.
             self._append_final_balances(final_balances)
             self._close_parquet()
+            if self._copy_ledger_reconciler is not None:
+                copy_summary = manifest.bounded_summary
+                if not isinstance(copy_summary, CopySummaryMetadata):
+                    # Copy outputs require the matching bounded summary before publication can
+                    # complete.
+                    raise RunOutputIntegrityError("copy output requires a copy summary")
+                self._copy_ledger_reconciler.verify_summary(copy_summary)
+            # Existing Sniping reconciliation remains independent of the new copy family.
             if self._sniping_ledger_reconciler is not None:
                 # Handle the local parquet run output session finalize sniping ledger
                 # reconciler condition as a distinct block.
@@ -1556,8 +1690,14 @@ def _fill_schema() -> pa.Schema:
 def _roundtrip_schema(schema_id: str) -> pa.Schema:
     """Build the fixed physical envelope for one supported logical generation."""
 
-    if schema_id not in {ROUNDTRIP_RESULT_SCHEMA_V3, ROUNDTRIP_RESULT_SCHEMA_V4}:
+    if schema_id not in {
+        ROUNDTRIP_RESULT_SCHEMA_V3,
+        ROUNDTRIP_RESULT_SCHEMA_V4,
+        COPY_POSITION_SCHEMA,
+    }:
+        # Unknown row schemas cannot be written under the shared Parquet container.
         raise ValueError("unsupported round-trip Parquet schema")
+    # The external index stores only stable paging fields and bounded canonical record bytes.
     return pa.schema(
         [
             pa.field("target_boundary_ordinal", pa.uint64(), nullable=False),

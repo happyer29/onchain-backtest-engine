@@ -11,8 +11,17 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, cast
 
+from backtest.application.copy_run_contract import (
+    copy_draft_from_spec,
+    is_copy_run_spec,
+    # Preparation compatibility is checked independently of runtime component construction.
+    require_copy_preparation,
+)
 from backtest.application.ml_contracts import InferenceMode
 from backtest.application.models import ArtifactKind, CommittedArtifact
+from backtest.application.ports.copy_runs import CopyRuntimeResolver, ResolvedCopyRuntime
+
+# Core-owned runtime ports preserve application independence from concrete plugins.
 from backtest.application.ports.runs import (
     # Include backtest engine so the runs dependency remains explicit.
     BacktestEngine,
@@ -63,7 +72,10 @@ from backtest.domain.identifiers import (
     LogicalRunId,
 )
 from backtest.engine.contracts import EnginePhysicalSettings
+from backtest.engine.copytrading_run import CopyRunSink, CopyRunSummary, run_copy_backtest
 from backtest.engine.reference import ReferenceRunConfig, RunSummary
+
+# Historical input is an immutable local event source, never a source SQL client.
 from backtest.engine.replay import HistoricalEventSource
 
 # Import rng at the visible module dependency boundary.
@@ -155,6 +167,15 @@ class _PreparedSnipingRun:
     engine_settings: EnginePhysicalSettings
 
 
+@dataclass(frozen=True, slots=True)
+class _PreparedCopyRun:
+    """Exact source and fresh copy components are held open through execution/publication."""
+
+    spec: ResolvedRunSpec
+    source: SnipingHistoricalEventSource
+    runtime: ResolvedCopyRuntime
+
+
 # Keep the run backtest contract and validation rules together.
 class RunBacktest:
     def __init__(
@@ -170,8 +191,10 @@ class RunBacktest:
         # Keep the additional engines input explicit in the init contract.
         additional_engines: Mapping[str, BacktestEngine] | None = None,
         sniping_components: SnipingRuntimeComponentsResolver | None = None,
+        copy_components: CopyRuntimeResolver | None = None,
         sniping_engine: SnipingBacktestEngine | None = None,
         additional_sniping_engines: Mapping[str, SnipingBacktestEngine] | None = None,
+        # Process thread limits remain an operational admission requirement for every backend.
         required_threads: int | None = None,
         # Keep the clock input explicit in the init contract.
         clock: Callable[[], datetime] | None = None,
@@ -209,6 +232,8 @@ class RunBacktest:
                 )
             sniping_engines[backend_name] = sniping_candidate
         self._sniping_components = sniping_components
+        # Copy runtime injection is separate from the established Sniping engine registry.
+        self._copy_components = copy_components
         # Assemble self sniping engines once so the run backtest init workflow shares one
         # value.
         self._sniping_engines = sniping_engines
@@ -299,7 +324,7 @@ class RunBacktest:
         spec: ResolvedRunSpec,
         # Keep the physical settings input explicit in the execute summary contract.
         physical_settings: RunPhysicalSettings,
-    ) -> RunSummary | SnipingRunSummary:
+    ) -> RunSummary | SnipingRunSummary | CopyRunSummary:
         """Execute exact semantics without staging/publishing result bytes.
 
         This is intentionally narrower than ``execute`` and exists for the
@@ -317,9 +342,13 @@ class RunBacktest:
         # Keep the spec input explicit in the open preflighted contract.
         spec: ResolvedRunSpec,
         physical_settings: RunPhysicalSettings,
-    ) -> Iterator[_PreparedRun | _PreparedSnipingRun]:
+    ) -> Iterator[_PreparedRun | _PreparedSnipingRun | _PreparedCopyRun]:
         # Execute the run backtest open preflighted workflow in explicit, reviewable
         # steps.
+        if is_copy_run_spec(spec):
+            with self._open_preflighted_copy(spec, physical_settings) as copy_prepared:
+                yield copy_prepared
+            return
         if is_pumpfun_sniping_spec(spec):
             # Handle the run backtest open preflighted is_pumpfun_sniping_spec(spec)
             # branch as a distinct logical block.
@@ -456,6 +485,81 @@ class RunBacktest:
             )
 
     @contextmanager
+    def _open_preflighted_copy(
+        self, spec: ResolvedRunSpec, settings: RunPhysicalSettings
+    ) -> Iterator[_PreparedCopyRun]:
+        """Reject incompatible source, runtime, backend or physical admission before outputs."""
+        if (
+            settings.backend is not RunBackend.REFERENCE_PUMPFUN_COPY_BUY
+            or self._copy_components is None
+        ):
+            raise RunPreflightError("copy run requires its installed reference backend")
+        # A valid backend still must fit the configured child-process thread limit.
+        if self._required_threads is not None and settings.threads != self._required_threads:
+            raise RunPreflightError("copy threads differ from the configured process thread limit")
+        # Runtime verifies exact configs and rejects unsupported overlays/schedules.
+        runtime = self._copy_components.resolve(spec)
+        draft = copy_draft_from_spec(spec)
+        with self._source_factory.open_resolved(spec) as source:
+            if not isinstance(source, SnipingHistoricalEventSource):
+                raise RunPreflightError("copy source has no verified DatasetSpec and clock")
+            # Bind the readers' verified manifest identities to the resolved spec.
+            for name in (
+                "dataset_revision_id",
+                "logical_content_hash",
+                "replay_semantics_id",
+                "network_id",
+                # Position schema is verified alongside dataset, semantics and immutable network
+                # identity.
+                "position_schema_id",
+            ):
+                if getattr(source, name) != getattr(spec, name):
+                    raise RunPreflightError("copy replay identity differs from the resolved spec")
+            # Source manifests must prove the full prepared signer and settlement contract.
+            require_copy_preparation(source.dataset_spec, draft.signing_wallets, draft.policy)
+            if source.decision_range != source.dataset_spec.decision_range:
+                raise RunPreflightError("copy decision range differs from its verified manifest")
+            # No receipt may be omitted, added, reordered or substituted before engine mutation.
+            expected = tuple(
+                (item.role, item.bundle_id, item.config_digest) for item in spec.components
+            )
+            # Actual runtime receipts must preserve the same complete canonical component order.
+            actual = tuple(
+                (item.role, item.bundle_id, item.config_digest)
+                for item in runtime.receipts
+                # Receipts must match the complete resolved component tuple in canonical order.
+            )
+            if actual != expected:
+                raise RunPreflightError("copy runtime receipts differ from resolved components")
+            bundles = {item.role: item.bundle_id for item in spec.components}
+            # Check actual strategy operands as well as its claimed bundle receipt.
+            if (
+                runtime.strategy.bundle_id != bundles["strategy"]
+                or runtime.strategy.policy != draft.policy
+                or runtime.strategy.signing_wallets != draft.signing_wallets
+            ):
+                # A changed wallet set or policy rejects execution before opening output
+                # publication.
+                raise RunPreflightError("copy strategy instance differs from its resolved receipt")
+            # Verify actual instances as well as receipt strings before any wallet can mutate.
+            protocol = runtime.protocol_factory()
+            if protocol.bundle_id != bundles["protocol:pumpfun"]:
+                raise RunPreflightError("copy protocol instance differs from its resolved receipt")
+            if protocol.trade_payload_schema_id.value != "pumpfun-copybuy-trade-payload-v1":
+                raise RunPreflightError("copy protocol requires exact signer-bearing payloads")
+            # The network cost model cannot substitute a different installed component.
+            if runtime.network_costs.bundle_id != bundles["network:solana"]:
+                raise RunPreflightError("copy fee instance differs from its resolved receipt")
+            # Initial cash and execution mode are semantic operands, never physical settings.
+            if (
+                runtime.config.initial_quote_balance_atomic != draft.initial_sol_balance_lamports
+                or runtime.config.execution_mode != draft.execution_mode
+            ):
+                raise RunPreflightError("copy wallet config differs from its resolved draft")
+            # Only fully verified local inputs and runtime instances enter the prepared copy run.
+            yield _PreparedCopyRun(spec, source, runtime)
+
+    @contextmanager
     def _open_preflighted_sniping(
         self,
         # Keep the spec input explicit in the open preflighted sniping contract.
@@ -573,10 +677,24 @@ class RunBacktest:
 
 
 def _execute_prepared(
-    prepared: _PreparedRun | _PreparedSnipingRun,
+    prepared: _PreparedRun | _PreparedSnipingRun | _PreparedCopyRun,
     output: RunOutputSession | None,
-) -> RunSummary | SnipingRunSummary:
+) -> RunSummary | SnipingRunSummary | CopyRunSummary:
     # Execute the execute prepared workflow in explicit, reviewable steps.
+    if isinstance(prepared, _PreparedCopyRun):
+        return run_copy_backtest(
+            source=prepared.source,
+            clock=prepared.source.transaction_clock(),
+            decision_range=prepared.source.decision_range,
+            # The runtime strategy receives only its verified point-in-time local source.
+            strategy=prepared.runtime.strategy,
+            # Fresh protocol state and a per-run wallet are constructed only inside replay.
+            protocol_factory=prepared.runtime.protocol_factory,
+            network_costs=prepared.runtime.network_costs,
+            config=prepared.runtime.config,
+            sink=None if output is None else cast(CopyRunSink, output),
+        )
+    # Sniping execution continues through its existing distinct implementation branch.
     if isinstance(prepared, _PreparedSnipingRun):
         # Handle the execute prepared prepared prepared sniping run type condition as a
         # distinct block.

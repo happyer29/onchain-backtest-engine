@@ -48,6 +48,24 @@ workers.
 > the existing verified Dataset/Snapshot/ReplayPack without extraction or
 > ReplayPack compilation.
 
+Pump.fun Copy Buy is available through the reference engine and CLI/API/Web UI
+under the separate deep-dive §23.5 contract: copy BUYs by `signing_wallet`, attempt
+each token once, and sell by fee-free price TP/SL or maximum holding time.
+Four sell attempts include pre-submit rejections; retries wait two modeled
+seconds before a fresh decision. It requires newly prepared signer-bearing
+history and a proven full settlement tail. See the
+[implementation and admission limits](docs/architecture-deep-dive.md#34-current-project-state). Optimized copy
+and materialized schedules remain unavailable; existing Sniping admission
+and fixed semantics are unchanged.
+
+**Copy Buy charts:** start `backtest serve` with the configuration for your
+run's data root, then choose **Copy Buy result** in the run list. The separate
+dashboard shows summary charts and signals. Each token's **График** button
+opens its market cap in SOL, the leader signal, your actual entry/exit and
+failed attempts. Use **Вокруг сделки** / **Вся история** to change the view.
+History comes from the verified local snapshot; large or unavailable histories
+return an explicit error. See deep-dive §3.4 for interactive query limits.
+
 ## Features
 
 | Capability | Current contract |
@@ -61,6 +79,11 @@ workers.
 | Local interface | Typed CLI, loopback-only Control API, and reactive same-origin Web UI with bounded arrow pagination, date-first bounded views, adaptive polling, and a dedicated analytical Sniping dashboard |
 | Artifact lifecycle | Verification, lineage, pins, reachability GC, trash grace period, and a verifiable backup/restore contract |
 | Exact ML path | Point-in-time features, frozen predictions, and a safe integer-linear runtime |
+
+The header's theme selector switches between **Тёплый закат** (Warm sunset,
+the default) and the original **Тёмная** (Dark) theme on both Control and
+Sniping result pages. The browser remembers the choice and synchronizes open
+tabs; if storage is unavailable, the selector reports that it is tab-only.
 
 The UI loads only one bounded table page at a time: 20 jobs, 10 runs, and 25
 Sniping round trips by default. Job and run pages are selected globally newest
@@ -225,6 +248,14 @@ Run the full local gate after changing code:
 Live ClickHouse and performance tests are separate and opt-in. A normal feature
 request does not authorize an architecture change: read the
 [normative deep dive](docs/architecture-deep-dive.md) first.
+
+## Indexer: OnchainDivers
+
+This project uses the Solana indexer built by the
+[OnchainDivers](https://onchaindivers.com/) team as its external read-only
+ClickHouse source of historical on-chain data. Selected data is verified and
+stored in immutable local Parquet snapshots before backtesting. We thank the
+team for providing the historical data used in the project.
 
 ## Support the project
 

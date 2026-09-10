@@ -358,19 +358,22 @@ def require_pumpfun_sniping_source_contract(spec: DatasetSpec) -> None:
     # shares one value.
     by_stream = _unique_streams(spec.capabilities, fallback_id=fallback_id)
     binding = spec.source_evidence_binding
-    if binding is None:
+    if not isinstance(binding, PumpfunSnipingSourceEvidenceBinding):
         raise SourceEvidenceMismatchError(fallback_id, ("source_evidence_binding",))
     if (
+        # The Sniping universe policy cannot be satisfied by a copy coverage binding.
         binding.launch_universe.policy_id != PUMPFUN_SNIPING_UNIVERSE_POLICY_ID
         or binding.launch_universe.decision_range != spec.decision_range
         or binding.skipped_slot_sentinel.profile_id != SOLANA_SKIPPED_SLOT_SENTINEL_POLICY_ID
         or binding.terminal_lifecycle_ordering.profile_id
         != PUMPFUN_TERMINAL_LIFECYCLE_ORDERING_POLICY_ID
+        # Exact mapping and query operands remain mandatory even with all proof flags present.
         or binding.capability_mapping_digest != spec.capability_mapping_digest
         or binding.query_template_digest != spec.query_template_digest
     ):
         raise SourceEvidenceMismatchError(fallback_id, ("source_evidence_binding",))
     evidence_by_id = {item.capability_id: item for item in spec.cut_evidence}
+    # Capability-specific extraction ranges retain authoritative typed bounds.
     range_by_id = {item.capability_id: item.block_range for item in spec.capability_ranges}
 
     if spec.settlement_tail is None:
@@ -378,7 +381,7 @@ def require_pumpfun_sniping_source_contract(spec: DatasetSpec) -> None:
     # Assemble requirement once so the require pumpfun sniping source contract workflow
     # shares one value.
     requirement = spec.settlement_requirement
-    if requirement is None:
+    if not isinstance(requirement, SettlementRequirement):
         raise SourceEvidenceMismatchError(fallback_id, ("settlement_requirement",))
     if (
         requirement.schema != SETTLEMENT_REQUIREMENT_SCHEMA

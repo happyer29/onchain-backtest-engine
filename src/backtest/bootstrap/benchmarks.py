@@ -18,7 +18,10 @@ from backtest.application.benchmarks import (
     BenchmarkSpec,
     BenchmarkWorkload,
 )
+from backtest.application.copy_run_contract import is_copy_run_spec
 from backtest.application.ports.benchmarks import BenchmarkTarget
+
+# Physical settings cannot admit a backend that lacks its dedicated performance contract.
 from backtest.application.run_results import RunPhysicalSettings
 
 # Import run specs at the visible module dependency boundary.
@@ -54,11 +57,18 @@ class SpawnRunSummaryExecutor:
     ) -> RunSummary | SnipingRunSummary:
         # Execute the spawn run summary executor execute summary workflow in explicit,
         # reviewable steps.
+        if is_copy_run_spec(spec):
+            raise ValueError("dedicated copy performance benchmark is not admitted")
+        # Existing benchmark targets retain their normal isolated execution container.
         execution = build_execution_container(
             self.settings,
             expected_projector_bundle_id=self.expected_projector_bundle_id,
         )
-        return execution.run_backtest.execute_summary(spec, physical_settings)
+        # Existing benchmark contracts intentionally retain only their admitted summary types.
+        summary = execution.run_backtest.execute_summary(spec, physical_settings)
+        if not isinstance(summary, (RunSummary, SnipingRunSummary)):
+            raise ValueError("benchmark returned an unsupported summary contract")
+        return summary
 
 
 # Apply dataclass semantics to the following spawn exact benchmark target factory

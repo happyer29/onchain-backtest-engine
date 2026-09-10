@@ -38,6 +38,9 @@ from backtest.application.errors import (
 
 # Import job commands at the visible module dependency boundary.
 from backtest.application.job_commands import ResolvedBacktestJob
+
+# Token charts are a bounded read-only use case, separate from execution commands.
+from backtest.application.market_charts import MarketChartQueryError
 from backtest.application.ml_job_commands import MlResolvedJob
 from backtest.application.ml_reference import ReferenceMlContract
 from backtest.application.models import (
@@ -60,6 +63,7 @@ from backtest.application.use_cases.inspect_source import InspectSourceRequest
 # Import plan dataset at the visible module dependency boundary.
 from backtest.application.use_cases.plan_dataset import PlanDataset
 from backtest.application.use_cases.query_artifacts import ArtifactQueryError, QueryArtifacts
+from backtest.application.use_cases.query_copy_market_chart import QueryCopyMarketChart
 from backtest.application.use_cases.query_job_events import ListJobEvents
 from backtest.application.use_cases.query_jobs import GetJob, GetJobRequest, ListJobs
 from backtest.application.use_cases.query_run_results import QueryRunResults, RunResultQueryError
@@ -74,6 +78,7 @@ from backtest.application.use_cases.store_source_inspection import StoreSourceIn
 # Import submit job at the visible module dependency boundary.
 from backtest.application.use_cases.submit_job import SubmitJob, SubmitJobRequest
 from backtest.domain.identifiers import ArtifactId, ContentDigest, JobId, LogicalRunId, SourceId
+from backtest.interfaces.api.market_charts import CopyMarketChartResponse
 from backtest.interfaces.api.ml_schemas import (
     BuildFeaturesJobForm,
     BuildLabelsJobForm,
@@ -96,7 +101,10 @@ from backtest.interfaces.api.pagination import (
 )
 from backtest.interfaces.api.schemas import (
     ArtifactDetailsResponse,
+    # Copy response schemas remain separate while sharing authenticated API routes.
     ArtifactLineageResponse,
+    CopyDashboardResponse,
+    CopyRunSummaryResponse,
     DatasetPlanResponse,
     # Include error response so the schemas dependency remains explicit.
     ErrorResponse,
@@ -128,6 +136,9 @@ from backtest.interfaces.api.schemas import (
     SourceInspectionResponse,
     SystemResourcesResponse,
     run_draft_command_from_bytes,
+    run_result_dashboard_response,
+    # Shared response dispatch preserves each result family contract.
+    run_result_summary_response,
 )
 
 # Bind terminal to status once as an explicit module-level contract.
@@ -179,6 +190,8 @@ class ControlUseCases:
     ml_reference_contract: ReferenceMlContract | None = None
     query_run_contracts: QueryRunContracts | None = None
     query_run_results: QueryRunResults | None = None
+    # Optional composition keeps unsupported deployments explicitly unavailable.
+    query_copy_market_chart: QueryCopyMarketChart | None = None
 
 
 # Define create app as one focused operation with an explicit boundary.
@@ -376,6 +389,21 @@ def create_app(
             content=ErrorResponse(code=error.code, message=response[1]).model_dump(),
         )
 
+    @app.exception_handler(MarketChartQueryError)
+    async def market_chart_error_handler(_: Request, error: MarketChartQueryError) -> JSONResponse:
+        """Project only stable safe failures; raw reader exceptions stay server-side."""
+        responses = {
+            "COPY_POSITION_NOT_FOUND": (404, "Сигнал не найден в этом прогоне."),
+            "MARKET_CHART_UNAVAILABLE": (404, "Проверенная история токена недоступна."),
+            # Quota and contention errors do not return partial or empty charts.
+            "MARKET_CHART_LIMIT_EXCEEDED": (422, "История превышает лимит интерактивного графика."),
+            "MARKET_CHART_BUSY": (503, "Другой график загружается. Повторите запрос."),
+        }
+        code, message = responses[error.code]
+        return JSONResponse(
+            status_code=code, content=ErrorResponse(code=error.code, message=message).model_dump()
+        )
+
     @app.exception_handler(HTTPException)
     # Define http error handler as one focused operation with an explicit boundary.
     async def http_error_handler(_: Request, error: HTTPException) -> JSONResponse:
@@ -421,6 +449,17 @@ def create_app(
             static_root / "sniping-results.html",
             enforce_session=enforce_session,
             session_token=selected_session_token,
+            secure_cookie=secure_cookie,
+        )
+
+    @app.get("/copy-results", include_in_schema=False)
+    async def copy_results_dashboard() -> FileResponse:
+        """Serve the packaged signal dashboard under the existing same-origin session."""
+        return _web_page_response(
+            static_root / "copy-results.html",
+            enforce_session=enforce_session,
+            session_token=selected_session_token,
+            # Reuse the same session-cookie protection as the other packaged dashboard.
             secure_cookie=secure_cookie,
         )
 
@@ -902,35 +941,35 @@ def create_app(
         # /api/v1/run-artifacts/{artifact id}/summary and pumpfun sniping run summary
         # response input in pumpfun sniping run summary.
         "/api/v1/run-artifacts/{artifact_id}/summary",
-        response_model=PumpfunSnipingRunSummaryResponse,
+        response_model=PumpfunSnipingRunSummaryResponse | CopyRunSummaryResponse,
     )
     def pumpfun_sniping_run_summary(
         artifact_id: str,
         # Keep the pumpfun sniping run summary response input explicit in the pumpfun sniping
         # run summary contract.
-    ) -> PumpfunSnipingRunSummaryResponse:
+    ) -> PumpfunSnipingRunSummaryResponse | CopyRunSummaryResponse:
         # Execute the pumpfun sniping run summary workflow in explicit, reviewable steps.
         queries = _required_service(use_cases.query_run_results)
-        response = PumpfunSnipingRunSummaryResponse.from_domain(
-            queries.summary(_artifact_id(artifact_id))
-        )
+        response = run_result_summary_response(queries.summary(_artifact_id(artifact_id)))
         return _bounded_api_response(response, max_request_bytes)
 
     @app.get(
         "/api/v1/run-artifacts/{artifact_id}/dashboard",
-        response_model=PumpfunSnipingDashboardResponse,
+        response_model=PumpfunSnipingDashboardResponse | CopyDashboardResponse,
     )
     def pumpfun_sniping_dashboard(
+        # The dashboard endpoint returns the exact family associated with the verified artifact.
         request: Request,
         artifact_id: str,
         limit: Annotated[int, Query(ge=1, le=200)] = 25,
-    ) -> PumpfunSnipingDashboardResponse:
+    ) -> PumpfunSnipingDashboardResponse | CopyDashboardResponse:
         # The combined route owns only the first-page limit; cursors use /roundtrips.
         _require_exact_query_parameters(request, allowed=frozenset({"limit"}))
         queries = _required_service(use_cases.query_run_results)
-        response = PumpfunSnipingDashboardResponse.from_domain(
+        response = run_result_dashboard_response(
             queries.dashboard(
                 _artifact_id(artifact_id),
+                # Dashboard paging remains explicitly capped before response-size enforcement.
                 limit=limit,
             )
         )
@@ -976,6 +1015,32 @@ def create_app(
             )
         )
         return _bounded_api_response(response, max_request_bytes)
+
+    @app.get(
+        "/api/v1/run-artifacts/{artifact_id}/copy-positions/{position_id}/market-cap",
+        response_model=CopyMarketChartResponse,
+    )
+    def copy_position_market_cap(
+        request: Request,
+        artifact_id: str,
+        position_id: str,
+        # Decimal text preserves the UInt64 composite key through browser URL encoding.
+        signal_boundary_ordinal: Annotated[
+            str, Query(min_length=1, max_length=20, pattern=r"^(?:0|[1-9][0-9]*)$")
+        ],
+    ) -> CopyMarketChartResponse:
+        """Clients select only an exact row key, never a path, source mint, or SQL."""
+        _require_exact_query_parameters(request, allowed=frozenset({"signal_boundary_ordinal"}))
+        key = _roundtrip_cursor(signal_boundary_ordinal, position_id)
+        if key is None:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT)
+        # An unavailable deployment capability cannot fall back to another result reader.
+        queries = _required_service(use_cases.query_copy_market_chart)
+        # The application authenticates the row before opening its retained snapshot.
+        chart = queries.execute(
+            _artifact_id(artifact_id), key.roundtrip_id, key.target_boundary_ordinal
+        )
+        return _bounded_api_response(CopyMarketChartResponse.from_domain(chart), max_request_bytes)
 
     # Apply get semantics to the following system resources contract.
     @app.get("/api/v1/system/resources", response_model=SystemResourcesResponse)

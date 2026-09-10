@@ -16,10 +16,18 @@ from backtest.adapters.source.clickhouse import (
     load_clickhouse_capabilities,
     # Close the clickhouse import after its required symbols are visible.
 )
+from backtest.adapters.source.clickhouse.pumpfun_copybuy import PumpfunCopyBuyQueryProfile
 from backtest.adapters.source.clickhouse.query import query_template_digest
+from backtest.application.copy_source_contracts import require_copy_source_contract
 from backtest.application.job_commands import ReusableCanonicalDistribution
+
+# Preparation receives a resolved plan and its exact source binding.
 from backtest.application.models import DatasetPlan
+from backtest.application.ports.projectors import ProtocolProjector
 from backtest.application.ports.source import SourceMetadataReader
+
+# Metadata verification remains a replaceable source port.
+from backtest.application.source_evidence import PumpfunCopyBuySourceEvidenceBinding
 
 # Import source fingerprint at the visible module dependency boundary.
 from backtest.application.source_fingerprint import source_schema_fingerprint
@@ -27,6 +35,9 @@ from backtest.application.use_cases.prepare_dataset import PrepareDataset
 from backtest.bootstrap.build_tools import BuildToolBundleRegistry
 from backtest.bootstrap.config import ConfigError, Settings
 from backtest.bootstrap.configured_projector import build_configured_projector
+
+# The copy source has a fixed projector assembled at bootstrap.
+from backtest.bootstrap.pumpfun_copy_source import build_pumpfun_copy_source_composition
 from backtest.bootstrap.pumpfun_live_source import build_pumpfun_live_source_composition
 
 # Import source at the visible module dependency boundary.
@@ -74,10 +85,19 @@ class PreparationContainer:
         expected_query_digest = (
             query_template_digest() if profile is None else profile.template_digest
         )
+        # The exact prepared selector determines the copy query family independently of aliases.
+        if isinstance(spec.source_evidence_binding, PumpfunCopyBuySourceEvidenceBinding):
+            require_copy_source_contract(spec)
+            selection = spec.source_evidence_binding.copy_coverage.selection
+            if profile is None or self.settings.source.copy_selection != selection:
+                raise ValueError("resolved copy dataset uses another source selection")
+            # Reconstruct the copy template identity from the exact configured signer selection.
+            expected_query_digest = PumpfunCopyBuyQueryProfile(selection, profile).template_digest
         if spec.query_template_digest != expected_query_digest:
             raise ValueError("resolved dataset plan uses another query template")
         source_binding = spec.source_evidence_binding
         if source_binding is not None:
+            # Projector and normalizer digests must both match the resolved dataset binding.
             if source_binding.projector_digest != self.projector_digest:
                 raise ValueError("resolved dataset plan uses another canonical projector")
             if source_binding.normalizer_digest != self.source_normalizer_digest:
@@ -143,27 +163,51 @@ def build_preparation_container(
     """Wire the sole child mode permitted to open the read-only remote source."""
 
     selected_capabilities = capabilities_file or settings.source.capabilities_file
-    if selected_capabilities is None or settings.source.projections_file is None:
+    if selected_capabilities is None or (
+        settings.source.projections_file is None and settings.source.copy_selection is None
+    ):
         raise ConfigError("prepare-dataset requires capability and projection configuration")
+    # Native thread limits are applied before any analytical adapter is constructed.
     resources = settings.resources
     apply_thread_limits(resources.native_threads_per_process)
     # Assemble capabilities once so the build preparation container workflow shares one
     # value.
     capabilities = load_clickhouse_capabilities(selected_capabilities)
     profile = select_clickhouse_query_profile(capabilities)
+    build_tools = BuildToolBundleRegistry().pin()
     pumpfun_live = None if profile is None else build_pumpfun_live_source_composition(capabilities)
+    copy_source = None
+    # An explicit copy selection chooses the independent signer-bearing source family.
+    if settings.source.copy_selection is not None:
+        copy_source = build_pumpfun_copy_source_composition(
+            capabilities, settings.source.copy_selection, build_tools=build_tools
+        )
+        pumpfun_live = copy_source
+    # One fixed projector is used by both controller inspection and preparation child.
     projection_capabilities = (
         capabilities if pumpfun_live is None else pumpfun_live.projection_capabilities
     )
-    build_tools = BuildToolBundleRegistry().pin()
-    projector = build_configured_projector(
-        settings.source.projections_file,
-        projection_capabilities,
-        # Pass build tools explicitly so build_configured_projector receives a reviewable
-        # projections file and source input in build preparation container.
-        build_tools=build_tools,
-        source_normalizer_digest=(None if pumpfun_live is None else pumpfun_live.normalizer_digest),
-    )
+    projector: ProtocolProjector
+    if copy_source is not None:
+        # Copy uses the projector already bound to its fixed source-selection contract.
+        projector = copy_source.projector
+    # Other source families still require their configured projection file.
+    else:
+        projection_file = settings.source.projections_file
+        if projection_file is None:
+            raise ConfigError("source projector is missing")
+        # A missing projector cannot be replaced by guessed source mappings.
+        projector = build_configured_projector(
+            projection_file,
+            projection_capabilities,
+            # Pass build tools explicitly so build_configured_projector receives a reviewable
+            # projections file and source input in build preparation container.
+            build_tools=build_tools,
+            source_normalizer_digest=(
+                None if pumpfun_live is None else pumpfun_live.normalizer_digest
+            ),
+        )
+    # The shared artifact repository retains ordinary staging quotas and publication semantics.
     artifacts = LocalArtifactRepository(
         settings.paths.data_root.resolve(),
         staging_quota_bytes=resources.tmp_quota_gb * 1024**3,

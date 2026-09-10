@@ -91,6 +91,10 @@ overhead, and deployment checks remain separate gates. The implemented Web UI
 covers `resolve -> submit -> progress -> result -> lineage` and the Sniping
 result dashboard without extending live-source admission.
 
+Both pages provide a warm-sunset default and the original dark theme through a
+shared browser-local preference, with a visible tab-only fallback when storage
+is unavailable. Appearance does not change commands, identities, or results.
+
 Job/run query surfaces are bounded projections: they do not expose executable
 payloads, the full input list, raw final balances, or Parquet. Manifests and
 lineage are read separately with hard limits. The CLI validates the identity of
@@ -658,6 +662,37 @@ coverage, and required fidelity; the projector transforms capability records
 into canonical events without mixing transport with protocol semantics. For
 each capability, a snapshot uses one authoritative source; silently merging
 sources is forbidden.
+
+### 7.1 Approved copy-buy contract
+
+Deep dive §23.5 defines the separate Pump.fun copy-buy strategy. Its reference
+source/prepare/run/result and CLI/API/UI slice is implemented;
+[deep-dive §3.4](architecture-deep-dive.md#34-current-project-state) bounds current admission.
+The read-only `/copy-results` dashboard adds whole-run summary charts, bounded
+signal pages and per-token SOL market-cap charts with source and actual fill
+markers. Deep-dive §3.4 defines the retained-history query limits and failure
+boundary; charts do not change run identities or provide PumpSwap history.
+Optimized copy and materialized schedules remain unavailable. It copies successful
+BUYs by exact `signing_wallet`, consumes each mint on its first signal even if
+the buy is rejected or fails, and exits fully by fee-free price TP/SL or maximum
+holding time from fill. Observation, buy, and sell delays are separate inputs.
+There are four sell attempts total; pre-submit rejection also counts, and a
+retry decision follows two modeled seconds after failure. Four failures leave
+an exhausted open position. Fees still enter ledger PnL. Complete bounded
+signer/initial-state/market/clock evidence, a proven retry settlement tail, and
+separate run/result identities are required; existing Sniping data/admission
+and fixed semantics do not automatically cover this strategy.
+
+The separate `pumpfun-copybuy-trade-payload-v1` carries the exact signer and
+integer curve state through generic protocol-payload storage; source event
+identity is preserved. Its versioned normalizer and transport do not replace
+the full preparation proof required by deep dive §23.5.
+
+Copy preparation independently enumerates leader BUYs before joining bounded
+creation history, and reconciles them against every required market transition.
+Missing older creation rejects the cut. The §23.5 copy-only receipt v3,
+inspection v6, DatasetSpec v6 and plan v5 bind this coverage and the full
+four-attempt settlement requirement without reinterpreting Sniping artifacts.
 
 ## 8. Deterministic scheduler
 

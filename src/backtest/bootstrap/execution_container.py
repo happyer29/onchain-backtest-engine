@@ -61,6 +61,9 @@ from backtest.application.use_cases.run_sweep import RunSweep
 from backtest.bootstrap.build_tools import BuildToolBundleRegistry
 from backtest.bootstrap.config import Settings
 
+# The copy resolver constructs its own runtime behind an application-owned port.
+from backtest.bootstrap.copy_runtime import PumpfunCopyRuntimeResolver
+
 # Import runtime plugins at the visible module dependency boundary.
 from backtest.bootstrap.runtime_plugins import ReferenceRuntimeComponentsResolver
 from backtest.bootstrap.sniping_runtime import PumpfunSnipingRuntimeComponentsResolver
@@ -261,6 +264,8 @@ def build_execution_container(
         sniping_components=PumpfunSnipingRuntimeComponentsResolver(
             runtime_manifest.runtime_lock_id
         ),
+        # Copy strategy construction stays in bootstrap and shares the same durable job path.
+        copy_components=PumpfunCopyRuntimeResolver(runtime_manifest.runtime_lock_id),
         # Keep the sniping reference engine SnipingReferenceEngine step visible while
         # building run backtest.
         sniping_engine=SnipingReferenceEngine(),

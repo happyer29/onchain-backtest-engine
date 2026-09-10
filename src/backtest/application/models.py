@@ -21,13 +21,17 @@ from backtest.application.canonical_json import (
     resolved_job_spec_hex,
     # Close the canonical json import after its required symbols are visible.
 )
+from backtest.application.copy_source import CopyBuyCoverageEvidence, CopySourceSelection
 from backtest.application.source_evidence import (
     LaunchUniverseEvidence,
+    PumpfunCopyBuySourceEvidenceBinding,
+    # Copy and Sniping bindings keep distinct coverage and universe contracts.
     PumpfunSnipingSourceEvidenceBinding,
     SkippedSlotSentinelEvidence,
     TerminalLifecycleOrderingEvidence,
 )
 from backtest.domain.fidelity import (
+    # Source finality and ingestion completeness are independent proof dimensions.
     ChainFinality,
     FidelityRequirement,
     IngestionCompleteness,
@@ -340,6 +344,7 @@ class CapabilityCutEvidence:
 
 # Bind bounded source evidence schema once as an explicit module-level contract.
 BOUNDED_SOURCE_EVIDENCE_SCHEMA = "bounded-source-evidence/v2"
+COPYBUY_SOURCE_EVIDENCE_SCHEMA = "bounded-source-evidence/v3"
 _SOURCE_EVIDENCE_RECEIPT_DOMAIN = b"backtest.bounded-source-evidence.receipt.v2\x00"
 
 
@@ -374,38 +379,47 @@ class BoundedSourceEvidenceReceipt:
     launch_universe: LaunchUniverseEvidence | None = None
     skipped_slot_sentinel: SkippedSlotSentinelEvidence | None = None
     terminal_lifecycle_ordering: TerminalLifecycleOrderingEvidence | None = None
+    # Copy receipts use a separate schema and cannot enrich older signerless evidence.
     schema: str = BOUNDED_SOURCE_EVIDENCE_SCHEMA
+    copy_coverage: CopyBuyCoverageEvidence | None = None
 
     def __post_init__(self) -> None:
         # Execute the bounded source evidence receipt post init workflow in explicit,
         # reviewable steps.
-        if self.schema != BOUNDED_SOURCE_EVIDENCE_SCHEMA:
+        if self.schema not in (BOUNDED_SOURCE_EVIDENCE_SCHEMA, COPYBUY_SOURCE_EVIDENCE_SCHEMA):
             raise ValueError("unsupported bounded source evidence schema")
+        # Every receipt operand must be a typed content digest before identity is recomputed.
         for field_name in (
             "receipt_id",
             "capability_mapping_digest",
             "query_template_digest",
             "projector_digest",
+            # Normalizer and result bytes are bound alongside mapping and projector identity.
             "normalizer_digest",
             "result_digest",
         ):
             if not isinstance(getattr(self, field_name), ContentDigest):
                 raise TypeError(f"{field_name} must be a ContentDigest")
+        # Source and capability identifiers cannot be arbitrary untyped values.
         if not isinstance(self.source_id, SourceId):
             raise TypeError("source_id must be a SourceId")
         if not isinstance(self.capability_id, CapabilityId):
             raise TypeError("capability_id must be a CapabilityId")
         if not isinstance(self.cut_evidence, CapabilityCutEvidence):
+            # A receipt must describe the same capability as its authoritative source cut.
             raise TypeError("cut_evidence must be CapabilityCutEvidence")
         if self.cut_evidence.capability_id != self.capability_id:
             raise ValueError("evidence receipt capability differs from its cut")
         if not isinstance(self.decision_range, BlockRange):
             raise TypeError("evidence decision_range must be a BlockRange")
+        # Decision coordinates must lie within the exact bounded extraction cut.
         cut_range = self.cut_evidence.block_range
         if (
             self.decision_range.network_id != cut_range.network_id
             or self.decision_range.position_schema_id != cut_range.position_schema_id
             or self.decision_range.from_block_ordinal < cut_range.from_block_ordinal
+            # Containment includes the right exclusive boundary, with no implicit settlement
+            # extension.
             or self.decision_range.to_block_ordinal > cut_range.to_block_ordinal
         ):
             raise ValueError("evidence decision range is outside its bounded source cut")
@@ -425,21 +439,31 @@ class BoundedSourceEvidenceReceipt:
             or self.source_fidelity.consistency != self.cut_evidence.consistency
         ):
             raise ValueError("evidence receipt fidelity differs from its cut evidence")
+        # Copy v3 requires independent purchase coverage; old receipts retain their meaning.
+        if (self.schema == COPYBUY_SOURCE_EVIDENCE_SCHEMA) != (self.copy_coverage is not None):
+            raise ValueError("copy coverage and receipt schema must agree")
+        coverage = self.copy_coverage
+        if coverage is not None:
+            _validate_copy_receipt_coverage(self, coverage)
+        # Legacy launch-universe evidence retains its own strict decision-range binding.
         if self.launch_universe is not None:
             if not isinstance(self.launch_universe, LaunchUniverseEvidence):
                 raise TypeError("launch_universe must be LaunchUniverseEvidence or None")
             if self.launch_universe.decision_range != self.decision_range:
                 raise ValueError("launch universe uses another decision range")
+        # Skipped-slot evidence is typed independently of launch classification.
         if self.skipped_slot_sentinel is not None and not isinstance(
             self.skipped_slot_sentinel,
             SkippedSlotSentinelEvidence,
         ):
             raise TypeError("skipped_slot_sentinel must be SkippedSlotSentinelEvidence or None")
+        # Terminal lifecycle evidence remains a distinct versioned proof object.
         if self.terminal_lifecycle_ordering is not None and not isinstance(
             self.terminal_lifecycle_ordering,
             TerminalLifecycleOrderingEvidence,
         ):
             raise TypeError(
+                # A malformed lifecycle object cannot be promoted to source proof.
                 "terminal_lifecycle_ordering must be TerminalLifecycleOrderingEvidence or None"
             )
         # Assemble ordered queries once so the bounded source evidence receipt post init
@@ -482,9 +506,27 @@ class BoundedSourceEvidenceReceipt:
             # reviewable source id and capability id input in bounded source evidence
             # receipt post init.
             schema=self.schema,
+            copy_coverage=self.copy_coverage,
         )
         if self.receipt_id != expected:
             raise ValueError("bounded source evidence receipt does not match its contents")
+
+
+def _validate_copy_receipt_coverage(
+    receipt: BoundedSourceEvidenceReceipt,
+    coverage: CopyBuyCoverageEvidence,
+) -> None:
+    """Independent candidates and initialization history must belong to this exact cut."""
+    if not isinstance(coverage, CopyBuyCoverageEvidence):
+        raise TypeError("copy receipt requires typed coverage")
+    selection, cut = coverage.selection, receipt.cut_evidence.block_range
+    if selection.decision_range != receipt.decision_range or receipt.launch_universe is not None:
+        raise ValueError("copy receipt cannot use another decision range or launch-only proof")
+    # Every stream starts from the proven initialization frontier, including clock.
+    if selection.history_range.from_block_ordinal != cut.from_block_ordinal:
+        raise ValueError("copy receipt must cover its exact initialization history")
+    if not set(coverage.candidate_query_fingerprints).issubset(receipt.query_fingerprints):
+        raise ValueError("copy receipt omits independent candidate queries")
 
 
 def bounded_source_evidence_receipt_digest(
@@ -511,9 +553,12 @@ def bounded_source_evidence_receipt_digest(
     projector_digest: ContentDigest,
     normalizer_digest: ContentDigest,
     launch_universe: LaunchUniverseEvidence | None = None,
+    # Clock and lifecycle policies remain explicit optional evidence alongside universe
+    # classification.
     skipped_slot_sentinel: SkippedSlotSentinelEvidence | None = None,
     terminal_lifecycle_ordering: TerminalLifecycleOrderingEvidence | None = None,
     schema: str = BOUNDED_SOURCE_EVIDENCE_SCHEMA,
+    copy_coverage: CopyBuyCoverageEvidence | None = None,
 ) -> ContentDigest:
     """Compute the domain-separated identity of one bounded receipt."""
 
@@ -576,6 +621,14 @@ def bounded_source_evidence_receipt_digest(
         "schema": schema,
         "source_id": source_id.value,
     }
+    # Only the new schema adds coverage bytes and a new hash domain.
+    receipt_domain = _SOURCE_EVIDENCE_RECEIPT_DOMAIN
+    if schema == COPYBUY_SOURCE_EVIDENCE_SCHEMA and copy_coverage is not None:
+        document["copy_coverage"] = copy_coverage.identity_document()
+        receipt_domain = b"backtest.bounded-source-evidence.receipt.v3\x00"
+    elif schema != BOUNDED_SOURCE_EVIDENCE_SCHEMA or copy_coverage is not None:
+        # Unsupported schema combinations cannot borrow the old receipt identity domain.
+        raise ValueError("unsupported bounded evidence schema/coverage combination")
     # Assemble encoded once so the bounded source evidence receipt digest workflow shares
     # one value.
     encoded = json.dumps(
@@ -587,7 +640,7 @@ def bounded_source_evidence_receipt_digest(
         # source evidence receipt digest.
         sort_keys=True,
     ).encode("utf-8")
-    return ContentDigest(sha256(_SOURCE_EVIDENCE_RECEIPT_DOMAIN + encoded).hexdigest())
+    return ContentDigest(sha256(receipt_domain + encoded).hexdigest())
 
 
 def build_bounded_source_evidence_receipt(
@@ -616,6 +669,9 @@ def build_bounded_source_evidence_receipt(
     launch_universe: LaunchUniverseEvidence | None = None,
     skipped_slot_sentinel: SkippedSlotSentinelEvidence | None = None,
     terminal_lifecycle_ordering: TerminalLifecycleOrderingEvidence | None = None,
+    copy_coverage: CopyBuyCoverageEvidence | None = None,
+    # The default preserves old Sniping receipt bytes unless copy coverage is explicit.
+    schema: str = BOUNDED_SOURCE_EVIDENCE_SCHEMA,
 ) -> BoundedSourceEvidenceReceipt:
     """Build a verified receipt from outcomes derived by a source adapter."""
 
@@ -644,8 +700,12 @@ def build_bounded_source_evidence_receipt(
         observed_rows=observed_rows,
         launch_universe=launch_universe,
         skipped_slot_sentinel=skipped_slot_sentinel,
+        # All specialized proof fields participate in the computed receipt identity.
         terminal_lifecycle_ordering=terminal_lifecycle_ordering,
+        copy_coverage=copy_coverage,
+        schema=schema,
     )
+    # Construct the receipt only after its complete canonical operand digest is available.
     return BoundedSourceEvidenceReceipt(
         # Pass receipt id explicitly so BoundedSourceEvidenceReceipt receives a reviewable
         # receipt id and source id input in build bounded source evidence receipt.
@@ -674,6 +734,9 @@ def build_bounded_source_evidence_receipt(
         launch_universe=launch_universe,
         skipped_slot_sentinel=skipped_slot_sentinel,
         terminal_lifecycle_ordering=terminal_lifecycle_ordering,
+        # The returned schema and copy coverage must match the identity computed above.
+        copy_coverage=copy_coverage,
+        schema=schema,
     )
 
 
@@ -1014,6 +1077,71 @@ class SettlementRequirement:
         )
 
 
+COPYBUY_SETTLEMENT_SCHEMA = "global-transaction-duration-four-attempt-copybuy/v1"
+
+
+@dataclass(frozen=True, slots=True)
+class CopyBuySettlementRequirement:
+    """Bound every signal through delayed entry, maximum hold and four full sell attempts."""
+
+    observation_delay_transactions: int
+    buy_delay_transactions: int
+    maximum_hold_seconds: int
+    sell_delay_transactions: int
+    maximum_tail_blocks: int
+    # The schema fixes four total sales and the modeled two-second retry wait.
+    schema: str = COPYBUY_SETTLEMENT_SCHEMA
+
+    def __post_init__(self) -> None:
+        """No zero-delay order, fractional duration or caller-defined retry policy is allowed."""
+        if self.schema != COPYBUY_SETTLEMENT_SCHEMA:
+            raise ValueError("unsupported copy settlement schema")
+        names = (
+            "observation_delay_transactions",
+            "buy_delay_transactions",
+            # All timing dimensions and the hard extraction cap are validated as integers.
+            "maximum_hold_seconds",
+            "sell_delay_transactions",
+            "maximum_tail_blocks",
+        )
+        for name in names:
+            # Booleans and negative values cannot stand in for declared timing operands.
+            value = getattr(self, name)
+            # Observation may be immediate; execution and all acquisition caps are positive.
+            minimum = 0 if name == "observation_delay_transactions" else 1
+            if type(value) is not int or value < minimum:
+                raise ValueError(f"{name} must be an integer >= {minimum}")
+
+    @property
+    def target_stream(self) -> CapabilityStream:
+        """Targets are real historical purchases, not reconstructed creation events."""
+        return CapabilityStream.PUMP_CURVE_TRADE
+
+    @property
+    def settlement_streams(self) -> tuple[CapabilityStream, ...]:
+        """Tail trades settle existing positions and never introduce new copy targets."""
+        return (
+            CapabilityStream.BLOCK_CLOCK,
+            CapabilityStream.PUMP_CURVE_LIFECYCLE,
+            CapabilityStream.PUMP_CURVE_TRADE,
+        )
+
+    def identity_document(self) -> dict[str, object]:
+        """Bind the complete explicit path and immutable first-plus-three retry semantics."""
+        return {
+            "schema": self.schema,
+            "observation_delay_transactions": self.observation_delay_transactions,
+            "buy_delay_transactions": self.buy_delay_transactions,
+            "maximum_hold_seconds": self.maximum_hold_seconds,
+            # Exit latency is distinct from holding duration and observation delay.
+            "sell_delay_transactions": self.sell_delay_transactions,
+            # The hard cap is not a claim that the clock actually covers the path.
+            "maximum_tail_blocks": self.maximum_tail_blocks,
+            "maximum_sell_attempts": 4,
+            "retry_delay_ns": 2_000_000_000,
+        }
+
+
 # Keep the data requirement contract and validation rules together.
 @dataclass(frozen=True, slots=True)
 class DataRequirement:
@@ -1028,7 +1156,7 @@ class DataRequirement:
     warmup_blocks: int = 0
     # Declare settlement tail blocks explicitly in the data requirement contract.
     settlement_tail_blocks: int = 0
-    settlement_requirement: SettlementRequirement | None = None
+    settlement_requirement: SettlementRequirement | CopyBuySettlementRequirement | None = None
 
     def __post_init__(self) -> None:
         # Execute the data requirement post init workflow in explicit, reviewable steps.
@@ -1070,7 +1198,7 @@ class DataRequirement:
         # Evaluate the complete data requirement post init settlement requirement and
         # isinstance condition before guarded effects.
         if self.settlement_requirement is not None and not isinstance(
-            self.settlement_requirement, SettlementRequirement
+            self.settlement_requirement, (SettlementRequirement, CopyBuySettlementRequirement)
         ):
             raise TypeError("settlement_requirement must be a SettlementRequirement or None")
 
@@ -1111,35 +1239,54 @@ class BoundedSourceEvidenceRequest:
     skipped_slot_sentinel_policy_id: str
     terminal_lifecycle_ordering_policy_id: str
     query_limits: QueryLimits
+    # The copy-only selector is bound explicitly, never reconstructed from query results.
+    copy_selection: CopySourceSelection | None = None
 
     def __post_init__(self) -> None:
         # Execute the bounded source evidence request post init workflow in explicit,
         # reviewable steps.
+        if self.copy_selection is not None:
+            if not isinstance(self.copy_selection, CopySourceSelection):
+                raise TypeError("copy evidence selection must be typed")
+            if self.copy_selection.decision_range != self.decision_range:
+                raise ValueError("copy evidence uses another decision range")
+            # Initialization must begin at the same bounded source frontier.
+            if (
+                self.copy_selection.history_range.from_block_ordinal
+                != self.block_range.from_block_ordinal
+            ):
+                raise ValueError("copy evidence uses another initialization history")
+        # Both extraction and decision ranges must be typed before generic containment checks.
         if not isinstance(self.block_range, BlockRange):
             raise TypeError("evidence block_range must be a BlockRange")
         if not isinstance(self.decision_range, BlockRange):
             raise TypeError("evidence decision_range must be a BlockRange")
         if (
+            # Network, schema and left bound must match before the right boundary is accepted.
             self.decision_range.network_id != self.block_range.network_id
             or self.decision_range.position_schema_id != self.block_range.position_schema_id
             or self.decision_range.from_block_ordinal < self.block_range.from_block_ordinal
             or self.decision_range.to_block_ordinal > self.block_range.to_block_ordinal
         ):
+            # A request cannot use evidence from outside its declared extraction cut.
             raise ValueError("evidence decision range is outside its extraction range")
         for field_name in (
             "capability_mapping_digest",
             "query_template_digest",
             "projector_digest",
+            # Normalizer bytes are part of evidence identity rather than a mutable runtime default.
             "normalizer_digest",
         ):
             if not isinstance(getattr(self, field_name), ContentDigest):
                 raise TypeError(f"{field_name} must be a ContentDigest")
         for field_name in (
+            # Policy identifiers are explicit immutable operands of every bounded request.
             "launch_universe_policy_id",
             "skipped_slot_sentinel_policy_id",
             "terminal_lifecycle_ordering_policy_id",
         ):
             value = getattr(self, field_name)
+            # Whitespace or missing policy identifiers would make proof binding ambiguous.
             if not isinstance(value, str) or not value or value != value.strip():
                 raise ValueError(f"{field_name} must be a non-empty trimmed string")
         if not isinstance(self.query_limits, QueryLimits):
@@ -1467,6 +1614,7 @@ def _require_same_chain(
 
 
 DATASET_SPEC_VERSION = 5
+COPYBUY_DATASET_SPEC_VERSION = 6
 _DATASET_SPEC_IDENTITY_DOMAIN = b"backtest.dataset-spec.identity.v5\x00"
 
 
@@ -1493,15 +1641,18 @@ class DatasetSpec:
     capability_ranges: tuple[CapabilityExtractionRange, ...]
     cut_evidence: tuple[CapabilityCutEvidence, ...]
     shards: tuple[DatasetShard, ...]
-    settlement_requirement: SettlementRequirement | None = None
-    source_evidence_binding: PumpfunSnipingSourceEvidenceBinding | None = None
+    settlement_requirement: SettlementRequirement | CopyBuySettlementRequirement | None = None
+    # The copy family has a separate source binding and maximum settlement requirement.
+    source_evidence_binding: (
+        PumpfunSnipingSourceEvidenceBinding | PumpfunCopyBuySourceEvidenceBinding | None
+    ) = None
 
     # Define dataset spec post init as one focused operation with an explicit boundary.
     def __post_init__(self) -> None:
         # Execute the dataset spec post init workflow in explicit, reviewable steps.
         if isinstance(self.spec_version, bool) or not isinstance(self.spec_version, int):
             raise TypeError("dataset spec_version must be an integer")
-        if self.spec_version != DATASET_SPEC_VERSION:
+        if self.spec_version not in (DATASET_SPEC_VERSION, COPYBUY_DATASET_SPEC_VERSION):
             raise ValueError(f"unsupported dataset spec version: {self.spec_version}")
         if not isinstance(self.network_id, NetworkId):
             # Fail the dataset spec post init path with TypeError for network id must be a
@@ -1562,7 +1713,7 @@ class DatasetSpec:
         if requirement is not None:
             # Handle the dataset spec post init requirement is not None branch as a
             # distinct logical block.
-            if not isinstance(requirement, SettlementRequirement):
+            if not isinstance(requirement, (SettlementRequirement, CopyBuySettlementRequirement)):
                 raise TypeError("settlement_requirement must be a SettlementRequirement or None")
             if self.settlement_tail is None:
                 raise ValueError("a settlement requirement requires a bounded settlement tail")
@@ -1646,25 +1797,43 @@ class DatasetSpec:
         # init step.
         object.__setattr__(self, "cut_evidence", evidence)
 
+        # Schema six is exclusively the complete copy source and four-attempt contract.
         binding = self.source_evidence_binding
+        _validate_dataset_contract_version(self.spec_version, requirement, binding)
         if binding is not None:
-            if not isinstance(binding, PumpfunSnipingSourceEvidenceBinding):
+            # Bindings are a closed union whose version must already match the DatasetSpec.
+            if not isinstance(
+                binding,
+                (PumpfunSnipingSourceEvidenceBinding, PumpfunCopyBuySourceEvidenceBinding),
+                # Only recognized immutable binding families may enter a DatasetSpec.
+            ):
                 raise TypeError(
                     "source_evidence_binding must be a PumpfunSnipingSourceEvidenceBinding or None"
                 )
-            if binding.launch_universe.decision_range != self.decision_range:
+            # The selected family determines where its authoritative decision range is stored.
+            bound_range = (
+                binding.copy_coverage.selection.decision_range
+                if isinstance(binding, PumpfunCopyBuySourceEvidenceBinding)
+                else binding.launch_universe.decision_range
+            )
+            # Both strategies bind the decision interval; only copy has a creation lookback.
+            if bound_range != self.decision_range:
                 raise ValueError("source evidence binding uses another decision range")
             if (
                 binding.capability_mapping_digest != self.capability_mapping_digest
                 or binding.query_template_digest != self.query_template_digest
+                # Mapping and query identities prevent proof reuse after a source-template change.
             ):
                 raise ValueError("source evidence binding uses another mapping/query contract")
             binding_capability_ids = tuple(item.capability_id for item in binding.receipt_refs)
             if binding_capability_ids != capability_ids:
                 raise ValueError(
+                    # The binding covers the complete planned capability tuple, not a matching
+                    # subset.
                     "source evidence binding must cover exactly the planned capabilities"
                 )
 
+        # Shard ordinals remain canonical and contiguous across either source family.
         if tuple(shard.ordinal for shard in self.shards) != tuple(range(len(self.shards))):
             raise ValueError("dataset shard ordinals must be contiguous and zero-based")
         planned_by_id = {item.capability_id: item for item in capabilities}
@@ -1750,6 +1919,22 @@ class DatasetSpec:
             raise ValueError("spec_id does not match the versioned dataset spec identity")
 
 
+def _validate_dataset_contract_version(
+    version: int,
+    requirement: SettlementRequirement | CopyBuySettlementRequirement | None,
+    binding: PumpfunSnipingSourceEvidenceBinding | PumpfunCopyBuySourceEvidenceBinding | None,
+) -> None:
+    """Mixed source/settlement families must fail before a dataset ID can be computed."""
+    copy_requirement = isinstance(requirement, CopyBuySettlementRequirement)
+    copy_binding = isinstance(binding, PumpfunCopyBuySourceEvidenceBinding)
+    if version == COPYBUY_DATASET_SPEC_VERSION:
+        if not copy_requirement or not copy_binding:
+            raise ValueError("DatasetSpec v6 requires copy settlement and source coverage")
+    # V5 remains the old family even when callers manually construct typed operands.
+    elif copy_requirement or copy_binding:
+        raise ValueError("copy contracts require DatasetSpec v6")
+
+
 def dataset_spec_identity_digest(
     # Close the dataset spec identity digest signature after its explicit inputs.
     *,
@@ -1774,13 +1959,20 @@ def dataset_spec_identity_digest(
     # Keep the cut evidence input explicit in the dataset spec identity digest contract.
     cut_evidence: tuple[CapabilityCutEvidence, ...],
     shards: tuple[DatasetShard, ...],
-    settlement_requirement: SettlementRequirement | None = None,
-    source_evidence_binding: PumpfunSnipingSourceEvidenceBinding | None = None,
+    settlement_requirement: SettlementRequirement | CopyBuySettlementRequirement | None = None,
+    source_evidence_binding: PumpfunSnipingSourceEvidenceBinding
+    | PumpfunCopyBuySourceEvidenceBinding
+    # The optional binding belongs to exactly one versioned strategy source family.
+    | None = None,
 ) -> ContentDigest:
     """Resolve the domain-tagged identity of a versioned dataset plan."""
 
-    if spec_version != DATASET_SPEC_VERSION:
+    if spec_version not in (DATASET_SPEC_VERSION, COPYBUY_DATASET_SPEC_VERSION):
         raise ValueError(f"unsupported dataset spec version: {spec_version}")
+    _validate_dataset_contract_version(
+        spec_version, settlement_requirement, source_evidence_binding
+    )
+    # Identity includes typed chain and source operands after family validation.
     document = {
         "network_id": network_id.value,
         "position_schema_id": position_schema_id.value,
@@ -1848,16 +2040,23 @@ def dataset_spec_identity_digest(
         separators=(",", ":"),
         sort_keys=True,
     ).encode("utf-8")
-    return ContentDigest(sha256(_DATASET_SPEC_IDENTITY_DOMAIN + encoded).hexdigest())
+    # Existing v5 IDs remain byte-identical; copy inputs occupy their own version domain.
+    identity_domain = _DATASET_SPEC_IDENTITY_DOMAIN
+    if spec_version == COPYBUY_DATASET_SPEC_VERSION:
+        identity_domain = b"backtest.dataset-spec.identity.v6\x00"
+    return ContentDigest(sha256(identity_domain + encoded).hexdigest())
 
 
 def _settlement_requirement_identity(
     # Keep the value input explicit in the settlement requirement identity contract.
-    value: SettlementRequirement | None,
+    value: SettlementRequirement | CopyBuySettlementRequirement | None,
 ) -> dict[str, object] | None:
     # Execute the settlement requirement identity workflow in explicit, reviewable steps.
     if value is None:
         return None
+    if isinstance(value, CopyBuySettlementRequirement):
+        return value.identity_document()
+    # Legacy single-round-trip operands keep their exact serialized form.
     return {
         "initial_delay_transactions": value.initial_delay_transactions,
         "maximum_followup_delay_transactions": value.maximum_followup_delay_transactions,
