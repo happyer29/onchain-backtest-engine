@@ -66,6 +66,15 @@ from backtest.engine.transaction_clock import (
     # explicit.
     TransactionClockErrorCode,
 )
+
+# Copy-buy uses an additive opaque payload while keeping canonical occurrence identity.
+from backtest.plugins.protocols.pumpfun.copybuy_payload import (
+    COPYBUY_TRADE_PAYLOAD_SCHEMA,
+    CopyBuyTradePayload,
+)
+from backtest.plugins.protocols.pumpfun.copybuy_validator import PumpfunCopySnapshotValidator
+
+# Both strategies reuse the same pure curve-state model.
 from backtest.plugins.protocols.pumpfun.model import (
     PumpCurveLifecycle,
     PumpCurveStateV1,
@@ -194,6 +203,13 @@ _PAYLOAD_SCHEMA_BY_KIND = {
 }
 
 
+def _supported_payload(kind: EventKindName, schema: ProtocolPayloadSchemaId | None) -> bool:
+    """Accept additive trade payloads without weakening launch/lifecycle contracts."""
+    if kind is EventKindName.VENUE_TRADE and schema == COPYBUY_TRADE_PAYLOAD_SCHEMA:
+        return True
+    return schema == _PAYLOAD_SCHEMA_BY_KIND[kind]
+
+
 # Keep the pumpfun projection spec contract and validation rules together.
 @dataclass(frozen=True, slots=True)
 class PumpfunProjectionSpec:
@@ -233,7 +249,7 @@ class PumpfunProjectionSpec:
             # EventKindName.BLOCK explicitly.
             if self.protocol != PUMPFUN_PROTOCOL_NAME:
                 raise ValueError("Pump events must use the pumpfun protocol family")
-            if self.protocol_payload_schema_id != _PAYLOAD_SCHEMA_BY_KIND[self.kind]:
+            if not _supported_payload(self.kind, self.protocol_payload_schema_id):
                 raise ValueError("Pump payload schema does not match event kind")
             if self.ordering_fidelity is not OrderingFidelity.INSTRUCTION_EXACT:
                 # Fail the pumpfun projection spec post init path with ValueError for pump
@@ -247,7 +263,13 @@ class PumpfunProjectionSpec:
         # Assemble missing once so the pumpfun projection spec post init workflow shares
         # one value.
         missing = _REQUIRED_COLUMNS[self.kind].difference(names)
+        # A signer-bearing declaration cannot silently use a payer or signerless map.
+        if self.protocol_payload_schema_id == COPYBUY_TRADE_PAYLOAD_SCHEMA:
+            missing.update({"signing_wallet"}.difference(names))
+            if dict(self.columns).get("signing_wallet") != "signing_wallet":
+                raise ValueError("copy signer must map the exact signing_wallet source field")
         if missing:
+            # All required semantic columns must exist even after signer-specific checks.
             raise ValueError(f"Pump projection misses semantic columns: {sorted(missing)}")
         if self.source_total_key_is_proven and not self.source_total_key:
             raise ValueError("proven source total key must not be empty")
@@ -389,6 +411,10 @@ class PumpfunProtocolProjector:
         candidate: CanonicalSnapshotCandidate,
         # Close the validate snapshot candidate signature after its explicit inputs.
     ) -> None:
+        # The source/settlement family is explicit; old artifacts never gain copy semantics.
+        if spec.spec_version == 6:
+            PumpfunCopySnapshotValidator().validate_snapshot_candidate(spec, candidate)
+            return
         PumpfunSnapshotValidator().validate_snapshot_candidate(spec, candidate)
 
     def _project_row(
@@ -567,6 +593,15 @@ class PumpfunProtocolProjector:
                 # Complete tuple only after its creator and protocol inputs are visible in
                 # pumpfun protocol projector project row.
             )
+            # Only the explicitly versioned copy schema retains the validated signer.
+            payload = encode_trade_payload(state)
+            payload_schema = PUMPFUN_TRADE_PAYLOAD_SCHEMA_ID
+            if spec.protocol_payload_schema_id == COPYBUY_TRADE_PAYLOAD_SCHEMA:
+                # Keep the typed schema non-null for either supported trade representation.
+                signer = AccountId(_string(value("signing_wallet"), "signing_wallet"))
+                payload = CopyBuyTradePayload(signer, state).encode()
+                payload_schema = COPYBUY_TRADE_PAYLOAD_SCHEMA
+            # Both schemas share the original source event and transaction identities.
             return VenueTradeEvent(
                 envelope=envelope,
                 venue_id=VenueId(_string(value("venue"), "venue")),
@@ -577,10 +612,10 @@ class PumpfunProtocolProjector:
                 sold_amount_atomic=sold_amount,
                 bought_amount_atomic=bought_amount,
                 fee_components=fees,
-                protocol_payload_schema=PUMPFUN_TRADE_PAYLOAD_SCHEMA_ID,
+                protocol_payload_schema=payload_schema,
                 # Include protocol payload in the completed pumpfun protocol projector
                 # project row result.
-                protocol_payload=encode_trade_payload(state),
+                protocol_payload=payload,
             )
 
         lifecycle_kind = VenueLifecycleKind(_string(value("lifecycle_kind"), "lifecycle_kind"))
@@ -728,7 +763,9 @@ class PumpfunSnapshotValidator:
             # continue ambiguously.
             raise SnapshotValidationError(SnapshotValidationErrorCode.EVENT_POSITION_INVALID)
         requirement = spec.settlement_requirement
-        if requirement is None:  # pragma: no cover - source contract proves it
+        if not isinstance(
+            requirement, SettlementRequirement
+        ):  # pragma: no cover - source contract proves it
             raise SnapshotValidationError(SnapshotValidationErrorCode.PROTOCOL_STATE_INVALID)
         clock = candidate.transaction_clock()
         if (

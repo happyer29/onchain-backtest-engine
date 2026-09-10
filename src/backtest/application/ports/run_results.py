@@ -11,6 +11,7 @@ from backtest.application.run_results import SuccessfulRunManifest
 # Import identifiers at the visible module dependency boundary.
 from backtest.domain.identifiers import ArtifactId, ContentDigest
 from backtest.domain.roundtrips import RoundTripRecord
+from backtest.engine.copytrading_results import CopyPositionRecord
 
 MAX_ROUNDTRIP_PAGE_SIZE = 200
 
@@ -37,7 +38,7 @@ class RoundTripCursor:
 # Keep the round trip page contract and validation rules together.
 @dataclass(frozen=True, slots=True)
 class RoundTripPage:
-    items: tuple[RoundTripRecord, ...]
+    items: tuple[RoundTripRecord | CopyPositionRecord, ...]
     next_cursor: RoundTripCursor | None
 
     def __post_init__(self) -> None:

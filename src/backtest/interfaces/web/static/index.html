@@ -1,10 +1,11 @@
 <!doctype html>
-<html lang="ru">
+<html lang="ru" data-theme="warm">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="color-scheme" content="dark" />
+    <meta name="color-scheme" content="light dark" />
     <title>On-Chain Backtest Engine · Control</title>
+    <script src="/static/theme.js"></script>
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
@@ -13,7 +14,20 @@
         <p class="eyebrow">Single-host control plane</p>
         <h1>On-Chain Backtest Engine</h1>
       </div>
-      <div id="health" class="status" role="status" aria-live="polite">Проверяю API…</div>
+      <div class="topbar-actions">
+        <div class="theme-control">
+          <label class="theme-picker" for="theme-select">
+            <span class="theme-swatch" aria-hidden="true"></span>
+            <span>Тема</span>
+            <select id="theme-select">
+              <option value="warm">Тёплый закат</option>
+              <option value="dark">Тёмная</option>
+            </select>
+          </label>
+          <span id="theme-persistence" class="theme-note" role="status" hidden>Только для этой вкладки</span>
+        </div>
+        <div id="health" class="status" role="status" aria-live="polite">Проверяю API…</div>
+      </div>
     </header>
 
     <main>
@@ -76,11 +90,11 @@
         <div class="section-heading">
           <div>
             <p class="eyebrow">Typed strategy contract</p>
-            <h2 id="pumpfun-sniping-heading">Pump.fun Sniping</h2>
+            <h2 id="pumpfun-sniping-heading">Pump.fun strategies</h2>
           </div>
           <span id="sniping-contract-status" class="status">Загрузка contract…</span>
         </div>
-        <p class="notice">
+        <p id="pumpfun-strategy-notice" class="notice">
           Фиксированные cooldown 600 секунд, buy latency 500 транзакций, ожидание
           sell decision 2 секунды и sell-all загружаются из API. Execution mode
           выбирается из закрытого API contract. Atomic amounts передаются как decimal strings.
@@ -92,8 +106,24 @@
           исполнимой on-chain оценкой ликвидности.
         </p>
         <details open>
-          <summary>Создать exact sniping run</summary>
+          <summary>Создать прогон Pump.fun</summary>
           <form id="sniping-form" class="compact-form">
+            <!-- Both strategy families resolve through the same typed API and durable queue. -->
+            <label>Стратегия<select id="pumpfun-strategy"><option value="sniping">Sniping</option><option value="copy">Copy Buy</option></select></label>
+            <fieldset id="copy-buy-fields" hidden disabled>
+              <legend>Копировать покупки, продавать по своим правилам</legend>
+              <label>signing_wallet (один кошелёк на строку)<textarea name="signing_wallets" rows="3" maxlength="6000" required></textarea></label>
+              <!-- Thresholds compare token prices without trading or network fees. -->
+              <div class="field-grid">
+                <label>Take profit, bps<input name="take_profit_bps" type="number" min="1" value="2000" required /></label>
+                <label>Stop loss, bps<input name="stop_loss_bps" type="number" min="1" max="10000" value="1000" required /></label>
+                <label>Maximum hold, seconds<input name="maximum_hold_seconds" type="number" min="1" value="60" required /></label>
+                <!-- Observation delay may be zero, but own entry always has a later landing. -->
+                <label>Observation delay, transactions<input name="observation_delay_transactions" type="number" min="0" value="0" required /></label>
+                <label>Buy delay, transactions<input name="buy_delay_transactions" type="number" min="1" value="500" required /></label>
+              </div>
+            </fieldset>
+            <!-- Both strategies use the same exact prepared dataset and financial profiles. -->
             <div class="field-grid">
               <label>Dataset revision ID<input name="dataset_revision_id" minlength="64" maxlength="71" required /></label>
               <label>Snapshot ID<input name="snapshot_id" minlength="64" maxlength="71" required /></label>
@@ -168,7 +198,7 @@
 
       <section class="panel" aria-labelledby="sniping-results-heading">
         <div class="section-heading">
-          <div><p class="eyebrow">Exact result artifact</p><h2 id="sniping-results-heading">Sniping summary и сделки</h2></div>
+          <div><p class="eyebrow">Exact result artifact</p><h2 id="sniping-results-heading">Pump.fun: результаты и сделки</h2></div>
         </div>
         <form id="sniping-results-form" class="compact-form">
           <div class="field-grid">
@@ -208,7 +238,7 @@
             <thead>
               <tr>
                 <th>Target</th>
-                <th>Asset / developer</th>
+                <th>Asset / developer or signer</th>
                 <th>Lifecycle</th>
                 <th>Buy quote</th>
                 <th>Sell quote</th>
@@ -427,22 +457,26 @@
           <button id="refresh-jobs" class="secondary" type="button">Обновить</button>
         </div>
         <!-- Jobs are globally newest-first; optional sorting rearranges this bounded page. -->
-        <div class="actions">
-          <label>Сортировка текущей страницы
-            <select id="jobs-sort">
-              <option value="submitted_at">Дата создания</option>
-              <option value="updated_at">Дата обновления</option>
-              <option value="job_type">Тип</option>
-              <option value="state">Состояние</option>
-              <option value="job_id">Job ID</option>
-            </select>
-          </label>
-          <button id="jobs-sort-direction" class="secondary" type="button" aria-controls="jobs-body" aria-pressed="true" aria-label="Сортировать по убыванию">
-            Сначала новые ↓
-          </button>
-          <span id="jobs-page-label" class="status" role="status" aria-live="polite">Страница 1 · по 20 jobs</span>
-          <button id="jobs-previous-page" class="secondary" type="button" aria-label="Предыдущая страница jobs" aria-controls="jobs-body" disabled>←</button>
-          <button id="jobs-next-page" class="secondary" type="button" aria-label="Следующая страница jobs" aria-controls="jobs-body" disabled>→</button>
+        <div class="table-toolbar">
+          <div class="table-sort-controls">
+            <label>Сортировка текущей страницы
+              <select id="jobs-sort">
+                <option value="submitted_at">Дата создания</option>
+                <option value="updated_at">Дата обновления</option>
+                <option value="job_type">Тип</option>
+                <option value="state">Состояние</option>
+                <option value="job_id">Job ID</option>
+              </select>
+            </label>
+            <button id="jobs-sort-direction" class="secondary" type="button" aria-controls="jobs-body" aria-pressed="true" aria-label="Сортировать по убыванию">
+              Сначала новые ↓
+            </button>
+          </div>
+          <div class="table-pagination" role="group" aria-label="Пагинация jobs">
+            <span id="jobs-page-label" class="page-summary" role="status" aria-live="polite">Страница 1 · по 20 jobs</span>
+            <button id="jobs-previous-page" class="secondary" type="button" aria-label="Предыдущая страница jobs" aria-controls="jobs-body" disabled>←</button>
+            <button id="jobs-next-page" class="secondary" type="button" aria-label="Следующая страница jobs" aria-controls="jobs-body" disabled>→</button>
+          </div>
         </div>
         <div class="table-wrap">
           <table>
@@ -471,21 +505,25 @@
           <button id="refresh-runs" class="secondary" type="button">Обновить</button>
         </div>
         <!-- The server pages globally by completion time; alternate sorts stay page-local. -->
-        <div class="actions">
-          <label>Сортировка текущей страницы
-            <select id="runs-sort">
-              <option value="completed_at">Дата завершения</option>
-              <option value="started_at">Дата запуска</option>
-              <option value="logical_run_id">Logical run</option>
-              <option value="result_hash">Result hash</option>
-            </select>
-          </label>
-          <button id="runs-sort-direction" class="secondary" type="button" aria-controls="runs-body" aria-pressed="true" aria-label="Сортировать по убыванию">
-            Сначала новые ↓
-          </button>
-          <span id="runs-page-label" class="status" role="status" aria-live="polite">Страница 1 · по 10 runs</span>
-          <button id="runs-previous-page" class="secondary" type="button" aria-label="Предыдущая страница runs" aria-controls="runs-body" disabled>←</button>
-          <button id="runs-next-page" class="secondary" type="button" aria-label="Следующая страница runs" aria-controls="runs-body" disabled>→</button>
+        <div class="table-toolbar">
+          <div class="table-sort-controls">
+            <label>Сортировка текущей страницы
+              <select id="runs-sort">
+                <option value="completed_at">Дата завершения</option>
+                <option value="started_at">Дата запуска</option>
+                <option value="logical_run_id">Logical run</option>
+                <option value="result_hash">Result hash</option>
+              </select>
+            </label>
+            <button id="runs-sort-direction" class="secondary" type="button" aria-controls="runs-body" aria-pressed="true" aria-label="Сортировать по убыванию">
+              Сначала новые ↓
+            </button>
+          </div>
+          <div class="table-pagination" role="group" aria-label="Пагинация runs">
+            <span id="runs-page-label" class="page-summary" role="status" aria-live="polite">Страница 1 · по 10 runs</span>
+            <button id="runs-previous-page" class="secondary" type="button" aria-label="Предыдущая страница runs" aria-controls="runs-body" disabled>←</button>
+            <button id="runs-next-page" class="secondary" type="button" aria-label="Следующая страница runs" aria-controls="runs-body" disabled>→</button>
+          </div>
         </div>
         <div class="table-wrap">
           <table>

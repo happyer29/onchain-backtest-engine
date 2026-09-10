@@ -4,15 +4,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from backtest.application.copy_source import CopyBuyCoverageEvidence
 from backtest.domain.identifiers import CapabilityId, ContentDigest
 from backtest.domain.time import BlockRange
 
+# Each evidence family keeps a separate schema and identity meaning.
 LAUNCH_UNIVERSE_EVIDENCE_SCHEMA = "pumpfun-launch-universe-evidence/v1"
 SKIPPED_SLOT_SENTINEL_EVIDENCE_SCHEMA = "solana-skipped-slot-sentinel-evidence/v1"
 TERMINAL_LIFECYCLE_ORDERING_EVIDENCE_SCHEMA = "pumpfun-terminal-lifecycle-ordering-evidence/v1"
 PUMPFUN_SNIPING_SOURCE_EVIDENCE_BINDING_SCHEMA = "pumpfun-sniping-source-evidence-binding/v1"
 
 MAYHEM_EXCLUSION_REASON = "MAYHEM_EXCLUDED"
+# Policy identifiers describe normalization behavior rather than endpoint capabilities.
 SOLANA_SKIPPED_SLOT_SENTINEL_POLICY_ID = "solana-skipped-slot-epoch-zero-pinned-fingerprint-v1"
 PUMPFUN_TERMINAL_LIFECYCLE_ORDERING_POLICY_ID = "pumpfun-terminal-buy-completion-migration-order-v1"
 
@@ -195,6 +198,76 @@ class PumpfunSnipingSourceEvidenceBinding:
             "schema": self.schema,
             "skipped_slot_sentinel": self.skipped_slot_sentinel.identity_document(),
             "terminal_lifecycle_ordering": (self.terminal_lifecycle_ordering.identity_document()),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class PumpfunCopyBuySourceEvidenceBinding:
+    """Copy coverage is a separate proof, never a reinterpretation of launch-only evidence."""
+
+    receipt_refs: tuple[SourceEvidenceReceiptRef, ...]
+    capability_mapping_digest: ContentDigest
+    query_template_digest: ContentDigest
+    projector_digest: ContentDigest
+    normalizer_digest: ContentDigest
+    # Creation lookback and independent purchase enumeration travel together.
+    copy_coverage: CopyBuyCoverageEvidence
+    skipped_slot_sentinel: SkippedSlotSentinelEvidence
+    terminal_lifecycle_ordering: TerminalLifecycleOrderingEvidence
+    schema: str = "pumpfun-copybuy-source-evidence-binding/v1"
+
+    def __post_init__(self) -> None:
+        """Reject partial, reordered or cross-contract source bindings before planning."""
+        if self.schema != "pumpfun-copybuy-source-evidence-binding/v1":
+            raise ValueError("unsupported copy source evidence binding")
+        if not isinstance(self.copy_coverage, CopyBuyCoverageEvidence):
+            raise TypeError("copy binding requires reconciled coverage")
+        # Shared mathematical proofs retain their original exact typed meaning.
+        if not isinstance(self.skipped_slot_sentinel, SkippedSlotSentinelEvidence):
+            raise TypeError("copy binding requires skipped-slot evidence")
+        if not isinstance(self.terminal_lifecycle_ordering, TerminalLifecycleOrderingEvidence):
+            raise TypeError("copy binding requires lifecycle evidence")
+        # All transform operands, not only the source result, are identity-bearing.
+        for value in (
+            self.capability_mapping_digest,
+            self.query_template_digest,
+            self.projector_digest,
+            self.normalizer_digest,
+            # No copy binding operand may be an unresolved string alias.
+        ):
+            _require_digest(value, field="copy binding operand")
+        # Each capability must have one authoritative bounded receipt.
+        refs = self.receipt_refs
+        if not isinstance(refs, tuple) or not refs or len(refs) > 128:
+            raise ValueError("copy binding requires bounded receipt refs")
+        if any(not isinstance(ref, SourceEvidenceReceiptRef) for ref in refs):
+            raise TypeError("copy binding receipt reference has an invalid type")
+        # Canonical ordering and uniqueness prevent ambiguous capability selection.
+        if tuple(sorted(refs, key=lambda ref: ref.capability_id.value)) != refs:
+            raise ValueError("copy binding receipt refs must be sorted")
+        if len({ref.capability_id for ref in refs}) != len(refs):
+            raise ValueError("copy binding repeats a capability")
+        if len({ref.receipt_id for ref in refs}) != len(refs):
+            # One receipt cannot claim authority for several distinct required capabilities.
+            raise ValueError("copy binding repeats a receipt")
+
+    def identity_document(self) -> dict[str, object]:
+        """Bind exact receipts and coverage to every downstream dataset and run."""
+        return {
+            "schema": self.schema,
+            "capability_mapping_digest": self.capability_mapping_digest.hex,
+            "query_template_digest": self.query_template_digest.hex,
+            "projector_digest": self.projector_digest.hex,
+            # Repreparation is mandatory whenever normalization or coverage changes.
+            "normalizer_digest": self.normalizer_digest.hex,
+            "copy_coverage": self.copy_coverage.identity_document(),
+            "skipped_slot_sentinel": self.skipped_slot_sentinel.identity_document(),
+            "terminal_lifecycle_ordering": self.terminal_lifecycle_ordering.identity_document(),
+            # References are bounded independently of the number of source events.
+            "receipt_refs": [
+                {"capability_id": ref.capability_id.value, "receipt_id": ref.receipt_id.hex}
+                for ref in self.receipt_refs
+            ],
         }
 
 

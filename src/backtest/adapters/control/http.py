@@ -30,6 +30,15 @@ from urllib.request import (
 
 # Import canonical json at the visible module dependency boundary.
 from backtest.application.canonical_json import canonicalize_job_payload
+
+# Copy transport remains an application codec, independent of HTTP response DTOs.
+from backtest.application.copy_result_codec import (
+    copy_decimal_document,
+    copy_document_from_decimal,
+    copy_position_from_document,
+)
+
+# Remote job status shares the existing bounded control API transport.
 from backtest.application.job_views import JobStatusView
 from backtest.application.models import (
     ArtifactKind,
@@ -62,7 +71,9 @@ from backtest.application.run_results import (
     RunBackend,
     RunComparisonProjection,
     RunPhysicalSettings,
+    copy_summary_from_document,
     validate_run_warnings,
+    # Validation applies after the selected summary family has been reconstructed.
 )
 
 # Import run specs at the visible module dependency boundary.
@@ -74,11 +85,17 @@ from backtest.application.use_cases.query_artifacts import (
     # Include lineage edge so the query artifacts dependency remains explicit.
     LineageEdge,
 )
-from backtest.application.use_cases.query_run_results import PumpfunSnipingRunSummaryView
+from backtest.application.use_cases.query_run_results import (
+    CopyRunSummaryView,
+    PumpfunSnipingRunSummaryView,
+    # Both result families return typed application views to CLI callers.
+    RunResultSummaryView,
+)
 from backtest.application.use_cases.query_runs import RunSummaryView
 from backtest.application.use_cases.submit_job import SubmitJobRequest
 from backtest.domain.execution import ExecutionMode
 
+# Semantic execution mode is decoded independently of result presentation.
 # Import hashing at the visible module dependency boundary.
 from backtest.domain.hashing import canonical_json_bytes
 from backtest.domain.identifiers import (
@@ -97,10 +114,13 @@ from backtest.domain.roundtrips import (
     ROUNDTRIP_RESULT_SCHEMA_V3,
     ROUNDTRIP_RESULT_SCHEMA_V4,
     RoundTripRecord,
+    # Original Sniping row versions keep their existing strict decoder.
     roundtrip_record_from_document,
 )
+from backtest.engine.copytrading_results import CopyPositionRecord
 from backtest.engine.sniping import SnipingValuationStatus
 
+# Session credentials remain transport-only and outside canonical result documents.
 _SESSION_COOKIE: Final = "backtest_session"
 _MAXIMUM_SAFE_ERROR_MESSAGE: Final = 512
 # Bind error code once as an explicit module-level contract.
@@ -267,11 +287,11 @@ class LocalControlApiClient:
             raise ControlApiError(404, "RUN_CONTRACT_NOT_FOUND", "Run contract was not found.")
         return selected[0]
 
-    def sniping_run_summary(self, artifact_id: ArtifactId) -> PumpfunSnipingRunSummaryView:
+    def sniping_run_summary(self, artifact_id: ArtifactId) -> RunResultSummaryView:
         # Execute the local control api client sniping run summary workflow in explicit,
         # reviewable steps.
         path = f"/api/v1/run-artifacts/{quote(artifact_id.hex, safe='')}/summary"
-        result = _sniping_run_summary(self._request_json("GET", path))
+        result = _run_result_summary(self._request_json("GET", path))
         if result.run_artifact_id != artifact_id:
             raise ControlApiProtocolError
         return result
@@ -976,6 +996,46 @@ def _run_contract_field(value: object) -> RunContractField:
         raise ControlApiProtocolError from None
 
 
+def _run_result_summary(value: object) -> RunResultSummaryView:
+    """Select the exact immutable result family before decoding its specialized fields."""
+    raw = _require_object(value)
+    if raw.get("contract_schema") != "pumpfun-copy-run-summary/v1":
+        return _sniping_run_summary(value)
+    # Copy responses require an exact closed envelope before numeric reconstruction.
+    expected = {
+        "contract_schema",
+        "run_artifact_id",
+        "logical_run_id",
+        "execution_attempt_id",
+        # Neither paths nor source credentials are part of the bounded summary envelope.
+        "network_id",
+        "position_schema_id",
+        "summary",
+    }
+    if set(raw) != expected:
+        # Unexpected fields cannot smuggle another result family into the copy decoder.
+        raise ControlApiProtocolError
+    try:
+        # Decimal strings are decoded only for schema-defined numeric fields.
+        decoded = _require_object(copy_document_from_decimal(raw["summary"]))
+        metadata = copy_summary_from_document(decoded)
+        # Reject any decimal spelling or field that would change during strict reconstruction.
+        if copy_decimal_document(metadata.document()) != raw["summary"]:
+            raise ControlApiProtocolError
+        return CopyRunSummaryView(
+            ArtifactId(_string_field(raw, "run_artifact_id")),
+            LogicalRunId(_string_field(raw, "logical_run_id")),
+            # Preserve the physical attempt and the immutable chain separately.
+            ExecutionAttemptId(_string_field(raw, "execution_attempt_id")),
+            NetworkId(_string_field(raw, "network_id")),
+            PositionSchemaId(_string_field(raw, "position_schema_id")),
+            metadata,
+        )
+    # Codec failures become a bounded control-protocol error without raw payload leakage.
+    except (KeyError, TypeError, ValueError):
+        raise ControlApiProtocolError from None
+
+
 def _sniping_run_summary(value: object) -> PumpfunSnipingRunSummaryView:
     # Execute the sniping run summary workflow in explicit, reviewable steps.
     document = _require_object(value)
@@ -1256,7 +1316,7 @@ def _roundtrip_page(
             # Complete the cursor group only after its semantic components are visible.
         )
         result = RoundTripPage(records, cursor)
-    except (TypeError, ValueError):
+    except (KeyError, TypeError, ValueError):
         raise ControlApiProtocolError from None
     if after is not None and result.items:
         # Handle the roundtrip page after is not None and result.items branch as a
@@ -1292,7 +1352,19 @@ def _roundtrip_cursor(value: object) -> RoundTripCursor:
     )
 
 
-def _roundtrip_record_from_api(value: object) -> RoundTripRecord:
+def _roundtrip_record_from_api(value: object) -> RoundTripRecord | CopyPositionRecord:
+    """The copy family has its own strict row schema and never imitates Sniping legs."""
+    raw = _require_object(value)
+    if raw.get("contract_schema") == "pumpfun-copy-position/v1":
+        if set(raw) != {"contract_schema", "record"}:
+            raise ControlApiProtocolError
+        # Exact re-encoding rejects transport aliases and unexpected numeric fields.
+        decoded = copy_document_from_decimal(raw["record"])
+        record = copy_position_from_document(decoded)
+        if copy_decimal_document(record.document()) != raw["record"]:
+            raise ControlApiProtocolError
+        return record
+    # Non-copy rows retain their original schema-specific decoding path.
     document, schema_id = _roundtrip_api_document(value)
     return roundtrip_record_from_document(document, schema_id=schema_id)
 

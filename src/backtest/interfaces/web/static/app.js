@@ -39,6 +39,7 @@ const RUN_PRODUCING_JOB_TYPES = new Set(["RUN_BACKTEST", "RUN_SWEEP"]);
 const PUMPFUN_SNIPING_BACKENDS = new Set([
   "reference-pumpfun-sniping-v1",
   "numpy-mmap-pumpfun-sniping-v1",
+  "reference-pumpfun-copy-buy-v1",
 ]);
 
 // Resolved form contracts are transient UI state, never execution authority.
@@ -46,6 +47,8 @@ let resolvedDatasetPlan = null;
 let mlContract = null;
 // Discovery responses stay separate from selected result-artifact state.
 let snipingContract = null;
+// Copy discovery does not inherit Sniping timing or launch semantics.
+let copyContract = null;
 let snipingRunArtifactId = null;
 // A cursor stack supports previous/next without retaining prior result rows.
 let snipingPageCursors = [null];
@@ -407,6 +410,60 @@ function pumpfunSnipingDraft(form) {
   };
 }
 
+// Copy adds only its typed inputs; shared financial profiles keep one form implementation.
+function pumpfunStrategyDraft(form) {
+  const draft = pumpfunSnipingDraft(form);
+  if (document.querySelector("#pumpfun-strategy").value !== "copy") return draft;
+  if (copyContract === null) throw new Error("Copy Buy contract недоступен");
+  // A copy snapshot must carry signer history; a Sniping schedule cannot be reused.
+  delete draft.delivery_schedule_id;
+  draft.contract_schema = copyContract.schema;
+  draft.signing_wallets = textField(form, "signing_wallets").split(/\s+/).filter(Boolean);
+  const names = ["take_profit_bps", "stop_loss_bps", "maximum_hold_seconds",
+    "observation_delay_transactions", "buy_delay_transactions"];
+  // API validates the complete policy and canonicalizes the bounded wallet set.
+  for (const name of names) draft[name] = integerField(form, name);
+  return draft;
+}
+
+// Changing strategy switches only the controls admitted by that discovered contract.
+function configurePumpfunStrategy() {
+  const copy = document.querySelector("#pumpfun-strategy").value === "copy";
+  const fields = document.querySelector("#copy-buy-fields");
+  fields.hidden = !copy;
+  fields.disabled = !copy;
+  // A materialized Sniping schedule is outside the copy v1 execution contract.
+  const form = document.querySelector("#sniping-form");
+  const schedule = form.elements.namedItem("delivery_schedule_id");
+  schedule.disabled = copy;
+  schedule.closest("label").hidden = copy;
+  // Only the readable reference backend is admitted for copy v1.
+  const backend = form.elements.namedItem("run_backend");
+  const choices = copy ? ["reference-pumpfun-copy-buy-v1"]
+    : ["reference-pumpfun-sniping-v1", "numpy-mmap-pumpfun-sniping-v1"];
+  backend.replaceChildren(...choices.map((name) => new Option(name, name)));
+  const contract = copy ? copyContract : snipingContract;
+  // Do not enable a stale form when discovery is missing or its fixed policy changed.
+  if (copy && (!contract || contract.fixed_semantics.maximum_sell_attempts !== "4"
+      || contract.fixed_semantics.sell_retry_seconds !== "2"
+      || contract.fixed_semantics.mint_entry_limit !== "1")) {
+    throw new Error("Copy Buy contract несовместим");
+  }
+  // Mode selection is still constrained by the discovered closed execution contract.
+  if (contract) configureSnipingExecutionModes(contract);
+  snipingContractStatus.textContent = copy ? "Copy Buy v1" : "Sniping v3";
+  // Explain behavioral rules without exposing internal scheduler or storage details.
+  document.querySelector("#pumpfun-strategy-notice").textContent = copy
+    ? "Копируем BUY по signing_wallet. Один вход в токен за прогон, даже после отказа покупки. TP/SL по цене без комиссий; максимум 4 продажи с повтором через 2 секунды после отказа."
+    : "Sniping: cooldown 600 секунд, покупка через 500 транзакций, решение о продаже через 2 секунды после исполнения.";
+}
+
+// Strategy selection remains local until the normal resolve-and-submit action.
+document.querySelector("#pumpfun-strategy").addEventListener("change", () => {
+  try { configurePumpfunStrategy(); }
+  catch (error) { showResult(document.querySelector("#sniping-result"), error.message, true); }
+});
+
 // Physical settings describe an attempt and never enter logical strategy identity.
 function runPhysicalSettings(form) {
   const backend = valuesOf(form).get("run_backend");
@@ -417,6 +474,7 @@ function runPhysicalSettings(form) {
     // Pump.fun has separate readable-oracle and admitted mmap implementations.
     "reference-pumpfun-sniping-v1",
     "numpy-mmap-pumpfun-sniping-v1",
+    "reference-pumpfun-copy-buy-v1",
   ]);
   // A closed backend list prevents the browser from supplying an import path.
   if (!supportedBackends.has(backend)) throw new Error("run_backend: backend не поддерживается");
@@ -554,6 +612,9 @@ async function refreshSnipingContract() {
   // Select the one supported Sniping schema from bounded contract discovery.
   try {
     const response = await api("/api/v1/run-contracts");
+    copyContract = response.items.find(
+      (item) => item.schema === "pumpfun-copy-buy-run-draft/v1",
+    ) ?? null;
     // Exact schema match prevents a legacy draft from reaching the v3 form.
     const contract = response.items.find(
       (item) => item.schema === "pumpfun-sniping-run-draft/v3",
@@ -579,6 +640,7 @@ async function refreshSnipingContract() {
     snipingContract = contract;
     snipingContractStatus.textContent = "v3 · selectable exact settlement";
     snipingContractStatus.className = "status ok";
+    configurePumpfunStrategy();
   } catch (error) {
     // Failed discovery removes stale contract state and disables execution submission.
     snipingContract = null;
@@ -1093,7 +1155,9 @@ function renderRuns() {
     actions.className = "row-actions";
     // A typed physical backend decides whether the Sniping result contract exists.
     if (PUMPFUN_SNIPING_BACKENDS.has(run.physical_settings.backend)) {
-      actions.append(snipingResultActionButton(run.run_artifact_id));
+      const copy = run.physical_settings.backend === "reference-pumpfun-copy-buy-v1";
+      actions.append(copy ? copyResultActionButton(run.run_artifact_id)
+        : snipingResultActionButton(run.run_artifact_id));
     }
     // Manifest and lineage remain valid for every exact committed Run artifact.
     actions.append(
@@ -1188,6 +1252,10 @@ async function refreshRuns({ resetPage = false, navigation = null } = {}) {
 
 // Render the compact viewer's bounded scalar summary without loading result tables.
 function renderSnipingSummary(summary) {
+  if (summary.contract_schema === "pumpfun-copy-run-summary/v1") {
+    renderCopySummary(summary.summary);
+    return;
+  }
   const values = [
     // Contract and execution context explain how the displayed result was produced.
     ["Summary schema", summary.summary_schema_id],
@@ -1225,6 +1293,11 @@ function renderSnipingSummary(summary) {
     ["Synthetic-funded sells", atomicText(summary.synthetic_funded_sell_atomic)],
     ["Result hash", summary.canonical_result_hash],
   ];
+  renderSummaryCards(values);
+}
+
+// Shared cards preserve exact decimal strings and use only text nodes.
+function renderSummaryCards(values) {
   snipingSummaryCards.replaceChildren();
   // Cards use text-only DOM nodes and retain exact values in their title.
   for (const [label, value] of values) {
@@ -1239,6 +1312,84 @@ function renderSnipingSummary(summary) {
     // Append the complete definition pair before publishing the card.
     card.append(term, description);
     snipingSummaryCards.append(card);
+  }
+}
+
+// Copy summaries expose retry outcomes and qualified economics without invented launch fields.
+function renderCopySummary(summary) {
+  const totals = summary.totals;
+  const values = [["Strategy", "Pump.fun Copy Buy"], ["Execution mode", summary.execution_mode]];
+  const counts = {
+    position_count: "Entry signals", filled_buy_count: "Filled buys", failed_buy_count: "Failed buys",
+    rejected_buy_count: "Rejected buys", closed_position_count: "Closed positions",
+    // Exhaustion is an open position, even after all four sale attempts have been consumed.
+    exhausted_position_count: "Open: four attempts exhausted", sell_attempt_count: "Sell attempts",
+    failed_sell_count: "Failed sell landings", rejected_sell_count: "Rejected sells",
+    unvalued_open_position_count: "Open positions without valuation", valuation_status: "Valuation",
+  };
+  // Keep unvalued inventory visible alongside completed and failed entry counts.
+  for (const [name, label] of Object.entries(counts)) values.push([label, totals[name]]);
+  // Monetary cards name SOL explicitly and preserve every lamport using integer formatting.
+  const amounts = {
+    quote_cashflow_atomic: "Wallet cash change", realized_cash_pnl_atomic: "Realized cash PnL",
+    economic_pnl_atomic: "Full economic PnL", valued_economic_pnl_subtotal_atomic: "Valued subtotal",
+    cashback_receivable_atomic: "Cashback receivable", account_deposit_locked_atomic: "Locked deposits",
+    // Paid fees and released account deposits remain separate from price-trigger thresholds.
+    protocol_fee_paid_atomic: "Protocol fees", creator_fee_paid_atomic: "Creator fees",
+    network_base_fee_paid_atomic: "Network base fees", network_priority_fee_paid_atomic: "Priority fees",
+    account_deposit_paid_atomic: "Deposits paid", account_deposit_refunded_atomic: "Deposits refunded",
+    venue_funded_sell_atomic: "Settled venue funding", synthetic_funded_sell_atomic: "Settled synthetic funding",
+  };
+  // Financial values remain lossless even above JavaScript safe-integer limits.
+  for (const [name, label] of Object.entries(amounts)) values.push([`${label}, SOL`, copySol(totals[name])]);
+  // A virtual result must retain the same prominent synthetic-funding qualification.
+  if (summary.execution_mode === "EXOGENOUS_VIRTUAL_SETTLEMENT") {
+    values.unshift(["Модель", "Синтетическая ликвидность; не on-chain исполнение"]);
+  }
+  // The hash identifies verified normalized output rather than the physical attempt.
+  values.push(["Result hash", summary.comparison.canonical_result_hash]);
+  renderSummaryCards(values);
+}
+
+// Display exact native atomic amounts without floating-point rounding or a false zero mark.
+function copySol(value) {
+  if (value === null || value === undefined) return "Недоступно";
+  const amount = BigInt(value), magnitude = amount < 0n ? -amount : amount;
+  const digits = magnitude.toString().padStart(10, "0");
+  return `${amount < 0n ? "−" : ""}${digits.slice(0, -9)}.${digits.slice(-9)}`;
+}
+
+// Keep the bounded copy page in canonical source order, with every retry visible.
+function renderCopyPositions(items) {
+  snipingRoundtripsBody.replaceChildren();
+  for (const envelope of items) {
+    const item = envelope.record;
+    const row = document.createElement("tr");
+    const buy = item.attempts[0];
+    // Execution status qualifies quote evidence and distinguishes free rejects from landings.
+    const attemptLines = (attempt) => [
+      `#${attempt.attempt} ${attempt.status} ${attempt.failure_code ?? ""}`,
+      `quote=${atomicText(attempt.landing_quote?.amount_out_atomic)}`,
+      `block=${attempt.decision_position.block_ordinal} tx=${attempt.decision_position.transaction_index}`,
+    ];
+    // Entry is ordinal zero; the remaining bounded records are the four possible exits.
+    const sells = item.attempts.slice(1);
+    // Each rendered column retains the same financial meaning as the shared result table.
+    const columns = [
+      [`block=${item.signal_position.block_ordinal} tx=${item.signal_position.transaction_index}`],
+      [item.asset_id, item.signing_wallet], [item.status, item.exit_reason ?? ""],
+      attemptLines(buy), sells.flatMap(attemptLines),
+      // Potential quote shortfalls are labelled separately from actual settled summary funding.
+      sells.map((a) => `#${a.attempt} potential shortfall=${atomicText(a.landing_quote?.liquidity?.synthetic_shortfall_atomic)}`),
+      item.attempts.map((a) => `#${a.attempt} paid=${atomicSum([a.protocol_fee_paid_atomic, a.creator_fee_paid_atomic, a.network_base_fee_paid_atomic, a.network_priority_fee_paid_atomic])}`),
+      item.account_components.map((a) => `paid=${a.paid_atomic} refund=${a.refunded_atomic} locked=${a.locked_delta_atomic}`),
+      // Open cashflow remains visible even when realized round-trip PnL is absent.
+      [item.cashback_receivable_atomic], [`cashflow=${item.quote_cashflow_atomic}`, `realized=${atomicText(item.realized_cash_pnl_atomic)}`],
+      [atomicText(item.economic_pnl_atomic)], [item.mtm_status, atomicText(item.mtm_liquidation_value_atomic)],
+    ];
+    // Text-only cells prevent artifact content from becoming executable browser markup.
+    for (const lines of columns) row.append(snipingDetailCell(lines));
+    snipingRoundtripsBody.append(row);
   }
 }
 
@@ -1395,6 +1546,11 @@ function sortedSnipingRoundtrips() {
 
 // Replace the compact table with exactly one page of validated round trips.
 function renderSnipingRoundtrips() {
+  const copy = snipingPageItems[0]?.contract_schema === "pumpfun-copy-position/v1";
+  snipingPageSort.disabled = copy;
+  snipingPageSortDirection.disabled = copy;
+  // Copy keeps source order until a dedicated comparator contract is admitted.
+  if (copy) { renderCopyPositions(snipingPageItems); return; }
   const items = sortedSnipingRoundtrips();
   // Only one bounded page exists in the DOM at any time.
   snipingRoundtripsBody.replaceChildren();
@@ -1625,6 +1781,18 @@ async function openSnipingResult(runArtifactId) {
   // Page rows and navigation become visible from this same combined response.
   renderSnipingRoundtrips();
   updateSnipingPagination();
+}
+
+// Open the copy-specific signal dashboard bound to one immutable result artifact.
+function copyResultActionButton(runArtifactId) {
+  const button = document.createElement("a");
+  button.className = "button-link secondary";
+  button.textContent = "Copy Buy result";
+  button.href = `/copy-results?run_artifact_id=${encodeURIComponent(runArtifactId)}`;
+  // The result tab receives no opener authority and cannot submit a new run on navigation.
+  button.target = "_blank";
+  button.rel = "noopener noreferrer";
+  return button;
 }
 
 // Open the dedicated dashboard in an isolated tab bound to the exact Run artifact.
@@ -1994,7 +2162,7 @@ document.querySelector("#sniping-form").addEventListener("submit", async (event)
       method: "POST",
       headers: { "Content-Type": "application/json" },
       // Draft construction validates atomic text before this request begins.
-      body: JSON.stringify(pumpfunSnipingDraft(form)),
+      body: JSON.stringify(pumpfunStrategyDraft(form)),
     });
     // Physical settings stay outside the resolved semantic spec by contract.
     const job = await submitTypedBacktest({

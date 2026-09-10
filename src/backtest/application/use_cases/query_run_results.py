@@ -13,10 +13,13 @@ from backtest.application.ports.run_results import (
     RunResultReaderFactory,
 )
 from backtest.application.run_results import (
+    # Result dispatch recognizes separate copy metadata without reinterpreting Sniping rows.
     LEGACY_PUMPFUN_SNIPING_SUMMARY_SCHEMA,
     PUMPFUN_SNIPING_SUMMARY_SCHEMA,
+    CopySummaryMetadata,
     PumpfunSnipingSummaryMetadata,
     SuccessfulRunManifest,
+    # Execution mode and immutable manifest remain the authority for displayed results.
 )
 from backtest.domain.execution import ExecutionMode
 
@@ -195,6 +198,49 @@ class PumpfunSnipingDashboardView:
     roundtrips: RoundTripPage
 
 
+@dataclass(frozen=True, slots=True)
+class CopyRunSummaryView:
+    """Bounded verified copy metadata, without fabricated launch/cooldown fields."""
+
+    run_artifact_id: ArtifactId
+    logical_run_id: LogicalRunId
+    execution_attempt_id: ExecutionAttemptId
+    network_id: NetworkId
+    position_schema_id: PositionSchemaId
+    # Copy metadata carries its own bounded count and valuation contract.
+    metadata: CopySummaryMetadata
+
+
+@dataclass(frozen=True, slots=True)
+class CopyDashboardView:
+    """A copy dashboard combines its own summary with one bounded position page."""
+
+    summary: CopyRunSummaryView
+    roundtrips: RoundTripPage
+
+
+RunResultSummaryView = PumpfunSnipingRunSummaryView | CopyRunSummaryView
+RunResultDashboardView = PumpfunSnipingDashboardView | CopyDashboardView
+
+
+def _project_run_summary(
+    artifact_id: ArtifactId, manifest: SuccessfulRunManifest
+) -> RunResultSummaryView:
+    """Select the declared result family from verified metadata, not a user-facing title."""
+    if isinstance(manifest.bounded_summary, CopySummaryMetadata):
+        return CopyRunSummaryView(
+            artifact_id,
+            manifest.logical_run_id,
+            manifest.execution_attempt_id,
+            # The result view exposes the same immutable chain identity as its resolved run.
+            manifest.resolved_spec.network_id,
+            manifest.resolved_spec.position_schema_id,
+            manifest.bounded_summary,
+        )
+    # All previously supported result families retain their original projection path.
+    return _project_sniping_summary(artifact_id, manifest)
+
+
 def _require_roundtrip_page_limit(limit: int) -> None:
     """Reject lossy or unbounded result-page requests before opening artifacts."""
 
@@ -302,14 +348,14 @@ class QueryRunResults:
     def __init__(self, readers: RunResultReaderFactory) -> None:
         self._readers = readers
 
-    def summary(self, artifact_id: ArtifactId) -> PumpfunSnipingRunSummaryView:
+    def summary(self, artifact_id: ArtifactId) -> RunResultSummaryView:
         """Return a verified bounded summary for one exact Run artifact."""
 
         try:
             with self._readers.open_exact(artifact_id) as reader:
                 # Summary-only queries authenticate and validate both result tables.
                 reader.verify()
-                return _project_sniping_summary(artifact_id, reader.manifest)
+                return _project_run_summary(artifact_id, reader.manifest)
         except (ReprepareRequiredError, RunResultQueryError):
             raise
         # Infrastructure or malformed-result failures collapse to one safe query code.
@@ -332,8 +378,12 @@ class QueryRunResults:
         try:
             with self._readers.open_exact(artifact_id) as reader:
                 # Reject a non-sniping manifest with the stable application error code.
-                if not isinstance(reader.manifest.bounded_summary, PumpfunSnipingSummaryMetadata):
+                if not isinstance(
+                    reader.manifest.bounded_summary,
+                    (PumpfunSnipingSummaryMetadata, CopySummaryMetadata),
+                ):
                     raise RunResultQueryError("RUN_HAS_NO_PUMPFUN_SNIPING_RESULTS")
+                # Paging is permitted only after verifying the supported financial result family.
                 return reader.roundtrips(after=after, limit=limit)
         except (ReprepareRequiredError, RunResultQueryError):
             raise
@@ -346,18 +396,22 @@ class QueryRunResults:
         artifact_id: ArtifactId,
         *,
         limit: int = MAX_ROUNDTRIP_PAGE_SIZE,
-    ) -> PumpfunSnipingDashboardView:
+        # Dashboard queries retain the same bounded page cap as direct row queries.
+    ) -> RunResultDashboardView:
         """Return one summary and the first page from one authenticated reader."""
 
         _require_roundtrip_page_limit(limit)
         try:
             with self._readers.open_exact(artifact_id) as reader:
                 # Projection checks the typed result kind before any table read.
-                summary = _project_sniping_summary(artifact_id, reader.manifest)
+                summary = _project_run_summary(artifact_id, reader.manifest)
                 page = reader.roundtrips(after=None, limit=limit)
                 # A compliant reader makes this a no-op after the cold page scan.
                 reader.verify()
+                if isinstance(summary, CopyRunSummaryView):
+                    return CopyDashboardView(summary=summary, roundtrips=page)
                 return PumpfunSnipingDashboardView(summary=summary, roundtrips=page)
+        # Typed preparation and query failures remain visible instead of becoming empty dashboards.
         except (ReprepareRequiredError, RunResultQueryError):
             raise
         # Preserve the same safe failure surface as standalone result queries.

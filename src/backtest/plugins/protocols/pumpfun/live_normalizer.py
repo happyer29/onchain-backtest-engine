@@ -420,6 +420,11 @@ class PumpfunLiveNormalizer:
         return PUMPFUN_LIVE_NORMALIZER_PROFILE_ID
 
     @property
+    def launch_universe_policy_id(self) -> str:
+        """Bind exclusions to this normalizer's declared classification policy."""
+        return PUMPFUN_LAUNCH_UNIVERSE_POLICY_ID
+
+    @property
     def config_digest(self) -> ContentDigest:
         """Bind every source-derived transform without binding endpoint or credentials."""
 
@@ -546,6 +551,7 @@ class PumpfunNormalizationSession:
         normalizer: PumpfunLiveNormalizer,
         stream: CapabilityStream,
         capability_id: CapabilityId,
+        # Each session proves one immutable shard; it never expands its range.
         covered_range: BlockRange,
         observation_sink: PumpfunNormalizationObservationSink | None,
     ) -> None:
@@ -553,62 +559,77 @@ class PumpfunNormalizationSession:
             raise TypeError("normalizer must be a PumpfunLiveNormalizer")
         if not isinstance(stream, CapabilityStream):
             raise TypeError("stream must be a CapabilityStream")
+        # Identity and bounds are validated before any row affects the stream digest.
         if not isinstance(capability_id, CapabilityId):
             raise TypeError("capability_id must be a CapabilityId")
         if not isinstance(covered_range, BlockRange):
             raise TypeError("covered_range must be a BlockRange")
+        # Observation callbacks carry only bounded normalization evidence.
         if observation_sink is not None and not callable(observation_sink):
             raise TypeError("observation_sink must be callable")
         self._normalizer = normalizer
         self._stream = stream
         self._capability_id = capability_id
+        # Shard metadata stays fixed throughout incremental driver batches.
         self._covered_range = covered_range
         self._observation_sink = observation_sink
         self._query_fingerprint: ContentDigest | None = None
         self._raw_rows = 0
         self._normalized_rows = 0
+        # Classification totals reconcile eligible rows with explicit exclusions.
         self._launch_classified = 0
         self._launch_eligible = 0
         self._excluded_launches = 0
         self._recognized_sentinels = 0
         self._derived_lifecycle_groups = 0
+        # Order validation spans batch boundaries and starts at the authoritative cut.
         self._expected_block = covered_range.from_block_ordinal
         self._last_produced_block_time: int | None = None
         self._last_order_key: tuple[object, ...] | None = None
         self._last_launch_transaction: tuple[int, int] | None = None
         self._lifecycle_position: tuple[int, int] | None = None
+        # A terminal trade and migration must complete inside one transaction identity.
         self._lifecycle_completion: tuple[str, str, str, int, int] | None = None
         self._lifecycle_migration_seen = False
         self._normalized_stream_digest = _OrderedDigest(
             "backtest.pumpfun-normalized-stream.v2",
+            # Versioned columns distinguish signer-bearing content from legacy output.
             {
                 "capability_id": capability_id.value,
-                "columns": list(_OUTPUT_COLUMNS[stream]),
+                "columns": list(normalizer.output_columns(stream)),
                 "range": _range_document(covered_range),
                 "stream": stream.value,
+                # Bind the schema before the first canonical row is hashed.
             },
         )
+        # Exclusion evidence is scoped to the declared strategy universe and range.
         self._ordered_exclusion_digest = _OrderedDigest(
             "backtest.pumpfun-ordered-launch-exclusions.v1",
             {
-                "policy_id": PUMPFUN_LAUNCH_UNIVERSE_POLICY_ID,
+                "policy_id": normalizer.launch_universe_policy_id,
                 "range": _range_document(covered_range),
+                # No excluded launch becomes a synthetic runtime event.
             },
         )
+        # Skipped slots close coverage without introducing a clock boundary.
         self._ordered_sentinel_digest = _OrderedDigest(
             "backtest.solana-ordered-skipped-slots.v1",
             {
                 "profile_id": SOLANA_SKIPPED_SLOT_SENTINEL_PROFILE_ID,
                 "range": _range_document(covered_range),
+                # The pinned fingerprint remains part of the sentinel profile.
             },
         )
+        # Lifecycle derivation keeps its original version and ordered evidence.
         self._ordered_lifecycle_digest = _OrderedDigest(
             "backtest.pumpfun-ordered-derived-lifecycle-groups.v1",
             {
                 "profile_id": PUMPFUN_TERMINAL_LIFECYCLE_PROFILE_ID,
                 "range": _range_document(covered_range),
+                # Only proven same-transaction completion/migration enters this digest.
             },
         )
+        # A failed or sealed stream cannot be resumed as a fresh shard.
         self._finished = False
         self._failed = False
         self._summary: PumpfunNormalizationSummary | None = None
@@ -620,30 +641,36 @@ class PumpfunNormalizationSession:
             _raise(PumpfunLiveNormalizationErrorCode.STREAM_ALREADY_FINISHED)
         if self._failed:
             _raise(PumpfunLiveNormalizationErrorCode.BATCH_CONTRACT_INVALID)
+        # Schema validation precedes row mutation; failures poison the entire session.
         try:
             self._validate_batch(batch)
             normalized: list[tuple[Any, ...]] = []
             indexes = {name: index for index, name in enumerate(batch.columns)}
             for row in batch.rows:
+                # Hash normalized rows in source order, preserving batch independence.
                 self._raw_rows += 1
                 output = self._normalize_row(row, indexes)
                 if output is not None:
                     self._normalized_stream_digest.update(list(output))
                     self._normalized_rows += 1
                     normalized.append(output)
+            # The validated query fingerprint is mandatory even for empty batches.
             fingerprint = self._query_fingerprint
             if fingerprint is None:  # pragma: no cover - _validate_batch establishes it
                 _raise(PumpfunLiveNormalizationErrorCode.BATCH_CONTRACT_INVALID)
             return PumpfunNormalizedBatch(
+                # The same declared columns enter both bytes and the stream digest.
                 capability_id=self._capability_id,
                 covered_range=self._covered_range,
-                columns=_OUTPUT_COLUMNS[self._stream],
+                columns=self._normalizer.output_columns(self._stream),
                 rows=tuple(normalized),
                 query_fingerprint=fingerprint,
+                # Output remains bounded by the incoming driver batch.
             )
         except PumpfunLiveNormalizationError:
             self._failed = True
             raise
+        # Convert row errors without leaking raw source values or query contents.
         except (OverflowError, PumpQuoteError, TypeError, ValueError) as error:
             self._failed = True
             raise PumpfunLiveNormalizationError(_row_contract_error_code(self._stream)) from error
@@ -772,63 +799,76 @@ class PumpfunNormalizationSession:
         return block, time_ns, transaction_count, block_hash
 
     def _normalize_launch(self, values: _Row) -> tuple[Any, ...] | None:
+        # Creation identity is immutable and independent of the wallet being copied.
         block, transaction, raw_instruction, event_index = self._position(values)
         signature = _signature(values["signature"])
         mint = _public_key(values["mint"])
         creator = _public_key(values["creator"])
         creation_user = _public_key(values["creation_user"])
+        # Classify only SOL-paired launches with an explicit creation-time mode.
         curve = _public_key(values["curve_address"])
         quote_source = _public_key(values["quote_asset"])
         if quote_source != PUMPFUN_LAUNCH_SOL_SOURCE_ASSET:
             _raise(PumpfunLiveNormalizationErrorCode.LAUNCH_CONTRACT_INVALID)
         mayhem = _flag(values["mayhem_mode"])
+        # Canonical order and one creation per transaction must hold across batches.
         key = (block, transaction, raw_instruction, signature, mint)
         self._require_order(key, PumpfunLiveNormalizationErrorCode.LAUNCH_CONTRACT_INVALID)
         transaction_key = block, transaction
         if self._last_launch_transaction == transaction_key:
             _raise(PumpfunLiveNormalizationErrorCode.LAUNCH_CONTRACT_INVALID)
         self._last_launch_transaction = transaction_key
+        # Bundle metadata is validated without treating its counts as trade evidence.
         _block_time(values["block_time"])
         _flag(values["direct_pump_invocation"])
         _uint(values["pump_program_index"])
         _uint(values["bundle_size"])
         _uint(values["bundled_buys"])
+        # Every accepted creation contributes exactly once to classification totals.
         _uint(values["bundled_buys_count"])
         _uint(values["dev_balance"])
         self._launch_classified += 1
         if mayhem:
             observation = ExcludedLaunchObservation(
-                policy_id=PUMPFUN_LAUNCH_UNIVERSE_POLICY_ID,
+                # Known Mayhem has evidence only, never a canonical execution event.
+                policy_id=self._normalizer.launch_universe_policy_id,
                 reason=_MAYHEM_EXCLUSION_REASON,
                 block_ordinal=block,
                 transaction_index=transaction,
                 event_index=event_index,
+                # Preserve exact ordered source identity in the exclusion digest.
                 signature=signature,
                 mint=mint,
             )
             self._excluded_launches += 1
+            # Excluded rows leave no state that could later trigger a strategy.
             self._ordered_exclusion_digest.update(_observation_document(observation))
             self._emit(observation)
             return None
         mode = _mode(values["token_program"], values["cashback_enabled"])
+        # An eligible creation starts from the pinned program's initial reserves.
         self._launch_eligible += 1
         return (
             block,
             transaction,
             event_index,
+            # The successful transaction and immutable actor fields retain provenance.
             signature,
             True,
             mint,
             creator,
             creation_user,
+            # Venue/quote and virtual reserves define the initial SOL curve price.
             curve,
             PUMPFUN_CANONICAL_SOL_ASSET,
             PUMPFUN_INITIAL_VIRTUAL_TOKEN_RESERVES,
             PUMPFUN_INITIAL_VIRTUAL_SOL_RESERVES,
+            # Real reserves and supply constrain executable fills independently of price.
             PUMPFUN_INITIAL_REAL_TOKEN_RESERVES,
             PUMPFUN_INITIAL_REAL_SOL_RESERVES,
             PUMPFUN_TOKEN_TOTAL_SUPPLY,
             PumpCurveLifecycle.ACTIVE.value,
+            # Token program and cashback mode select the shared account requirements.
             mode.value,
         )
 

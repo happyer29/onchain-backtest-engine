@@ -5,19 +5,26 @@ from __future__ import annotations
 import json
 from typing import cast
 
+from backtest.application.copy_source import copy_coverage_from_document
 from backtest.application.errors import ReprepareRequiredError
+
+# Plan decoding reconstructs immutable source coverage before model validation.
 from backtest.application.models import (
     # Include capability proof fields so the models dependency remains explicit.
     CAPABILITY_PROOF_FIELDS,
+    COPYBUY_SETTLEMENT_SCHEMA,
     BudgetIssue,
     BudgetIssueKind,
     BudgetReport,
+    # Budget status remains operational and cannot promote source fidelity.
     BudgetStatus,
     # Include capability cut evidence so the models dependency remains explicit.
     CapabilityCutEvidence,
     CapabilityExtractionRange,
     CapabilityProofs,
     CapabilityStream,
+    CopyBuySettlementRequirement,
+    # Copy settlement is a separate typed maximum-path contract.
     DatasetPlan,
     # Include dataset shard so the models dependency remains explicit.
     DatasetShard,
@@ -30,11 +37,15 @@ from backtest.application.models import (
 )
 from backtest.application.source_evidence import (
     LaunchUniverseEvidence,
+    PumpfunCopyBuySourceEvidenceBinding,
+    # Receipt families carry different coverage semantics under explicit schemas.
     PumpfunSnipingSourceEvidenceBinding,
     SkippedSlotSentinelEvidence,
     SourceEvidenceReceiptRef,
     TerminalLifecycleOrderingEvidence,
 )
+
+# Fidelity remains a source claim validated without silent upgrades.
 from backtest.domain.fidelity import (
     ChainFinality,
     FeesFidelity,
@@ -94,7 +105,7 @@ def dataset_plan_from_bytes(payload: bytes) -> DatasetPlan:
     _keys(document, {"budget", "query_limits", "schema", "spec"}, "dataset plan")
     # Evaluate the complete dataset plan from bytes document and schema condition before
     # guarded effects.
-    if schema != "backtest.dataset-plan/v4":
+    if schema not in ("backtest.dataset-plan/v4", "backtest.dataset-plan/v5"):
         raise DatasetPlanCodecError("unsupported dataset plan schema")
     try:
         # Perform the protected dataset plan from bytes operation before explicit failure
@@ -131,7 +142,7 @@ def dataset_spec_from_document(value: object) -> DatasetSpec:
     version = document.get("spec_version")
     if not isinstance(version, bool) and version in (1, 2, 3, 4):
         raise ReprepareRequiredError(f"backtest.dataset-spec/v{version}")
-    if version != 5:
+    if version not in (5, 6):
         # Fail the dataset spec from document path with DatasetPlanCodecError for
         # unsupported dataset spec schema when version is true; do not continue
         # ambiguously.
@@ -191,8 +202,11 @@ def _document(plan: DatasetPlan) -> dict[str, object]:
             "max_result_rows": plan.query_limits.max_result_rows,
             # Return the completed document result without a hidden fallback.
         },
-        "schema": "backtest.dataset-plan/v4",
+        "schema": "backtest.dataset-plan/v5"
+        if spec.spec_version == 6
+        else "backtest.dataset-plan/v4",
         "spec": _spec_document(spec),
+        # The outer plan version follows the semantic DatasetSpec family.
     }
 
 
@@ -336,17 +350,21 @@ def _spec(value: object) -> DatasetSpec:
 
 
 def _source_evidence_binding_document(
-    value: PumpfunSnipingSourceEvidenceBinding | None,
+    value: PumpfunSnipingSourceEvidenceBinding | PumpfunCopyBuySourceEvidenceBinding | None,
 ) -> dict[str, object] | None:
     return None if value is None else value.identity_document()
 
 
 def _source_evidence_binding(
     value: object,
-) -> PumpfunSnipingSourceEvidenceBinding | None:
+) -> PumpfunSnipingSourceEvidenceBinding | PumpfunCopyBuySourceEvidenceBinding | None:
     if value is None:
         return None
+    # Null bindings retain their original meaning; copy schemas require explicit reconstruction.
     document = _object(value, "source evidence binding")
+    if document.get("schema") == "pumpfun-copybuy-source-evidence-binding/v1":
+        return _copy_source_evidence_binding(document)
+    # Sniping keeps its closed launch-universe document unchanged.
     _keys(
         document,
         {
@@ -384,6 +402,40 @@ def _source_evidence_binding(
         ),
         schema=_string(document["schema"], "source evidence binding schema"),
     )
+
+
+def _copy_source_evidence_binding(
+    document: dict[str, object],
+) -> PumpfunCopyBuySourceEvidenceBinding:
+    """Decode copy-only evidence, then reject fields outside its canonical document."""
+    result = PumpfunCopyBuySourceEvidenceBinding(
+        receipt_refs=tuple(
+            _source_evidence_receipt_ref(item)
+            for item in _list(document["receipt_refs"], "copy receipt refs")
+        ),
+        # These operands bind the same concrete source transform used by preparation.
+        capability_mapping_digest=ContentDigest(
+            _string(document["capability_mapping_digest"], "mapping")
+        ),
+        query_template_digest=ContentDigest(_string(document["query_template_digest"], "query")),
+        projector_digest=ContentDigest(_string(document["projector_digest"], "projector")),
+        # All four source transform operands remain part of the reconstructed binding.
+        normalizer_digest=ContentDigest(_string(document["normalizer_digest"], "normalizer")),
+        # Initial-state and signal completeness are distinct from clock and lifecycle proofs.
+        copy_coverage=copy_coverage_from_document(document["copy_coverage"]),
+        skipped_slot_sentinel=_skipped_slot_sentinel(document["skipped_slot_sentinel"]),
+        terminal_lifecycle_ordering=_terminal_lifecycle_ordering(
+            document["terminal_lifecycle_ordering"]
+        ),
+        # The schema is checked with exact canonical round-trip equality.
+        schema=_string(document["schema"], "copy binding schema"),
+    )
+    if result.identity_document() != document:
+        raise DatasetPlanCodecError("copy binding is not canonical")
+    return result
+
+
+# A noncanonical binding cannot be normalized silently into an executable spec.
 
 
 def _source_evidence_receipt_ref(value: object) -> SourceEvidenceReceiptRef:
@@ -469,11 +521,14 @@ def _terminal_lifecycle_ordering(value: object) -> TerminalLifecycleOrderingEvid
 # Define settlement requirement document as one focused operation with an explicit
 # boundary.
 def _settlement_requirement_document(
-    value: SettlementRequirement | None,
+    value: SettlementRequirement | CopyBuySettlementRequirement | None,
 ) -> dict[str, object] | None:
     # Execute the settlement requirement document workflow in explicit, reviewable steps.
     if value is None:
         return None
+    if isinstance(value, CopyBuySettlementRequirement):
+        return value.identity_document()
+    # The legacy timing document remains stable for existing artifacts.
     return {
         "initial_delay_transactions": value.initial_delay_transactions,
         "maximum_followup_delay_transactions": value.maximum_followup_delay_transactions,
@@ -489,11 +544,36 @@ def _settlement_requirement_document(
     }
 
 
-def _settlement_requirement(value: object) -> SettlementRequirement | None:
+def _copy_settlement_requirement(document: dict[str, object]) -> CopyBuySettlementRequirement:
+    """Fixed retries are checked by exact round-trip, not accepted as caller-defined policy."""
+    result = CopyBuySettlementRequirement(
+        observation_delay_transactions=_integer(
+            document["observation_delay_transactions"], "observation delay", minimum=0
+        ),
+        buy_delay_transactions=_integer(document["buy_delay_transactions"], "buy delay", minimum=1),
+        # Hold begins at our actual fill, followed by four separate possible sell landings.
+        maximum_hold_seconds=_integer(document["maximum_hold_seconds"], "maximum hold", minimum=1),
+        sell_delay_transactions=_integer(
+            document["sell_delay_transactions"], "sell delay", minimum=1
+        ),
+        maximum_tail_blocks=_integer(document["maximum_tail_blocks"], "tail cap", minimum=1),
+        # The maximum tail is a hard preparation cap rather than a replay-time fallback.
+    )
+    if result.identity_document() != document:
+        raise DatasetPlanCodecError("copy settlement is not canonical")
+    return result
+
+
+def _settlement_requirement(
+    value: object,
+) -> SettlementRequirement | CopyBuySettlementRequirement | None:
     # Execute the settlement requirement workflow in explicit, reviewable steps.
     if value is None:
         return None
     document = _object(value, "settlement requirement")
+    if document.get("schema") == COPYBUY_SETTLEMENT_SCHEMA:
+        return _copy_settlement_requirement(document)
+    # A copy contract never passes through the single-round-trip decoder.
     _keys(
         document,
         # Open the initial delay transactions and maximum followup delay transactions

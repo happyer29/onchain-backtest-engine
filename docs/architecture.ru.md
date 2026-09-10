@@ -88,6 +88,10 @@ overhead и deployment checks остаются отдельными gates. Ре�
 покрывает `resolve -> submit -> progress -> result -> lineage` и Sniping
 result dashboard без расширения live-source admission.
 
+Обе страницы предлагают тему «Тёплый закат» по умолчанию и исходную тёмную
+тему через общую browser-local настройку. При недоступном хранилище UI сообщает
+о выборе только для вкладки. Оформление не меняет команды, identities или results.
+
 Job/run query surfaces являются bounded projections: они не раздают executable
 payload, полный input list, raw final balances или Parquet; manifest и lineage
 читаются отдельно с hard limits. CLI валидирует identity уже работающего
@@ -634,6 +638,38 @@ coverage и требуемую fidelity; projector преобразует capabi
 canonical events, не смешивая transport с protocol semantics. Для каждой
 capability snapshot использует один authoritative source; silent merge sources
 запрещён.
+
+### 7.1 Согласованный контракт копирования покупок
+
+Deep dive §23.5 задаёт отдельную стратегию Pump.fun copy-buy. Reference-срез
+source/prepare/run/results и CLI/API/UI реализован;
+[deep dive §3.4](architecture-deep-dive.ru.md#34-текущее-состояние-проекта) ограничивает текущий допуск.
+Optimized copy и materialized schedules недоступны. Она копирует успешные BUY по точному
+`signing_wallet`, расходует mint по первому сигналу даже при отказе/неудаче
+покупки и полностью выходит по ценовым TP/SL без fees либо максимальному
+удержанию от fill. Наблюдение, покупка и продажа имеют отдельные задержки.
+Всего четыре попытки продажи, включая pre-submit rejection; решение о повторе
+принимается минимум через две модельные секунды после неудачи. Четыре неудачи
+оставляют exhausted open position. Комиссии входят в ledger PnL. Нужны полные
+bounded signer/initial-state/market/clock evidence, доказанный tail всех повторов
+и отдельные run/result identities. Данные/допуск и фиксированные правила
+существующего Sniping автоматически не распространяются на эту стратегию.
+
+Отдельный `pumpfun-copybuy-trade-payload-v1` переносит точный signer и
+целочисленное состояние кривой через generic protocol-payload storage,
+сохраняя идентичность исходного события. Версионированные нормализатор и
+транспорт не заменяют полную проверку подготовки из deep dive §23.5.
+
+Подготовка независимо перечисляет BUY лидеров до JOIN с ограниченной историей
+создания и сверяет их со всеми нужными рыночными переходами. Отсутствующее
+старое создание закрывает cut. Copy-only receipt v3, inspection v6, DatasetSpec
+v6 и plan v5 из §23.5 связывают покрытие и полный settlement четырёх попыток,
+не переинтерпретируя артефакты Sniping.
+
+Read-only `/copy-results` показывает диаграммы сводки, ограниченные страницы
+сигналов и маркеткап токена в SOL с сигналом лидера и фактическими исполнениями.
+Лимиты чтения сохранённой истории и отказы определены в deep dive §3.4;
+графики не меняют ID прогонов и не добавляют историю PumpSwap.
 
 ## 8. Детерминированный scheduler
 

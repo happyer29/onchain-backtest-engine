@@ -12,8 +12,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Final
 
+from backtest.application.copy_source import CopySourceSelection, copy_selection_from_document
 from backtest.application.run_results import RunBackend, RunPhysicalSettings
 
+# Deployment configuration stays outside semantic run identity except explicit selected operands.
 DEFAULT_CONFIG_ENV: Final = "BACKTEST_CONFIG"
 
 
@@ -309,6 +311,8 @@ class SourceSettings:
     secret_ref: str = field(default="BACKTEST_INDEXER_PASSWORD", repr=False)
     capabilities_file: Path | None = None
     projections_file: Path | None = None
+    # Copy acquisition is an explicit semantic selection, independent of connection secrets.
+    copy_selection: CopySourceSelection | None = None
 
     # Transport assertions are mutually constrained below; safe defaults do
     # not infer protection from a private-looking address.
@@ -317,6 +321,10 @@ class SourceSettings:
     allow_insecure_remote_http: bool = False
 
     def __post_init__(self) -> None:
+        if self.copy_selection is not None and not isinstance(
+            self.copy_selection, CopySourceSelection
+        ):
+            raise ConfigError("source copy_selection must be a typed selection")
         # Source labels are operational metadata, but malformed tokens must
         # still fail before any adapter can construct a connection.
         for value, label in (
@@ -507,6 +515,8 @@ def _validate_source_section(section: dict[str, object]) -> None:
         "secret_ref",
         "capabilities_file",
         "projections_file",
+        "copy_selection",
+        # TLS and tunnel choices remain separate from the semantic signer selection.
         "secure",
         # Keep the verified private tunnel component named inside the supported contract.
         "verified_private_tunnel",
@@ -527,6 +537,18 @@ def _optional_path(section: dict[str, object], key: str) -> Path | None:
         raise ConfigError(f"{key} must be a non-empty path string")
     # Return the completed optional path result without a hidden fallback.
     return Path(value)
+
+
+def _copy_selection(section: dict[str, object]) -> CopySourceSelection | None:
+    """The closed selector rejects endpoint-like extras and never prints supplied values."""
+    value = section.get("copy_selection")
+    if value is None:
+        return None
+    try:
+        return copy_selection_from_document(value)
+    # Invalid local selection becomes a bounded config error without echoing source secrets.
+    except (TypeError, ValueError):
+        raise ConfigError("source copy_selection is invalid") from None
 
 
 def load_settings(path: Path | None = None) -> Settings:
@@ -709,7 +731,9 @@ def load_settings(path: Path | None = None) -> Settings:
             secret_ref=_string(source, "secret_ref", "BACKTEST_INDEXER_PASSWORD"),
             capabilities_file=_optional_path(source, "capabilities_file"),
             projections_file=_optional_path(source, "projections_file"),
+            copy_selection=_copy_selection(source),
             secure=_boolean(source, "secure", False),
+            # Transport safety flags do not grant fidelity or change the copy strategy identity.
             verified_private_tunnel=_boolean(
                 # Pass source explicitly so _boolean receives a reviewable verified
                 # private tunnel and source input in load settings.

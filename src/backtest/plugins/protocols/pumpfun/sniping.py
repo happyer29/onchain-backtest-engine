@@ -7,6 +7,9 @@ from dataclasses import dataclass, replace
 from typing import Any, Final, Never
 
 from backtest.domain.account_requirements import AccountRequirement
+
+# Quote math accepts either intent family while source and scheduling contracts stay separate.
+from backtest.domain.copytrading import CopyBuyIntent
 from backtest.domain.execution import ExecutionMode
 from backtest.domain.fidelity import OrderingFidelity
 
@@ -267,7 +270,7 @@ class PumpfunSnipingProtocolRuntime:
 
     def quote_buy_from_primitive_state(
         self,
-        intent: RoundTripIntent,
+        intent: RoundTripIntent | CopyBuyIntent,
         state: PumpPrimitiveStateV1,
         # Close the quote buy from primitive state signature after its explicit inputs.
         *,
@@ -293,7 +296,7 @@ class PumpfunSnipingProtocolRuntime:
     # focused operation with an explicit boundary.
     def quote_sell_from_primitive_state(
         self,
-        intent: RoundTripIntent,
+        intent: RoundTripIntent | CopyBuyIntent,
         state: PumpPrimitiveStateV1,
         *,
         # Keep the tokens in atomic input explicit in the quote sell from primitive state
@@ -314,7 +317,7 @@ class PumpfunSnipingProtocolRuntime:
 
     def valuation_quote_from_primitive_state(
         self,
-        intent: RoundTripIntent,
+        intent: RoundTripIntent | CopyBuyIntent,
         state: PumpPrimitiveStateV1,
         # Keep the last active state input explicit in the valuation quote from primitive
         # state contract.
@@ -552,7 +555,7 @@ class PumpfunSnipingProtocolRuntime:
 
     def quote_buy(
         self,
-        intent: RoundTripIntent,
+        intent: RoundTripIntent | CopyBuyIntent,
         # Close the quote buy signature after its explicit inputs.
         *,
         effective_at_unix_s: int,
@@ -570,7 +573,7 @@ class PumpfunSnipingProtocolRuntime:
 
     def account_requirements(
         self,
-        intent: RoundTripIntent,
+        intent: RoundTripIntent | CopyBuyIntent,
     ) -> tuple[AccountRequirement, ...]:
         """Describe mode-specific accounts without importing Solana rent prices."""
 
@@ -578,7 +581,7 @@ class PumpfunSnipingProtocolRuntime:
 
     def _quote_buy_state(
         self,
-        intent: RoundTripIntent,
+        intent: RoundTripIntent | CopyBuyIntent,
         state: PumpCurveStateV1,
         # Close the quote buy state signature after its explicit inputs.
         *,
@@ -605,7 +608,7 @@ class PumpfunSnipingProtocolRuntime:
         # Keep the remaining quote sell inputs visible at the pumpfun sniping protocol
         # runtime quote sell boundary.
         self,
-        intent: RoundTripIntent,
+        intent: RoundTripIntent | CopyBuyIntent,
         *,
         tokens_in_atomic: int,
         effective_at_unix_s: int,
@@ -626,7 +629,7 @@ class PumpfunSnipingProtocolRuntime:
 
     def _quote_sell_state(
         self,
-        intent: RoundTripIntent,
+        intent: RoundTripIntent | CopyBuyIntent,
         # Keep the state input explicit in the quote sell state contract.
         state: PumpCurveStateV1,
         *,
@@ -655,7 +658,7 @@ class PumpfunSnipingProtocolRuntime:
         # Keep the remaining valuation quote inputs visible at the pumpfun sniping
         # protocol runtime valuation quote boundary.
         self,
-        intent: RoundTripIntent,
+        intent: RoundTripIntent | CopyBuyIntent,
         *,
         tokens_in_atomic: int,
         effective_at_unix_s: int,
@@ -710,7 +713,7 @@ class PumpfunSnipingProtocolRuntime:
             )
         return None
 
-    def _intent_curve(self, intent: RoundTripIntent) -> _CurveRecord:
+    def _intent_curve(self, intent: RoundTripIntent | CopyBuyIntent) -> _CurveRecord:
         # Execute the pumpfun sniping protocol runtime intent curve workflow in explicit,
         # reviewable steps.
         record = _require_curve(self._curves, intent.venue_id)
@@ -725,7 +728,7 @@ class PumpfunSnipingProtocolRuntime:
         return record
 
 
-def _buy_contract(intent: RoundTripIntent, quote: PumpBuyQuote) -> ProtocolQuote:
+def _buy_contract(intent: RoundTripIntent | CopyBuyIntent, quote: PumpBuyQuote) -> ProtocolQuote:
     # Execute the buy contract workflow in explicit, reviewable steps.
     protocol_account, creator_account, cashback_source = _fee_accounts(
         intent.venue_id,
@@ -756,7 +759,7 @@ def _buy_contract(intent: RoundTripIntent, quote: PumpBuyQuote) -> ProtocolQuote
 
 
 # Define sell contract as one focused operation with an explicit boundary.
-def _sell_contract(intent: RoundTripIntent, quote: PumpSellQuote) -> ProtocolQuote:
+def _sell_contract(intent: RoundTripIntent | CopyBuyIntent, quote: PumpSellQuote) -> ProtocolQuote:
     # Execute the sell contract workflow in explicit, reviewable steps.
     protocol_account, creator_account, cashback_source = _fee_accounts(
         intent.venue_id,
@@ -806,7 +809,7 @@ def _sell_liquidity_policy(execution_mode: ExecutionMode) -> PumpSellLiquidityPo
     return PumpSellLiquidityPolicy(policy_id)
 
 
-def _synthetic_liquidity_account(intent: RoundTripIntent) -> AccountId:
+def _synthetic_liquidity_account(intent: RoundTripIntent | CopyBuyIntent) -> AccountId:
     """Derive one stable bounded external source per exact network and venue."""
 
     # The engine-owned helper lets storage reconciliation reproduce this exact ID.

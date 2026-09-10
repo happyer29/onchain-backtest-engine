@@ -2,8 +2,17 @@
 from __future__ import annotations
 
 import json
+import multiprocessing
+import time
+
+# Build independent immutable specs for the real spawned-worker regression.
 from collections.abc import Iterator
+from dataclasses import replace
+
+# Spawn initializers must accept the same synchronization objects as production.
+from multiprocessing.synchronize import Barrier
 from pathlib import Path
+from threading import BrokenBarrierError
 
 import pytest
 
@@ -344,6 +353,80 @@ def test_scan_semantic_hash_is_identical_for_serial_and_two_independent_workers(
     assert serial.samples[0].items_processed == 64
     assert parallel.samples[0].items_processed == 128
     assert len(parallel.samples[0].worker_process_ids) == 2
+
+
+def _staggered_worker_initializer(
+    config: replay_module._WorkerConfig, start_barrier: Barrier | None = None
+) -> None:
+    """Make the second measured worker miss the old 20ms release deadline."""
+    if config.phase is replay_module.BenchmarkExecutionPhase.MEASURED:
+        marker = Path(config.data_root) / "first-worker-started"
+        try:
+            # Exclusive creation selects one fast worker without a process-order assumption.
+            with marker.open("x"):
+                pass
+        except FileExistsError:
+            time.sleep(1)
+    # Child imports are fresh under spawn; this resolves to the real initializer.
+    if start_barrier is None:
+        replay_module._initialize_worker(config)
+    else:
+        replay_module._initialize_worker(config, start_barrier)
+
+
+@pytest.mark.parametrize(("warmup_iterations", "measured_iterations"), [(0, 1), (1, 3)])
+def test_slow_worker_start_preserves_distinct_processes_each_round(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    # Cover both immediate final-round cleanup and retained targets across rounds.
+    warmup_iterations: int,
+    measured_iterations: int,
+) -> None:
+    """A fast worker cannot drain another worker's task or reuse a closed target."""
+    artifacts, replay_pack_id = _replay_pack(tmp_path)
+    runner = LocalReplayBenchmarkRunner(
+        artifacts.data_root,
+        # Resource admission is unchanged; only initialization timing is perturbed.
+        private_memory_budget_mb=4_096,
+        physical_cores=2,
+        max_processes_by_io=2,
+    )
+    serial = runner.run(_spec(replay_pack_id.hex))
+    # Exercise final-round cleanup and reuse across warmup/measured rounds.
+    spec = replace(
+        _spec(replay_pack_id.hex, process_count=2),
+        warmup_iterations=warmup_iterations,
+        measured_iterations=measured_iterations,
+    )
+    # The delay is deterministic fault injection rather than a retry of a flaky test.
+    monkeypatch.setattr(replay_module, "_initialize_worker", _staggered_worker_initializer)
+    parallel = runner.run(spec)
+    assert parallel.canonical_result_hash == serial.canonical_result_hash
+    assert len(parallel.samples) == measured_iterations
+    # Every sample must cover two actual workers and both copies of the input.
+    for sample in parallel.samples:
+        assert len(set(sample.worker_process_ids)) == 2
+        assert sample.items_processed == 128
+
+
+@pytest.mark.parametrize("abort", [False, True])
+def test_worker_readiness_failure_closes_target(
+    monkeypatch: pytest.MonkeyPatch, abort: bool
+) -> None:
+    """Missing or aborted peers must fail before execution and release the target."""
+    target = _ClosableTarget(fail=True)
+    barrier = multiprocessing.get_context("spawn").Barrier(2, timeout=0.01)
+    if abort:
+        barrier.abort()
+    # An execution would raise a different error, proving the barrier runs first.
+    monkeypatch.setattr(replay_module, "_WORKER_TARGET", replay_module._CapacityTarget(target, 1))
+    monkeypatch.setattr(replay_module, "_WORKER_START_BARRIER", barrier)
+    with pytest.raises(BrokenBarrierError):
+        replay_module._execute_worker(0, False, False)
+    # Cleanup clears worker authority even when the round never becomes ready.
+    assert target.closed
+    assert replay_module._WORKER_TARGET is None
+    assert replay_module._WORKER_START_BARRIER is None
 
 
 def test_process_admission_and_cold_cache_fail_closed(tmp_path: Path) -> None:

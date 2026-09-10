@@ -8,11 +8,16 @@ from enum import StrEnum
 from backtest.application.ml_contracts import ExactInferencePolicy, InferenceMode
 from backtest.application.run_specs import AssetBalance
 
+# Copy policy and public-key validation are pure domain semantics.
+from backtest.domain.copytrading import CopyBuyPolicy, require_solana_wallet
+
 # Import execution at the visible module dependency boundary.
 from backtest.domain.execution import ExecutionMode
 from backtest.domain.identifiers import (
+    AccountId,
     AssetId,
     DatasetRevisionId,
+    # Prepared dataset and optional replay identities remain separate typed inputs.
     DeliveryScheduleId,
     # Include feature set id so the identifiers dependency remains explicit.
     FeatureSetId,
@@ -428,7 +433,73 @@ class PumpfunSnipingRunDraft:
         return PUMPFUN_SNIPING_RUN_DRAFT_SCHEMA
 
 
-RunDraft = ReferenceRunDraft | PumpfunSnipingRunDraft
+@dataclass(frozen=True, slots=True)
+class PumpfunCopyBuyRunDraft:
+    """Explicit copy-only inputs; existing Sniping draft versions retain their meaning."""
+
+    dataset_revision_id: DatasetRevisionId
+    snapshot_id: SnapshotId
+    replay_pack_id: ReplayPackId | None
+    signing_wallets: tuple[AccountId, ...]
+    initial_sol_balance_lamports: int
+    # Price thresholds and independent latency are one immutable policy contract.
+    policy: CopyBuyPolicy
+    execution_mode: ExecutionMode
+    wallet_account_profile: WalletAccountProfileDraft
+    pump_fee_profile: PumpFeeProfileDraft
+    buy_solana_fee_profile: SolanaFeeProfileDraft
+    # Fees and root seed remain explicit even when a trial uses deterministic defaults.
+    sell_solana_fee_profile: SolanaFeeProfileDraft
+    root_seed: int
+
+    def __post_init__(self) -> None:
+        """Validate canonical signer identities before any executable component exists."""
+        if not isinstance(self.signing_wallets, tuple) or not 1 <= len(self.signing_wallets) <= 128:
+            raise ValueError("copy draft requires one to 128 canonical signing wallets")
+        for wallet in self.signing_wallets:
+            require_solana_wallet(wallet)
+        # Reordering or duplicating wallets must not create another interpretation of the list.
+        if self.signing_wallets != tuple(
+            sorted(set(self.signing_wallets), key=lambda item: item.value)
+        ):
+            raise ValueError("copy signing wallets must be sorted and unique")
+        # The initial SOL budget may be zero and must still consume failed entry signals.
+        _non_negative_integer(
+            self.initial_sol_balance_lamports, field_name="initial_sol_balance_lamports"
+        )
+        # The copy policy object carries its fixed retry and price-trigger contract.
+        if not isinstance(self.policy, CopyBuyPolicy):
+            raise TypeError("copy draft requires CopyBuyPolicy")
+        # The two existing exogenous modes retain their shared fee/account funding semantics.
+        if (
+            not isinstance(self.execution_mode, ExecutionMode)
+            or self.execution_mode not in PUMPFUN_SNIPING_EXECUTION_MODES
+        ):
+            raise ValueError("copy draft has an unsupported execution mode")
+        # Every executable draft retains explicit typed financial profiles.
+        profiles = (
+            (self.wallet_account_profile, WalletAccountProfileDraft),
+            (self.pump_fee_profile, PumpFeeProfileDraft),
+            # Effective dates and exact formula versions are validated by their typed profiles.
+            (self.buy_solana_fee_profile, SolanaFeeProfileDraft),
+            (self.sell_solana_fee_profile, SolanaFeeProfileDraft),
+        )
+        if any(not isinstance(value, expected) for value, expected in profiles):
+            raise TypeError("copy draft contains an invalid financial profile")
+        # The canonical seed is validated even when no future trade will occur.
+        _non_negative_integer(self.root_seed, field_name="root_seed")
+        # Keyed RNG identity is bounded consistently with the generic ResolvedRunSpec.
+        if self.root_seed >= 1 << 256:
+            raise ValueError("copy root seed must fit unsigned 256 bits")
+
+    @property
+    def contract_schema(self) -> str:
+        """No old draft can silently acquire the copy strategy's source/exit semantics."""
+        return "pumpfun-copy-buy-run-draft/v1"
+
+
+# The shared CLI/API application boundary admits the separate copy draft explicitly.
+RunDraft = ReferenceRunDraft | PumpfunSnipingRunDraft | PumpfunCopyBuyRunDraft
 
 
 def _stable_text(value: object, *, field_name: str) -> str:

@@ -400,21 +400,25 @@ class PumpfunLiveSourceComposition:
         request: BoundedSourceEvidenceRequest,
         projector_digest: ContentDigest,
     ) -> None:
+        # Bounded proof requests must carry the exact installed projector config digest.
         if not isinstance(projector_digest, ContentDigest):
             _fail(PumpfunLiveSourceErrorCode.REQUEST_IDENTITY_MISMATCH)
         network_ids = {item.network_id for item in self.raw_capabilities}
         position_ids = {item.position_schema_id for item in self.raw_capabilities}
         if (
+            # The source capability set must identify one immutable network and position schema.
             len(network_ids) != 1
             or len(position_ids) != 1
             or request.block_range.network_id != next(iter(network_ids))
             or request.block_range.position_schema_id != next(iter(position_ids))
             or request.capability_mapping_digest != self.capability_mapping_digest
+            # Both physical query and projection operands are checked before remote evidence reads.
             or request.query_template_digest != self.query_template_digest
             or request.projector_digest != projector_digest
             or request.normalizer_digest != self.normalizer_digest
-            or request.launch_universe_policy_id != PUMPFUN_LAUNCH_UNIVERSE_POLICY_ID
+            or request.launch_universe_policy_id != self.normalizer.launch_universe_policy_id
             or request.skipped_slot_sentinel_policy_id != SOLANA_SKIPPED_SLOT_SENTINEL_PROFILE_ID
+            # Sentinel and terminal normalization policies remain separately pinned.
             or request.terminal_lifecycle_ordering_policy_id
             != PUMPFUN_TERMINAL_LIFECYCLE_PROFILE_ID
         ):
@@ -635,119 +639,157 @@ class _EvidenceAccumulator:
         "_exclusions",
         "_last_clock_block",
         "_last_clock_time",
+        # Launch classification and lifecycle groups retain independent bounded evidence state.
+        "_launch_policy",
         "_launches",
         "_lifecycle_groups",
         "_sentinels",
         "_summaries",
+        # Per-shard observation summaries are distinct from whole-cut counters.
         "_summary_excluded_launches",
         "_summary_lifecycle_groups",
         "_summary_sentinels",
         "derived_lifecycle_count",
         "launch_classified_count",
+        # Eligible and excluded launch counts cannot be inferred from canonical event counts.
         "launch_eligible_count",
         "launch_excluded_count",
         "query_fingerprints",
         "raw_rows",
         "sentinel_count",
+        # The slot sentinel counter records coverage without fabricating a clock boundary.
     )
 
     def __init__(self, request: BoundedSourceEvidenceRequest) -> None:
+        # Classification follows the explicitly requested family; no proof is promoted here.
+        self._launch_policy = request.launch_universe_policy_id
         self._clock: dict[int, tuple[int, int]] = {}
         self._launches: dict[str, _LaunchState] = {}
         self._last_clock_block: int | None = None
         self._last_clock_time: int | None = None
+        # Exclusion framing binds the strategy-specific universe policy and initialization range.
         self._exclusions = _OrderedDigest(
             "backtest.pumpfun-live-source-exclusions.v1",
             {
-                "policy_id": PUMPFUN_LAUNCH_UNIVERSE_POLICY_ID,
-                "range": _range_document(request.decision_range),
+                "policy_id": self._launch_policy,
+                "range": _range_document(
+                    # Copy initialization may precede decisions; Sniping keeps its original
+                    # decision-only range.
+                    request.decision_range
+                    if request.copy_selection is None
+                    else request.copy_selection.history_range
+                ),
             },
+            # The completed exclusion operand document determines deterministic digest framing.
         )
         self._sentinels = _OrderedDigest(
             "backtest.pumpfun-live-source-sentinels.v1",
             {
                 "profile_id": SOLANA_SKIPPED_SLOT_SENTINEL_PROFILE_ID,
+                # Sentinel coverage is measured over the complete declared extraction range.
                 "range": _range_document(request.block_range),
             },
         )
         self._lifecycle_groups = _OrderedDigest(
             "backtest.pumpfun-live-source-lifecycle-groups.v1",
+            # Terminal group evidence has its own profile and ordered digest.
             {
                 "profile_id": PUMPFUN_TERMINAL_LIFECYCLE_PROFILE_ID,
                 "range": _range_document(request.block_range),
             },
         )
+        # Per-shard summaries and query fingerprints remain bounded preparation evidence.
         self._summaries: list[dict[str, object]] = []
         self.query_fingerprints: set[ContentDigest] = set()
         self.raw_rows = dict.fromkeys(_STREAM_ORDER, 0)
         self.launch_classified_count = 0
         self.launch_eligible_count = 0
+        # Known exclusions and skipped slots never appear as execution targets.
         self.launch_excluded_count = 0
         self.sentinel_count = 0
         self.derived_lifecycle_count = 0
         self._summary_excluded_launches = 0
         self._summary_sentinels = 0
+        # Shard counters allow deterministic reconciliation against whole-cut observations.
         self._summary_lifecycle_groups = 0
 
     def observe(self, observation: PumpfunNormalizationObservation) -> None:
         if isinstance(observation, SkippedSlotObservation):
             if observation.profile_id != SOLANA_SKIPPED_SLOT_SENTINEL_PROFILE_ID:
                 _fail(PumpfunLiveSourceErrorCode.INCOMPLETE_BLOCK_RANGE)
+            # A known skipped slot contributes only to coverage evidence.
             self._sentinels.update(
                 (observation.block_ordinal,),
                 {
                     "block_ordinal": observation.block_ordinal,
                     "profile_id": observation.profile_id,
+                    # Sentinel identity includes its pinned profile, not a synthetic transaction
+                    # count.
                 },
             )
             self.sentinel_count += 1
             return
         if isinstance(observation, ExcludedLaunchObservation):
+            # Excluded launches must use the selected immutable universe policy.
             if (
-                observation.policy_id != PUMPFUN_LAUNCH_UNIVERSE_POLICY_ID
+                observation.policy_id != self._launch_policy
                 or observation.reason != MAYHEM_EXCLUSION_REASON
             ):
                 _fail(PumpfunLiveSourceErrorCode.NORMALIZATION_FAILED)
+            # Hash every exclusion in exact source occurrence order.
             self._exclusions.update(
                 (
                     observation.block_ordinal,
                     observation.transaction_index,
                     observation.event_index,
+                    # Signature and mint disambiguate exclusions within shared transaction
+                    # coordinates.
                     observation.signature,
                     observation.mint,
                 ),
                 {
                     "block_ordinal": observation.block_ordinal,
+                    # Preserve exclusion coordinates and classification reason for later binding
+                    # checks.
                     "event_index": observation.event_index,
                     "mint": observation.mint,
                     "policy_id": observation.policy_id,
                     "reason": observation.reason,
                     "signature": observation.signature,
+                    # The original signature remains provenance and never becomes an execution
+                    # signal.
                     "transaction_index": observation.transaction_index,
                 },
             )
             self.launch_excluded_count += 1
             return
+        # Only the recognized terminal normalization observation may reach lifecycle evidence.
         if not isinstance(observation, DerivedLifecycleGroupObservation):
             _fail(PumpfunLiveSourceErrorCode.NORMALIZATION_FAILED)
         if observation.profile_id != PUMPFUN_TERMINAL_LIFECYCLE_PROFILE_ID:
             _fail(PumpfunLiveSourceErrorCode.LIFECYCLE_CONTRACT_MISMATCH)
         self._lifecycle_groups.update(
+            # Terminal occurrence identity starts with the same atomic transaction coordinates.
             (
                 observation.block_ordinal,
                 observation.transaction_index,
                 observation.terminal_event_index,
                 observation.signature,
+                # Mint identity prevents mixing terminal events from separate curves.
                 observation.mint,
             ),
             {
                 "block_ordinal": observation.block_ordinal,
                 "completion_event_index": observation.completion_event_index,
+                # Completion and migration indices remain explicitly ordered after the terminal
+                # trade.
                 "curve_address": observation.curve_address,
                 "migration_event_index": observation.migration_event_index,
                 "mint": observation.mint,
                 "profile_id": observation.profile_id,
                 "signature": observation.signature,
+                # Terminal trade index and transaction coordinate allow reconstruction of atomic
+                # ordering.
                 "terminal_event_index": observation.terminal_event_index,
                 "transaction_index": observation.transaction_index,
             },

@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="ru" data-theme="warm">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Local assets retain the Control UI's session and content security policy. -->
+    <title>Копитрейдинг · Результаты бэктеста</title>
+    <script src="/static/theme.js"></script>
+    <link rel="stylesheet" href="/static/styles.css" />
+    <script defer src="/static/copy-market-chart.js"></script>
+    <script defer src="/static/copy-results.js"></script>
+  <!-- The standalone page owns only result-view state; replay still runs through the control plane. -->
+  </head>
+  <body class="dashboard-body">
+    <!-- The result page never submits or repeats a trading run. -->
+    <header class="topbar dashboard-topbar">
+      <div><p class="eyebrow">Pump.fun · Copy Buy</p><h1>Копитрейдинг</h1>
+        <p class="dashboard-subtitle">Сигналы лидера, ваши сделки и история маркеткапа.</p></div>
+      <div class="dashboard-header-actions">
+        <div class="theme-control">
+          <!-- Use the shared theme picker without exposing source settings to the browser. -->
+          <label class="theme-picker" for="theme-select">
+            <span class="theme-swatch" aria-hidden="true"></span>
+            <span>Тема</span>
+            <select id="theme-select">
+              <option value="warm">Тёплый закат</option>
+              <!-- Theme choices change presentation only and persist through the shared local script. -->
+              <option value="dark">Тёмная</option>
+            </select>
+          </label>
+          <span id="theme-persistence" class="theme-note" role="status" hidden>Только для этой вкладки</span>
+        </div>
+        <!-- The control link returns to run selection without triggering another backtest. -->
+        <a class="button-link secondary" href="/">← Control UI</a>
+        <span id="copy-status" class="status" role="status">Выберите результат</span>
+      </div>
+    </header>
+    <main class="dashboard-main">
+      <!-- The run form accepts a content-addressed result identifier, never a filesystem path. -->
+      <!-- A content ID is the only user-controlled run selector. -->
+      <section class="panel">
+        <form id="copy-run-form" class="dashboard-query-form">
+          <label>Run artifact ID<input id="copy-run-id" required minlength="64" maxlength="64" pattern="[0-9a-f]{64}" autocomplete="off" /></label>
+          <button type="submit">Открыть результат</button>
+        </form>
+        <!-- Errors and loading states leave prior run content hidden until identity is verified. -->
+        <p id="copy-error" class="result error" role="alert" hidden></p>
+      </section>
+      <div id="copy-content" class="dashboard-content" hidden>
+        <!-- Whole-run cards and charts never aggregate just the visible page. -->
+        <section class="panel" aria-labelledby="copy-summary-heading">
+          <div class="section-heading dashboard-section-heading">
+            <h2 id="copy-summary-heading">Результат прогона</h2><span id="copy-mode" class="badge"></span>
+          </div>
+          <div id="copy-kpis" class="dashboard-kpis copy-kpis"></div>
+          <!-- Global charts use the complete run summary independently of signal pagination. -->
+          <p id="copy-valuation" class="dashboard-notice"></p>
+          <div class="dashboard-chart-grid">
+            <figure class="chart-card"><figcaption><strong>От сигнала до результата</strong><span>Число токенов; этапы пересекаются</span></figcaption><div id="copy-outcomes" class="chart-scroll"></div></figure>
+            <!-- Cash movement, realized profit and locked deposits are different quantities. -->
+            <figure class="chart-card"><figcaption><strong>Баланс и PnL, SOL</strong><span>Показатели всего прогона; не складываются</span></figcaption><div id="copy-finances" class="chart-scroll"></div></figure>
+          </div>
+        </section>
+        <section class="panel" aria-labelledby="copy-signals-heading">
+          <div class="section-heading dashboard-section-heading"><div>
+            <!-- Each signal row represents a single permanently consumed mint in this run. -->
+            <p class="eyebrow">Один токен · один сигнал на прогон</p><h2 id="copy-signals-heading">Сигналы и сделки</h2>
+          </div><span id="copy-page-label" class="notice"></span></div>
+          <!-- Filtering is explicitly page-local; navigation remains manual and bounded. -->
+          <div class="copy-table-controls">
+            <label>Фильтр этой страницы<input id="copy-filter" type="search" placeholder="Токен, кошелёк или статус" /></label>
+            <label>Сигналов на странице<select id="copy-page-size"><option>25</option><option>50</option><option>100</option><option>200</option></select></label>
+            <button id="copy-prev" class="secondary" type="button" disabled>Назад</button>
+            <button id="copy-next" class="secondary" type="button" disabled>Далее</button>
+          <!-- Manual navigation constrains both the response size and the number of visible chart actions. -->
+          </div>
+          <div class="table-wrap">
+            <table id="copy-table"><thead><tr><th>Токен / лидер</th><th>Сигнал · блок / tx</th><th>Покупка</th><th>Выход / попытки</th><th>Реализованный PnL, SOL</th><th>История</th></tr></thead><tbody id="copy-rows"></tbody></table>
+          </div>
+          <p class="notice">TP/SL считаются по цене без комиссий. PnL учитывает фактические денежные проводки. Незаполненный PnL означает отсутствие оценки, а не ноль.</p>
+        <!-- Financial table labels distinguish unavailable valuation from a zero result. -->
+        </section>
+      </div>
+    </main>
+    <!-- Native modal supplies keyboard focus, Escape and return to the token's button. -->
+    <dialog id="copy-chart-dialog" class="copy-chart-dialog" aria-labelledby="copy-chart-heading">
+      <div class="section-heading dashboard-section-heading"><div>
+        <p class="eyebrow">Историческая кривая Pump.fun · SOL</p><h2 id="copy-chart-heading">Маркеткап токена</h2>
+      </div><button id="copy-chart-close" class="secondary" type="button" autofocus>Закрыть</button></div>
+      <p id="copy-chart-token" class="mono copy-token-address"></p>
+      <!-- The modal names the selected mint before any history request can complete. -->
+      <p id="copy-chart-status" role="status"></p>
+      <div id="copy-chart-content" hidden>
+        <div class="copy-chart-controls"><button id="copy-chart-trade" type="button">Вокруг сделки</button><button id="copy-chart-all" class="secondary" type="button">Вся история</button><span id="copy-chart-range" class="notice"></span></div>
+        <!-- Failure crosses cannot be confused with the filled entry/exit shapes. -->
+        <p class="copy-chart-legend"><span class="copy-signal">◆ Сигнал лидера</span><span class="copy-buy">▲ Ваш вход</span><span class="copy-sell">● Ваш выход</span><span class="copy-failed">× Неудачная попытка</span></p>
+        <div id="copy-market-plot" class="chart-scroll"></div>
+        <p id="copy-chart-detail" class="dashboard-notice" aria-live="polite">Выберите точку на графике или событие ниже.</p>
+        <div class="table-wrap"><table><thead><tr><th>Событие</th><th>Время, UTC</th><th>Блок / tx</th><th>Маркеткап, SOL</th><th>Результат</th></tr></thead><tbody id="copy-chart-events"></tbody></table></div>
+        <!-- The displayed metric and post-migration boundary are explicit. -->
+        <p class="notice">Маркеткап = полная эмиссия × маржинальная цена кривой, округлённый вниз до лампорта. Это не цена исполнения вашего ордера. Линия показывает состояние после целой транзакции; время источника имеет точность до секунды. После completion/migration линия заканчивается; последующие отказы отмечены на последнем состоянии кривой. История PumpSwap не включена.</p>
+        <details><summary>Источник графика</summary><p id="copy-chart-source" class="mono copy-token-address"></p></details>
+      </div>
+    </dialog>
+  </body>
+<!-- The modal remains part of the local page; no external chart service is embedded. -->
+</html>
