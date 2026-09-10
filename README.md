@@ -233,6 +233,7 @@ If the project is useful to you, you can support it with a donation:
 | Network | Address |
 |---|---|
 | Bitcoin | `bc1p7xa9amu9pjh5cear5dezulujg2fe86su0afg02w3cpxwp8rkychsvx3cmc` |
+| Ethereum (ETH) | `0x9f0d4b76466a2151d1848ba831c1109ec8fff18d` |
 | Solana | `D7eLSxAPhJaVE9rjyFPeTK6xEsxis1RpQ5Q3FQRMUG1G` |
 | TRON | `TGJFm8HHspMBcJ2maog88cTjzVrqz3izsB` |
 
