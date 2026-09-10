@@ -20,8 +20,9 @@ preserved, and completeness/finality remain UNKNOWN. Research artifacts cannot
 enter replay or Strategy directly. Existing Sniping gates and identities are
 unchanged. The first slice is implemented and verified on hermetic source,
 CLI/API/child and browser workflows. One saved live-source cut passed local
-analysis of all 10,075 signers and 97,040 rows at a 180-second window; scoped
-[capacity evidence](research-capacity.md) records the limits. General live-source
+analysis of all 10,075 signers and 97,040 rows at 180, 1,000 and 3,600 seconds;
+compact intermediate keys preserve exact output under unchanged quotas.
+[Capacity evidence](research-capacity.md) records the scope. General live-source
 fidelity/capacity, transfers, full wallet PnL, ownership clustering and automatic
 strategy promotion remain outside this closure. See the
 [wallet research guide](wallet-research.md).

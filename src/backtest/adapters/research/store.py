@@ -322,7 +322,7 @@ class LocalResearchStore:
         table_queries = {
             # Every persisted result table is produced by one reviewed fixed statement.
             ResearchTable.ACTIVITY: queries.ACTIVITY,
-            ResearchTable.PAIRS: "SELECT * FROM pairs ORDER BY row_id",
+            ResearchTable.PAIRS: queries.PAIR_ROWS,
             ResearchTable.EVIDENCE: queries.EVIDENCE,
         }
         # One output budget is shared across all three result tables.

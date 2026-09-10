@@ -132,7 +132,10 @@ Leave the signer field empty to analyze all observed signers. A saved
 97,040-row cut with 10,075 signers passed at 180 seconds and a minimum of two
 shared mints: 81,645 pairs and 213,851 pair/mint evidence rows. The graph still
 shows the current page. [Capacity evidence](research-capacity.md) records this
-specific workload; larger or denser snapshots can still exceed the guards.
+specific workload. Windows of 1,000 and 3,600 seconds also pass on this cut:
+compact temporary keys reduce repeated address storage while the published
+rows keep full addresses and exact observation references. Larger or denser
+snapshots can still exceed the guards.
 
 ## Move a hypothesis toward a strategy
 

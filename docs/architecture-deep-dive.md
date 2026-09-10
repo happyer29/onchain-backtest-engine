@@ -283,9 +283,10 @@ re-extraction or ReplayPack recompilation.
   causal availability remain `UNKNOWN`. Hermetic source contracts and isolated
   CLI/API execution are verified; the real-browser workflow and installed-wheel
   CLI/child/API/assets gate passed. Local analysis of one saved live-source
-  cut with 97,040 rows and 10,075 signers passed at a 180-second window with
-  an empty signer selection; [capacity evidence](research-capacity.md) records
-  its finite guards and resource measurements. This does not establish general
+  cut with 97,040 rows and 10,075 signers passed at 180, 1,000 and 3,600-second
+  windows with an empty signer selection. Compact native keys preserve exact
+  output bytes within unchanged resource quotas; [capacity evidence](research-capacity.md)
+  records the scoped comparisons. This does not establish general
   live-source capacity or fidelity. Transfers, full wallet PnL, owner clustering
   and automatic strategy promotion remain unimplemented;
 - an installable Python 3.13 package, reproducible `uv.lock`, hexagonal ports,
