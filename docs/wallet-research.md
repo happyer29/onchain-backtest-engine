@@ -134,21 +134,46 @@ partial graph as complete. Requests contain at most 200 rows and 2 MiB each;
 total transport is capped at 128 MiB, each request at 15 seconds, and the whole
 load/build at 3 minutes. Large views consume more browser memory than a page.
 
-**Найти кошелёк в графе** searches full addresses or case-sensitive substrings
-across all loaded wallets. At most 100 suggestions are displayed, with their
-full match count and a prompt to refine the search. Selecting a wallet keeps
-all its incident connections visible; the inspector lists every neighbour in
-pages of 50. Selecting a neighbour or edge opens the exact pair and its
-**Открыть исходные покупки** action, including pairs outside the table's current
-page. **Снять выделение** restores the complete loaded graph. Dense display
-updates show a separate status and yield between batches. Table pagination,
-activity and evidence navigation preserve the full graph and selected pair.
-Switching to page mode or opening another artifact releases it.
+The full result opens with three reversible levels:
 
-The full graph uses straight edges without thousands of overlapping counter
-labels; exact counts appear in the inspector. Its grid is a bounded visual
-layout, not clustering. Neither layout distance nor the first page establishes
-statistical strength or a strongest-pair ranking. This is the complete selected
+1. **1 / Все группы**: one node per visual group, sized by wallet count. A line
+   represents **wallet pairs between two groups**, not a token count. Internal
+   pairs + crossing pairs reconcile exactly to the full result. Click a line
+   for a paginated list of all contributing pairs and their original purchases.
+2. **2 / Группа**: every member and every internal pair. The inspector reports
+   external pair counts and lists links to other groups; these pairs are not
+   discarded. **Все кошельки группы** and **Все внутренние пары** provide
+   complete keyboard-accessible lists in pages of 50.
+3. **3 / Окружение кошелька**: the selected wallet at the centre and all its
+   neighbours from the entire result, including other groups. **Показывать связи
+   между соседями** explicitly adds all pairs among those neighbours; separate
+   counters show direct and optional pairs.
+
+**Найти кошелёк в графе** searches full addresses or case-sensitive substrings
+across all participating wallets and opens level three directly. At most 100
+suggestions appear, with the full match count and a prompt to refine the search.
+The inspector lists every neighbour in pages of 50. A pair opens its exact
+**Открыть исходные покупки** action regardless of the table page. Use the level
+buttons to go back; **Снять выделение** restores the current level's inspector.
+Table pagination, activity and evidence navigation preserve the loaded model.
+Switching to page mode or another artifact releases it. Subsequent projections
+have a 30-second deadline and a separate cancel button; a rejected projection
+retains the checked model for another navigation attempt, never a partial canvas.
+
+Grouping uses the weighted local-moving stage of modularity optimization,
+inspired by [Blondel et al.](https://arxiv.org/abs/0803.0476), with shared-token
+counts as edge weights, canonical address order, resolution one and at most
+20 sweeps. This is a bounded display heuristic (`local-modularity-20-v1`), not
+the full multilevel Louvain algorithm or a claim of optimality. The page reports
+whether moves stopped or the sweep cap was reached. Group numbers are local
+to this result and implementation; they are not persistent owner IDs.
+
+Colours indicate visual groups. Large group views use rings, placing wallets
+with more internal links nearer the centre; small views use the existing
+bounded CoSE layout. Wallet views keep the selected wallet at the centre and
+place neighbours by group. Distances are not similarity measurements. No group,
+position or label establishes common ownership, coordinated trading,
+statistical significance or a profitable strategy. This is the complete selected
 result, not every connection in the market. The table remains available when
 the graph library is unavailable or full-view admission fails.
 

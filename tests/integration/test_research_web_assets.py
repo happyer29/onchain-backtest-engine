@@ -48,7 +48,10 @@ def test_graph_assets_are_local_pinned_and_serve_under_unchanged_csp(tmp_path: P
     assert paths == [
         "/static/vendor/cytoscape-3.34.3.min.js",
         # The graph adapter receives typed page rows from the existing controller client.
+        "/static/research-graph-model.js",
+        "/static/research-hierarchy.js",
         "/static/research-graph.js",
+        # Transfer validation loads after presentation modules and before the page controller.
         "/static/research-graph-load.js",
         "/static/research.js",
     ]

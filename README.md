@@ -183,7 +183,11 @@ graph supports zoom, pan, node dragging, selection and purchase drilldown for
 the current page (at most 25 pairs / 50 nodes) or an explicitly selected whole
 result (up to 200,000 pairs / 5,000 participating wallets). The full graph has
 progress/cancellation, exact completeness checks, wallet search and paginated
-neighbours; it persists when the table changes page. Start with the
+neighbours; it persists when the table changes page. Three levels show visual
+groups → wallets within a group → every neighbour of a wallet, including
+cross-group pairs. Counts reconcile to the entire result; grouped lines expose
+all original pairs. Visual groups do not establish ownership or coordination.
+Start with the
 [wallet research guide](docs/wallet-research.md). The contract is in
 [deep dive §24.6](docs/architecture-deep-dive.md#246-on-chain-wallet-research).
 Hermetic source/CLI/API/child and browser workflows are verified. Local analysis

@@ -166,9 +166,10 @@ deselected. Formatting, lint, types and all five import contracts passed too.
 No live source query was needed for this follow-up.
 
 
-## Whole-result graph display (2026-09-10)
+## Whole-result flat graph baseline (2026-09-10)
 
-The display-only §24.6 mode was checked on the retained 1,000-second result
+This historical flat-renderer baseline predates the three-level presentation
+recorded below. The display-only §24.6 mode was checked on the retained 1,000-second result
 `11a963e2dd0a3d23918fe10af03c16ed29f5a50e267659f0ac095dabd9a9c0e5`:
 153,869 exact pairs and 2,924 distinct pair participants. Its 10,075 activity
 signers are a different population. No source scan or analytical recalculation
@@ -241,3 +242,82 @@ The isolated test then passed in 7.26 seconds, and the final full run passed
 without parallel graph benchmarking. The replay worker code/tests were not
 modified or weakened to obtain that result; the intermittent failure is
 recorded rather than treated as graph evidence or hidden by a skip.
+
+## Three-level graph display (2026-09-10)
+
+The approved §24.6 extension changes only static display code. On the same
+verified result above, canonical-address weighted local moves stopped after
+eight sweeps and produced **81 visual groups**. Every one of 2,924 wallets is
+represented. Internal pairs **83,043** plus cross-group pairs **70,826** equal
+all **153,869** source-result pairs; the overview has 219 aggregate edges.
+The largest group exposes 820 wallets, all 36,349 internal pairs and access to
+41,508 external pairs. An initial prototype with a different wallet visitation
+order yielded 72 groups; the shipped canonical ordering is covered by an
+input-order equivalence test. These are presentation partitions, not findings
+of common ownership or coordinated trading.
+
+The same Node 24.15.0 / macOS arm64 harness, real pinned Cytoscape core and
+actual sequential verified localhost API were used for the comparison. Canvas
+mounting and CoSE geometry are mocked in this harness; these are process/model
+measurements, not browser FPS or whole-tab memory. One measured run per version:
+
+| Phase | Flat baseline | Three-level display |
+|---|---:|---:|
+| Transfer 770 pages / 39,002,095 response bytes | 4.279 s | 5.057 s |
+| Full model + initial projection wall time | 3.731 s | 0.788 s |
+| RSS after initial projection | 656,359,424 B | 297,877,504 B |
+| Process high-water RSS after initial projection | 675,184 KiB | 290,896 KiB |
+| Open first wallet's complete 37-pair neighbourhood | 0.816 s | 0.060 s |
+| RSS after wallet focus | 712,556,544 B | 298,401,792 B |
+| Process high-water RSS after wallet focus | 697,744 KiB | 291,408 KiB |
+| Minor / major page faults after focus | 59,205 / 1,282 | 23,883 / 277 |
+| Process swappedOut | 0 | 0 |
+| Process fsRead / fsWrite | 0 / 0 | 0 / 0 |
+
+The new overview renders 81 nodes and 219 aggregated edges while retaining
+all exact rows and compact global adjacency. Expanding a group or wallet
+replaces that projection; it does not download or recalculate the result.
+The page fixture still retains the same full input for comparison: 0.015 s,
+233,897,984 B RSS, so it is not a measurement of normal page-only memory.
+API disk I/O is outside the Node process; process counters do not establish
+zero server I/O, a system-wide no-swap guarantee or a browser memory ceiling.
+Dense individual groups can still contain many edges and consume more memory
+than the overview. The unchanged 200,000-pair / 5,000-wallet cap is not a
+performance SLA for all devices.
+
+Real-browser inspection initially loaded and grouped the complete result in
+7.3 seconds. The 820-wallet group and the first wallet's complete 37 neighbours
+were navigable. Its optional neighbour view adds all 666 neighbour-to-neighbour
+pairs. Exact pair 25 still opens its two original purchase rows (334 and 86
+seconds apart) independently of the first 25-row table page. Grouping, colours,
+layout and display toggles do not change the recipe, committed artifacts or
+UNKNOWN source fidelity; research artifacts remain unavailable to Strategy.
+
+Final fresh-browser load/build took 6.9 seconds. Cancellation left no canvas and
+allowed retry. The member list exposed all 820 members in 50-item pages; opening
+its first member showed all 716 incident pairs, with 67,423 optional pairs among
+its neighbours. Moving the table to pair 25 preserved that same neighbourhood.
+At a 375px viewport there was no horizontal document overflow and the checkbox
+remained 13px wide. Wide 1280px inspection and browser warning/error logs passed.
+
+Verification followed §§3.4, 6, 24.6 and 38, retaining existing API/security,
+resource and publication boundaries:
+
+- `ruff format --check src tests` / `ruff check src tests`: passed, 434 files.
+- `mypy src/backtest`: passed, 284 modules; `lint-imports`: all 5 contracts kept.
+- Full `pytest --cov=backtest --cov-report=term-missing`: 1,372 passed,
+  80.80% coverage, 192.48 s. One opt-in live ClickHouse test skipped and three
+  performance tests deselected by existing project policy; no new live query.
+- `node --test tests/web/research-graph*.test.cjs`: 29 passed, covering exact
+  group reconciliation, deterministic grouping, all-level/cross-group evidence,
+  optional neighbour pairs, bounds, global search, pagination and cancellation/
+  replacement races. The focused installed-assets test also passed.
+- Offline wheel build and isolated installed CLI/API/CSP/SRI smoke passed;
+  all 15 distributed static assets matched source bytes. No new dependency,
+  credentials, local configuration or extracted artifacts entered the package.
+
+The research code digest is unchanged from the baseline above. Neither this
+presentation nor its grouping policy makes research results causal strategy
+inputs or raises UNKNOWN fidelity. Over-limit and incomplete loading still
+reject the whole view explicitly; no market completeness or owner clustering
+is claimed.

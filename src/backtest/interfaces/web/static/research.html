@@ -8,6 +8,9 @@
   <link rel="stylesheet" href="/static/research.css" />
   <!-- The pinned graph library is shipped locally; deferred order keeps the client synchronous. -->
   <script defer src="/static/vendor/cytoscape-3.34.3.min.js" integrity="sha384-qPKQxl9uMXOw7vSTUDAnpUilhLuulovw6P5Z4db4bqxW5VhumS7przEmHX0iM0Oc"></script>
+  <script defer src="/static/research-graph-model.js"></script>
+  <script defer src="/static/research-hierarchy.js"></script>
+  <!-- The renderer routes page selection and complete-result projection navigation. -->
   <script defer src="/static/research-graph.js"></script>
   <!-- Whole-result reads use only the existing bounded same-origin pair endpoint. -->
   <script defer src="/static/research-graph-load.js"></script>
@@ -143,6 +146,20 @@
           <!-- Expansion changes viewport space while retaining the same admitted graph data. -->
           <button id="graph-expand" class="secondary" aria-pressed="false">Развернуть граф</button>
         </div>
+        <!-- Breadcrumbs expose all three levels without tying the graph to the table cursor. -->
+        <div id="graph-hierarchy" hidden>
+          <nav class="graph-controls" aria-label="Уровни графа">
+            <button id="graph-overview" class="secondary">1 / Все группы</button>
+            <button id="graph-parent-group" class="secondary" hidden>2 / Группа</button>
+            <!-- The third breadcrumb names the active wallet scope without rendering a long address. -->
+            <span id="graph-wallet-level" hidden>3 / Окружение кошелька</span>
+            <button id="graph-view-cancel" class="secondary" hidden>Отменить построение вида</button>
+          </nav>
+          <p id="graph-view-status" class="notice" role="status" aria-live="polite"></p>
+          <!-- The neighbour toggle is an explicit projection filter with separate visible counts. -->
+          <label id="graph-neighbour-option" hidden><input id="graph-neighbour-links" type="checkbox" /> Показывать связи между соседями</label>
+          <p id="graph-grouping-status" class="hint"></p>
+        </div>
         <!-- Scope-wide search provides a keyboard equivalent to selecting a canvas node. -->
         <div class="graph-workspace">
           <div id="graph" role="img" aria-label="Граф совместных покупок; поиск и выбор кошелька доступны рядом" aria-describedby="graph-help"></div>
@@ -164,8 +181,17 @@
         <!-- Layout must not be mistaken for a cluster, a rank or a complete market network. -->
         <p class="hint">«Текущая страница» — до 25 пар / 50 кошельков. «Весь результат» — все найденные пары,
           до 200 000 связей / 5 000 кошельков, независимо от страниц таблицы. В граф входят только участники найденных пар. Загрузка — до 3 минут.
-          Выбор кошелька в полном графе оставляет видимыми все его связи; «Снять выделение» возвращает весь граф.
-          Это связи внутри выбранного результата, а не всего рынка. Расстояния и расположение узлов не означают кластеры.</p>
+          Полный результат открывается в три уровня: группы → кошельки группы → все соседи кошелька, включая другие группы.
+          На обзоре размер узла отражает число кошельков, толщина линии — число пар между группами. Внутри группы линия — одна пара.
+          Это связи выбранного результата, а не всего рынка. Цвет обозначает визуальную группу; он не доказывает общего владельца.</p>
+        <!-- A display community is a weighted structural hint, not a new research finding. -->
+        <p class="hint">Группировка старается собрать кошельки с плотными связями друг с другом.
+          Большее число общих токенов придаёт связи больший вес. Это приблизительное разбиение для просмотра;
+          другой период или параметры исследования могут изменить состав и номера групп.</p>
+        <!-- Geometry supports navigation, without inventing a measured similarity or a causal feature. -->
+        <p class="hint">Нажми группу для раскрытия или найди любой адрес справа. Внешние связи группы доступны в списке справа.
+          В крупных группах узлы с большим числом внутренних связей ближе к центру; в окружении выбранный кошелёк всегда в центре.
+          Расстояния не являются мерой сходства. Вернуться можно кнопками уровней; «Снять выделение» восстанавливает список текущего уровня.</p>
         <!-- Page navigation is also available beside the graph, using the same exact table cursors. -->
         <div id="graph-page-navigation" class="pagination"><button id="graph-first-page" class="secondary">К первым парам</button>
           <button id="graph-next-page" disabled>Следующие пары →</button></div>

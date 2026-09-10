@@ -39,7 +39,7 @@ function harness(withLibrary = true) {
     // Reusing one control per selector models the static dashboard elements.
   };
   const context = {document: {querySelector: find, createElement: () => new Control()},
-    ResizeObserver: class {observe() {}}, console, setTimeout, clearTimeout, DOMException};
+    ResizeObserver: class {observe() {}}, console, setTimeout, clearTimeout, DOMException, AbortSignal, AbortController};
   vm.createContext(context);
   // Load library and integration into one realm, matching browser plain-object and array semantics.
   if (withLibrary) {
@@ -59,6 +59,10 @@ function harness(withLibrary = true) {
       // A fresh page instance is exposed only by the test harness, never by product UI.
       var testCore = null;
     `, context);
+  }
+  // Display indexing and projection modules execute in the same realm as the pinned graph core.
+  for (const name of ["research-graph-model.js", "research-hierarchy.js"]) {
+    vm.runInContext(readFileSync(path.join(staticRoot, name), "utf8"), context);
   }
   const renderer = vm.runInContext(source + "\nResearchGraph;", context);
   // Tests inspect the real bounded graph while acting through registered UI event handlers.
@@ -162,8 +166,11 @@ test("whole graph retains all edges, searches all wallets and paginates high-deg
   const wallets = ["A", ...rows.map((row) => row.signer_b)], opened = [];
   // The actual Cytoscape model is used, including its adjacency and event implementations.
   await h.renderer.renderWhole({rows, wallets}, (id) => opened.push(id), new AbortController().signal, () => {});
-  assert.equal(h.core().edges().length, 123);
+  assert.equal(h.core().nodes().length, 1);
+  assert.equal(h.core().edges().length, 0);
+  assert.match(h.find("#graph-view-status").textContent, /123 пар внутри \+ 0 между/);
   h.find("#graph-search").value = "B122";
+  // Search remains global even while the overview contains only group nodes.
   h.find("#graph-search").fire("input");
   assert.deepEqual(h.find("#graph-wallet").children.map((option) => option.value), ["", "B122"]);
   // The last wallet and pair are outside both the first 25 table rows and first 100 search suggestions.
@@ -184,7 +191,10 @@ test("whole graph retains all edges, searches all wallets and paginates high-deg
   h.find("#graph-selection").children.at(-1).fire("click");
   assert.deepEqual(opened, ["122"]);
   await h.find("#graph-clear").fire("click");
-  assert.equal(h.core().elements(".muted").length, 0);
+  // Inspector reset preserves the complete wallet neighbourhood at level three.
+  assert.equal(h.core().edges().length, 123);
+  await h.find("#graph-overview").fire("click");
+  assert.equal(h.core().nodes().length, 1);
 });
 
 // A stale asynchronous build must never overwrite the page graph that replaced it during a yield.
@@ -192,9 +202,12 @@ test("whole construction honours cancellation and scope replacement", async (con
   const h = harness();
   context.after(() => h.renderer.clear());
   const controller = new AbortController();
-  const building = h.renderer.renderWhole({rows: [pair("0")], wallets: ["A", "B"]}, () => {}, controller.signal, () => {});
-  // Hold the original instance so destruction is verified independently of the new graph.
+  // An existing page makes early retirement observable before full construction begins.
+  h.renderer.render([pair("old")], () => {});
   const old = h.core();
+  // The new full-model build retires the prior page before yielding.
+  const building = h.renderer.renderWhole({rows: [pair("0")], wallets: ["A", "B"]}, () => {}, controller.signal, () => {});
+  // Hold the prior page instance so destruction is verified independently of the new graph.
   // Switching to a normal page destroys the in-progress headless instance before the next batch.
   controller.abort();
   h.renderer.render([pair("25", "C", "D")], () => {});
@@ -220,12 +233,79 @@ test("whole selection races preserve the latest focus and release replaced insta
   // Only the final wallet's full incident edge remains visible, without removing any stored edge.
   assert.equal(h.core().getElementById("wallet:B79").selected(), true);
   assert.equal(h.core().edges().filter((edge) => !edge.hasClass("muted")).length, 1);
+  assert.equal(h.core().edges().length, 1);
+  h.find("#graph-wallet").value = "A";
+  await h.find("#graph-wallet").fire("change");
+  // Returning to the hub reconstructs all retained pairs, without reloading or sampling.
   assert.equal(h.core().edges().length, 80);
   const old = h.core();
-  const clearing = h.find("#graph-clear").fire("click");
+  const clearing = h.find("#graph-overview").fire("click");
   // Replacing the scope during reset cannot reattach the discarded whole model afterward.
   h.renderer.render([pair("25", "C", "D")], () => {});
   await clearing;
   assert.equal(old.destroyed(), true);
   assert.equal(h.core().edges()[0].data("row").row_id, "25");
+});
+
+// Groups, cross-group evidence and neighbourhood expansion preserve the same independently known pairs.
+test("three levels expose every internal and crossing pair with reversible navigation", async (context) => {
+  const h = harness(), opened = [];
+  context.after(() => h.renderer.clear());
+  const rows = [["A", "B"], ["A", "C"], ["B", "C"], ["C", "D"], ["D", "E"], ["D", "F"], ["E", "F"]]
+    .map(([a, b], index) => ({...pair(String(index), a, b), shared_mints: index === 3 ? "1" : "10"}));
+  // Two strong triangles are joined by exactly pair 3; their overview must have one aggregate edge.
+  await h.renderer.renderWhole({rows, wallets: ["A", "B", "C", "D", "E", "F"]}, (id) => opened.push(id), new AbortController().signal, () => {});
+  assert.equal(h.core().nodes().length, 2); assert.equal(h.core().edges().length, 1);
+  h.core().edges()[0].emit("tap");
+  const list = () => h.find("#graph-selection").children.find((item) => item.className === "graph-neighbours");
+  await list().children[0].fire("click");
+  // An aggregate drilldown points to an exact pair, not a synthetic group evidence identifier.
+  h.find("#graph-selection").children.at(-1).fire("click");
+  assert.deepEqual(opened, ["3"]);
+  await h.find("#graph-overview").fire("click");
+  await list().children[0].fire("click");
+  assert.equal(h.core().nodes().length, 3); assert.equal(h.core().edges().length, 3);
+  // The group inspector explicitly includes the one pair crossing its boundary.
+  assert.match(h.find("#graph-view-status").textContent, /3 внутренних пар/);
+  assert.match(h.find("#graph-selection").children[1].textContent, /1 пар с другими группами/);
+  h.find("#graph-wallet").value = "C";
+  await h.find("#graph-wallet").fire("change");
+  assert.equal(h.core().nodes().length, 4); assert.equal(h.core().edges().length, 3);
+  // Enabling neighbour pairs adds A–B; toggling back removes only that explicitly optional edge.
+  h.find("#graph-neighbour-links").checked = true;
+  // The checkbox requests a complete new projection, not an in-place sampled edit.
+  await h.find("#graph-neighbour-links").fire("change");
+  assert.equal(h.core().edges().length, 4);
+  h.find("#graph-neighbour-links").checked = false;
+  // The checkbox requests a complete new projection, not an in-place sampled edit.
+  await h.find("#graph-neighbour-links").fire("change");
+  assert.equal(h.core().edges().length, 3);
+  // The group breadcrumb returns to all three internal pairs, then overview still covers both groups.
+  await h.find("#graph-parent-group").fire("click");
+  assert.equal(h.core().nodes().length, 3);
+  await h.find("#graph-overview").fire("click");
+  assert.equal(h.core().nodes().length, 2);
+});
+
+// A cancelled local projection releases its canvas but retains the verified full model for navigation.
+test("projection cancellation can recover without a second download and stale evidence is inert", async (context) => {
+  const h = harness(), opened = [];
+  context.after(() => h.renderer.clear());
+  await h.renderer.renderWhole({rows: [pair("0")], wallets: ["A", "B"]}, (id) => opened.push(id), new AbortController().signal, () => {});
+  h.find("#graph-wallet").value = "A";
+  // Capture the awaited navigation independently of the cancellation control.
+  const pending = h.find("#graph-wallet").fire("change");
+  // Cancel while neighbourhood construction is awaiting its next bounded checkpoint.
+  h.find("#graph-view-cancel").fire("click");
+  await pending;
+  assert.match(h.find("#graph-view-status").textContent, /отменено/);
+  // A subsequent navigation uses retained exact data and never republishes the cancelled canvas.
+  await h.find("#graph-overview").fire("click");
+  await h.find("#graph-wallet").fire("change");
+  h.core().edges()[0].emit("tap");
+  const stale = h.find("#graph-selection").children.at(-1);
+  h.renderer.render([pair("25", "C", "D")], () => {});
+  // Retired inspector callbacks cannot request purchases against a newly opened artifact or scope.
+  stale.fire("click");
+  assert.deepEqual(opened, []);
 });

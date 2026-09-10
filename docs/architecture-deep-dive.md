@@ -286,7 +286,11 @@ re-extraction or ReplayPack recompilation.
   The latter loads verified pages with progress, cancellation and exact
   completeness checks; search covers all loaded wallets, neighbour controls
   are paginated, and table navigation preserves the complete graph. Graph
-  layout and selection are presentation only. Signer/payer roles and duplicate
+  layout and selection are presentation only. Three levels show all visual
+  groups, a group’s complete internal graph with external-pair drilldown, and
+  a wallet’s global neighbours, with optional neighbour-to-neighbour pairs.
+  Internal/cross-group totals reconcile, grouping is bounded and deterministic,
+  and only the active projection enters Cytoscape. Signer/payer roles and duplicate
   multiplicity are preserved; completeness, finality, source consistency and
   causal availability remain `UNKNOWN`. Hermetic source contracts and isolated
   CLI/API execution are verified; the real-browser workflow and installed-wheel
@@ -2830,15 +2834,52 @@ credentials, traces and execution artifacts remain unavailable to the browser.
 Whole-result loading uses the existing verified keyset API in sequential pages
 of at most 200 rows, with a 2 MiB response cap, 128 MiB cumulative transport cap,
 15-second request deadline and 180-second overall load/build deadline. One
-active loader and one graph instance are retained. Before declaring completion,
+active loader, one complete bounded pair/adjacency model and one rendered
+projection are retained. Before declaring completion,
 the client checks exact artifact/table scope, contiguous pair ordinals from
 zero, cursor exhaustion and equality with the verified summary pair count.
 Exceeding a row, wallet, byte or time bound rejects the whole view explicitly;
 no truncation, top-k selection or partially loaded graph is labelled complete.
 Cancellation, result replacement and display-scope replacement release pending
 requests, buffers and graph instances, and stale callbacks cannot alter the
-replacement view. Construction yields in bounded chunks; the whole view uses
-a bounded geometric layout rather than an unbounded force calculation.
+replacement view. Construction yields in bounded chunks. The approved whole-view
+presentation has three navigable levels: all visual groups, every wallet and
+internal pair of one group, and a selected wallet with all incident pairs across
+the entire result. An optional explicit toggle adds all pairs among those
+neighbours; the displayed counters distinguish both sets.
+
+Visual grouping is a presentation heuristic over the complete loaded pair set,
+not a research recipe or an ownership/coordinated-trading assertion. The
+versioned `local-modularity-20-v1` display policy starts with singleton wallets,
+uses shared-mint counts as positive edge weights, canonical address order,
+resolution one and at most twenty greedy local-moving sweeps, with deterministic
+ties and no RNG. It stops early when no node moves; reaching twenty sweeps is
+labelled a bounded heuristic, never a proof of optimum or convergence. This is
+the local-moving stage only, not a claim to implement full multilevel Louvain.
+Group numbers are local navigation labels, not persistent analytical IDs.
+
+The overview represents every wallet once. Every exact pair contributes either
+to one group's internal count or one inter-group edge count; these counts MUST
+reconcile to the verified total. Group views expose all internal pairs and
+explicit external-group counts with paginated access to every crossing pair.
+All groups, including small and disconnected ones, remain navigable. Overview
+edges mean numbers of wallet pairs, whereas wallet edges retain shared-token
+counts; the UI MUST explain the distinction and never add those counts as if
+they had the same meaning. Exact ordinal drilldown remains available at all
+levels. Breadcrumbs and global wallet search make navigation reversible without
+fetching another result or changing table pagination.
+
+Grouping, projection construction and rendering yield in bounded batches with
+ownership checks. The existing 180-second initial deadline includes grouping;
+each later projection has a cancellable 30-second deadline. No partial
+projection is labelled complete, and a rejected projection releases its canvas
+while retaining the verified model for another navigation attempt. Scope/result
+replacement discards both. Only the active projection enters Cytoscape. Large
+projections use deterministic geometric rings ordered by local degree (or
+visual group for wallet neighbours), with the selected wallet at the centre;
+small projections may use the existing finite CoSE layout, bounded to 150 nodes,
+1,000 edges and 400 iterations. Layout is not a measured distance or importance
+score. No new analytical engine, source query or server process is introduced.
 
 Search and selection operate on all participating wallets and their complete
 incident connections in the loaded scope. Inspector controls are separately

@@ -50,3 +50,7 @@ textarea{resize:vertical}button{font:inherit;background:#9de0cb;color:#122822;bo
 
 /* Canvas and native select intrinsic widths cannot expand a narrow grid track after full loading. */
 #graph,.graph-inspector,.graph-neighbours{min-width:0;max-width:100%}.graph-neighbours{grid-template-columns:minmax(0,1fr)}
+/* Breadcrumb emphasis identifies navigation level independently of pair-table selection. */
+#graph-hierarchy{margin:16px 0}#graph-hierarchy [aria-current="step"]{border-color:#9de0cb;color:#9de0cb}#graph-wallet-level{font-weight:700;color:#9de0cb}
+/* The optional neighbour filter is a compact checkbox, not a full-width text field. */
+#graph-neighbour-option{display:flex;align-items:center;gap:10px;margin:12px 0}#graph-neighbour-links{width:auto;margin:0;accent-color:#9de0cb}

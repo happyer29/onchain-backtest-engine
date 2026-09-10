@@ -5,7 +5,7 @@ const ResearchGraph = (() => {
   const find = (selector) => document.querySelector(selector);
   let graph = null;
   let openEvidence = null;
-  let whole = false, walletsInGraph = [];
+  let hierarchy = null, walletsInGraph = [];
   // In-flight display selection cannot remount a graph after replacement.
   let selectionVersion = 0;
   // Node positions and edge width are display settings, excluded from analytical identity.
@@ -19,13 +19,6 @@ const ResearchGraph = (() => {
     {selector: ".muted", style: {opacity: 0.16}},
     {selector: ":selected", style: {"background-color": "#f1ce79", "line-color": "#f1ce79",
       "border-color": "#fff1c7", "border-width": 2, color: "#fff1c7"}}
-  ];
-
-  // Dense whole-result views avoid per-edge labels and expensive curved-edge geometry.
-  const wholeStyles = [...styles,
-    {selector: "node", style: {label: "", width: 18, height: 18}},
-    {selector: "edge", style: {label: "", width: 1, "curve-style": "straight", "overlay-opacity": 0}},
-    {selector: ".muted", style: {display: "none"}}
   ];
 
   // Public addresses and all evidence labels are text, never markup or selector expressions.
@@ -48,36 +41,9 @@ const ResearchGraph = (() => {
     return [...nodes, ...edges];
   }
 
-  // Large selection changes yield between style batches without redrawing the dense graph each time.
-  async function focusWhole(keep, selected) {
-    const owned = graph, version = ++selectionVersion;
-    const hide = owned.elements().difference(keep).filter((item) => !item.hasClass("muted"));
-    const show = keep.filter((item) => item.hasClass("muted"));
-    owned.elements(":selected").unselect();
-    // Detaching the canvas avoids a full-edge repaint after every bounded styling batch.
-    const detach = hide.length + show.length > 1000 || !owned.container();
-    if (detach) owned.unmount();
-    find("#graph-selection-status").textContent = "Обновляем выделение…";
-    // Apply only changed visibility, retaining unchanged neighbours during subsequent selections.
-    for (const [items, muted] of [[hide, true], [show, false]]) {
-      for (let index = 0; index < items.length; index += 1000) {
-        await new Promise((resolve) => setTimeout(resolve, 0));
-        // Mode changes and newer selections may retire this operation during any yield.
-        if (graph !== owned || version !== selectionVersion) return;
-        owned.batch(() => items.slice(index, index + 1000).toggleClass("muted", muted));
-      }
-    }
-    if (graph !== owned || version !== selectionVersion) return;
-    // Mount only the latest complete selection; the retained edge model is never sampled or deleted.
-    if (detach) owned.mount(find("#graph"));
-    if (selected) selected.select();
-    owned.fit(keep.nodes(), 48);
-    find("#graph-selection-status").textContent = selected ? "Видны все связи выбранного элемента. Остальные скрыты до снятия выделения." : "Виден весь загруженный граф.";
-  }
-
-  // Small-page selection stays synchronous, while the complete model uses cancellable display batches.
+  // Page selection highlights existing elements; whole-result navigation owns a separate projection.
   function focus(keep, selected = null) {
-    if (whole) return focusWhole(keep, selected);
+
     graph.elements().unselect().removeClass("muted");
     graph.elements().difference(keep).addClass("muted");
     // Selection keeps exact pair/node identity; muted neighbours remain retained in the model.
@@ -86,7 +52,9 @@ const ResearchGraph = (() => {
 
   // Keyboard and pointer actions use the same complete adjacency set in either display scope.
   function resetSelection() {
+    if (hierarchy) return hierarchy.reset();
     find("#graph-wallet").value = "";
+    // A page reset also clears native keyboard selection, independently of canvas highlighting.
     find("#graph-selection").replaceChildren(textNode("p", "Выбери узел или связь на графе.", "hint"));
     if (graph) return focus(graph.elements());
   }
@@ -95,10 +63,13 @@ const ResearchGraph = (() => {
   function clear(message = "") {
     selectionVersion++;
     if (graph) graph.destroy();
+    if (hierarchy) hierarchy.destroy();
     graph = null;
     // Discard the prior scope before exposing any new address or progress controls.
     openEvidence = null;
-    whole = false;
+    hierarchy = null;
+    find("#graph-hierarchy").hidden = true;
+    find("#graph-neighbour-links").checked = false;
     walletsInGraph = [];
     // Searches never retain addresses from a discarded display scope.
     find("#graph-search").value = "";
@@ -165,14 +136,16 @@ const ResearchGraph = (() => {
   function inspectWallet(wallet, edges, offset = 0) {
     find("#graph-selection").replaceChildren(textNode("h4", "Подписант"),
       textNode("p", wallet, "wallet-address"),
-      textNode("p", `Связей ${whole ? "во всём результате" : "на этой странице"}: ${edges.length}`),
+      textNode("p", `Связей на этой странице: ${edges.length}`),
       // The range indicator distinguishes the inspector page from the wallet’s complete degree.
       ...neighbourList(wallet, edges, offset));
   }
 
   // Whole-result focus hides unrelated elements only until selection is cleared; no data is removed.
   function showWallet(wallet) {
+    if (hierarchy) return hierarchy.wallet(wallet);
     if (!graph || !wallet) {resetSelection(); return;}
+    // The page path looks up the exact current canvas identity, not a shortened label.
     const node = graph.getElementById(`wallet:${wallet}`);
     if (!node.length) return;
     find("#graph-wallet").value = wallet;
@@ -203,13 +176,8 @@ const ResearchGraph = (() => {
 
   // Starting from a circle avoids overlapping initial coordinates; layout is presentation only.
   function arrange() {
+    if (hierarchy) return hierarchy.arrange();
     if (!graph) return;
-    if (whole) {
-      // A fixed grid is O(wallets), so no force iterations scale with the full edge set.
-      graph.nodes().layout({name: "grid", padding: 48, animate: false, spacingFactor: 1.5}).run();
-      graph.fit(graph.nodes(), 48);
-      return;
-    }
     graph.layout({name: "circle", padding: 48, animate: false}).run();
     // The finite force layout spreads neighbours without introducing a clustering calculation.
     graph.layout({name: "cose", randomize: false, animate: false, padding: 48,
@@ -249,57 +217,45 @@ const ResearchGraph = (() => {
     find("#graph-zoom").textContent = `${Math.round(graph.zoom() * 100)}%`;
   }
 
-  // Build a checked whole result without attaching partially loaded data to a visible canvas.
+  // Group only the complete verified result; replacement retires each yielded phase before mounting.
   async function renderWhole(data, onEvidence, signal, progress) {
     clear();
     if (typeof cytoscape !== "function") throw new Error("Библиотека графа не загрузилась. Обнови страницу.");
-    if (data.rows.length > 200000 || data.wallets.length > 5000) throw new Error("Превышен лимит полного графа.");
-    whole = true;
-    // A verified empty result needs no canvas or synthetic placeholder nodes.
-    if (!data.rows.length) {
+    const version = selectionVersion, owned = () => selectionVersion === version;
+    const model = await ResearchGraphModel.build(data, signal, progress, owned);
+    // A verified empty result needs no canvas, synthetic group or enabled navigation controls.
+    if (!model.rows.length) {
       find("#graph-status").textContent = "Весь результат: 0 из 0 связей · 0 кошельков. Граф пуст.";
       return;
     }
-    // A headless instance retains the graph in bounded chunks and mounts only after complete admission.
-    const owned = cytoscape({headless: true, styleEnabled: true, elements: [], style: wholeStyles,
-      layout: {name: "preset"}, minZoom: 0.005, maxZoom: 4, pixelRatio: 1,
-      boxSelectionEnabled: false, textureOnViewport: true});
-    graph = owned;
-    owned.add(elements([], data.wallets));
-    // Yield before each finite batch so cancellation and replacement can retire this exact instance.
-    for (let index = 0; index < data.rows.length; index += 1000) {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      signal.throwIfAborted();
-      if (graph !== owned) throw new DOMException("Graph replaced", "AbortError");
-      owned.add(elements(data.rows.slice(index, index + 1000), []));
-      // Progress concerns construction, independently of the already verified download count.
-      progress(Math.min(index + 1000, data.rows.length), data.rows.length);
-    }
+    // Check ownership once more before attaching the model to the active dashboard.
     signal.throwIfAborted();
-    if (graph !== owned) throw new DOMException("Graph replaced", "AbortError");
-    owned.mount(find("#graph"));
-    // Only a complete mounted instance gets live controls and an exact-result evidence callback.
-    openEvidence = onEvidence;
-    walletsInGraph = data.wallets;
-    owned.on("tap", "node", (event) => showWallet(event.target.data("wallet")));
-    owned.on("tap", "edge", (event) => showPair(event.target.data("row")));
-    owned.on("tap", (event) => {if (event.target === owned) resetSelection();});
-    // Zoom state is visible for pointer, touch and keyboard interactions alike.
-    owned.on("zoom", () => {find("#graph-zoom").textContent = `${Math.round(owned.zoom() * 100)}%`;});
+    if (!owned()) throw new DOMException("Graph replaced", "AbortError");
+    hierarchy = ResearchHierarchy.create(model, onEvidence);
+    find("#graph-hierarchy").hidden = false;
+    // The full model owns its row array while the loader releases its temporary transport array.
+    await hierarchy.go("overview", null, signal);
+    signal.throwIfAborted();
+    if (!owned()) throw new DOMException("Graph replaced", "AbortError");
+    walletsInGraph = model.wallets;
     searchWallets();
+    // Accessible navigation activates only after the first complete projection has mounted.
     find("#graph-search").disabled = false;
     find("#graph-wallet").disabled = false;
     find("#graph-clear").disabled = false;
-    // The bounded grid positions all nodes; edges remain the exact full relationship set.
     for (const button of find("#graph-controls").querySelectorAll("button")) button.disabled = false;
-    arrange();
-    signal.throwIfAborted();
-    find("#graph-status").textContent = `Весь результат: ${data.rows.length} из ${data.rows.length} связей · ${data.wallets.length} кошельков. Загрузка завершена, без усечения.`;
+    // Sweep completion is descriptive, never an optimization or owner-identification guarantee.
+    find("#graph-status").textContent = `Весь результат: ${model.rows.length} из ${model.rows.length} пар · ${model.wallets.length} кошельков · ${model.groups.length} групп. Без усечения.`;
+    find("#graph-grouping-status").textContent = `Группировка: ${model.passes} из 20 проходов; ${model.stable ? "перестановки завершились" : "достигнут предел проходов"}. Это визуальная эвристика, не доказательство общего владельца.`;
   }
 
+  // Controls always resolve the currently mounted projection, never a discarded whole-result canvas.
+  const currentGraph = () => hierarchy ? hierarchy.core() : graph;
   // Clamp explicit zoom actions and keep the viewport centre stable.
   function zoom(factor) {
+    const graph = currentGraph();
     if (!graph) return;
+    // Resolve zoom bounds from the current projection, whose scale may differ from the page.
     const level = Math.max(graph.minZoom(), Math.min(graph.maxZoom(), graph.zoom() * factor));
     graph.zoom({level, renderedPosition: {x: graph.width() / 2, y: graph.height() / 2}});
   }
@@ -307,7 +263,7 @@ const ResearchGraph = (() => {
   // Bind controls once; each action uses the currently owned bounded renderer instance.
   find("#graph-zoom-in").addEventListener("click", () => zoom(1.25));
   find("#graph-zoom-out").addEventListener("click", () => zoom(0.8));
-  find("#graph-fit").addEventListener("click", () => {if (graph) graph.fit(whole ? graph.nodes(":visible") : undefined, 48);});
+  find("#graph-fit").addEventListener("click", () => {const graph = currentGraph(); if (graph) graph.fit(graph.nodes(), 48);});
   find("#graph-reset").addEventListener("click", arrange);
   find("#graph-wallet").addEventListener("change", (event) => showWallet(event.target.value));
   // Clearing or expanding is a reversible display action, never a new analysis request.
@@ -319,9 +275,10 @@ const ResearchGraph = (() => {
     find("#graph-expand").setAttribute("aria-pressed", String(expanded));
     find("#graph-expand").textContent = expanded ? "Свернуть граф" : "Развернуть граф";
     // Fit after the CSS size change so long addresses and controls remain on the page.
-    if (graph) {graph.resize(); graph.fit(whole ? graph.nodes(":visible") : undefined, 48);}
+    const graph = currentGraph();
+    if (graph) {graph.resize(); graph.fit(graph.nodes(), 48);}
   });
-  const observer = new ResizeObserver(() => {if (graph) graph.resize();});
+  const observer = new ResizeObserver(() => {const graph = currentGraph(); if (graph) graph.resize();});
   observer.observe(find("#graph"));
   // No DOM reference or selected pair from a previous page survives clear().
   return {render, renderWhole, clear};
