@@ -8,6 +8,22 @@
 > неоднозначности применяется deep dive, а найденное расхождение исправляется
 > в обоих документах.
 
+## Согласованное расширение для исследования кошельков
+
+[Deep dive §24.6](architecture-deep-dive.md#246-on-chain-wallet-research)
+определяет отдельного потребителя наблюдаемых данных: ограниченный
+`research prepare` создаёт проверенный неизменяемый снимок участников сделок,
+а локальный `research analyze` рассчитывает в DuckDB активность, пары по общим
+токенам и ссылки на подтверждающие наблюдения. Используются существующие
+очередь, публикация артефактов и ограниченный same-origin интерфейс. Подписант
+и плательщик комиссии остаются разными ролями; кратность строк сохраняется,
+полнота и финальность остаются UNKNOWN. Исследовательские артефакты не входят
+непосредственно в replay или Strategy. Допуск Sniping и существующие ID
+сохраняются. Первый сценарий реализован и проверен на hermetic source,
+CLI/API/child и browser workflows. Live-source fidelity/capacity, переводы,
+полный wallet PnL, owner clustering и автоматический перенос в стратегию
+остаются вне этой реализации. См. [инструкцию](wallet-research.ru.md).
+
 ## 1. Решение в одном абзаце
 
 Платформа — **один Python modular monolith с гексагональными границами**,
@@ -121,8 +137,8 @@ cross-network run не реализованы. Точный current-vs-productio
 - один trusted codebase и один Python environment;
 - 16 GB RAM — минимальный supported profile, 32 GB — рекомендуемый;
 - один local NVMe; CPU-first, optional local GPU;
-- source доступен только `inspect-source`, `prepare-dataset` и optional estimate
-  в `plan-dataset`;
+- source доступен только `inspect-source`, `prepare-dataset`, bounded
+  `research prepare` и optional estimate в `plan-dataset`;
 - compile, feature/ML и backtest jobs читают только committed local artifacts;
 - `CANONICAL_EXACT` run с одинаковой logical identity даёт byte-identical
   normalized audit/result независимо от Parquet/ReplayPack, batch и порядка
@@ -544,6 +560,7 @@ snapshot/ReplayPack с three-way exact equivalence.
 ## 6. Порты и extension contracts
 
 Primary use cases: `inspect-source`, `plan-dataset`, `prepare-dataset`,
+`research prepare`, `research analyze`,
 `compile-replay`, `compile-delivery-schedule`, `run-backtest`, `run-sweep`,
 `build-features`, `train`, `predict`, submit/cancel/query jobs/runs, verify и GC.
 `RunSpecDraft` с aliases/defaults не исполняется: resolver создаёт immutable

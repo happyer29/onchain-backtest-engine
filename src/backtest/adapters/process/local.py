@@ -167,7 +167,8 @@ class LocalSubprocessRunner:
             _unlink_quietly(envelope_path)
             raise ProcessSpawnError("progress channel could not be created") from exc
         environment = child_progress_environment(os.environ, progress_write_descriptor)
-        if attempt.spec.job_type is not JobType.PREPARE_DATASET:
+        # Only the two bounded source-acquisition jobs may receive source secrets.
+        if attempt.spec.job_type not in {JobType.PREPARE_DATASET, JobType.PREPARE_RESEARCH}:
             # Handle the local subprocess runner spawn job type, prepare dataset and spec
             # condition as a distinct block.
             for secret_ref in self._source_secret_refs:

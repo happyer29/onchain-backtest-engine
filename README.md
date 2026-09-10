@@ -95,7 +95,7 @@ flowchart LR
 ```
 
 External access is limited to `inspect-source`, bounded `prepare-dataset`,
-and the optional remote estimate in `plan-dataset`.
+bounded `research prepare`, and the optional remote estimate in `plan-dataset`.
 Compilation, feature/ML, and backtest paths read only verified committed local
 artifacts. The Engine and Strategy never receive a SQL client, credentials, or
 future labels.
@@ -164,6 +164,7 @@ inspect-source
 | Area | Main commands |
 |---|---|
 | Source and dataset | `inspect-source`, `plan-dataset`, `prepare-dataset` |
+| Wallet research | `research prepare`, `research analyze`, `research show`, `research rows` |
 | Replay | `compile-replay`, `compile-delivery-schedule` |
 | Execution | `resolve-run`, `run`, `sweep` |
 | Results | `list-runs`, `describe-run-contract`, `show-run-summary`, `list-roundtrips` |
@@ -171,6 +172,18 @@ inspect-source
 
 The current syntax is always available through `backtest <command> --help`;
 detailed examples are collected in the [CLI reference](docs/cli-reference.md).
+
+## Wallet research
+
+The `/research` dashboard and `backtest research` CLI implement bounded
+Pump.fun signing-wallet activity, shared-token purchase pairs and original
+trade evidence over immutable local snapshots. Start with the
+[wallet research guide](docs/wallet-research.md). The contract is in
+[deep dive §24.6](docs/architecture-deep-dive.md#246-on-chain-wallet-research).
+Hermetic source/CLI/API/child and browser workflows are verified. Source
+completeness and causal availability remain `UNKNOWN`; live research capacity,
+transfers, full wallet PnL, owner clustering and automatic strategy promotion
+are not claimed. This does not extend admitted Sniping source scope.
 
 ## Honest limitations
 
@@ -204,6 +217,7 @@ If this README and the deep dive disagree, the deep dive is authoritative.
 | [Getting Started](docs/getting-started.md) | Configure the source, prepare a snapshot, and run the first backtest |
 | [Configuration](docs/configuration.md) | Understand TOML, secret refs, transport, and resource limits |
 | [CLI reference](docs/cli-reference.md) | Find commands, exact IDs, and workflows |
+| [Wallet research](docs/wallet-research.md) | Explore wallet activity and co-buy evidence before writing a strategy |
 | [Project layout](docs/project-layout.md) | Understand the repository structure and local data root |
 | [Architecture overview](docs/architecture.md) | Get a concise map of the system |
 | [Architecture deep dive](docs/architecture-deep-dive.md) | Verify normative invariants, identity, and failure semantics |

@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- The research screen is a packaged same-origin client of the existing controller. -->
+  <title>Исследование кошельков · Backtest</title>
+  <link rel="stylesheet" href="/static/research.css" />
+  <script defer src="/static/research.js"></script>
+</head>
+<body>
+  <!-- Navigation keeps discovery close to the established execution workflow. -->
+  <header><a href="/">← Control UI</a><span>ON-CHAIN RESEARCH / 01</span></header>
+  <main>
+    <section class="intro">
+      <p class="eyebrow">От наблюдения к гипотезе</p>
+      <h1>Кто покупает вместе?</h1>
+      <!-- The observation scope is visible before a user launches an acquisition. -->
+      <p>Исследуй активность подписантов и общие первые покупки токенов Pump.fun.
+        Каждая связь раскрывается до исходных сделок.</p>
+      <p class="notice">Успешные SOL-пары в выбранном диапазоне блоков. Полнота рынка,
+        финальность и доступность данных в прошлом — UNKNOWN. Связь не доказывает общего владельца.</p>
+    </section>
+    <!-- Source acquisition and local analysis are separate explicit actions. -->
+    <div class="workflow">
+      <section class="panel"><p class="eyebrow">01 / Данные</p><h2>Сохранить наблюдения</h2>
+        <form id="prepare-form">
+          <label>От блока, включительно<input name="from_block" type="number" min="0" max="4294967295" required /></label>
+          <label>До блока, не включая<input name="to_block" type="number" min="1" max="4294967296" required /></label>
+          <!-- Hard limits describe actual rejection rules, rather than promising partial scans. -->
+          <p class="hint">До 300 000 блоков и 2 млн строк. Источник и сеть берутся из локального профиля.</p>
+          <button type="submit">Подготовить снимок</button>
+        </form>
+      </section>
+      <section class="panel"><p class="eyebrow">02 / Гипотеза</p><h2>Найти совместные покупки</h2>
+        <!-- Only a committed research snapshot can be selected as the recipe input. -->
+        <form id="analyze-form">
+          <label>Research snapshot ID<input name="snapshot_id" pattern="[0-9a-f]{64}" minlength="64" maxlength="64" required /></label>
+          <div class="two"><label>Окно, секунд<input name="window_seconds" type="number" min="0" max="3600" value="60" required /></label>
+            <label>Минимум общих токенов<input name="minimum_shared_mints" type="number" min="1" max="2000000" value="2" required /></label></div>
+          <!-- An empty signer selection means all observed signers, never a sampled top list. -->
+          <label>Подписанты, необязательно<textarea name="wallets" rows="2" placeholder="Адреса через пробел или с новой строки; до 128"></textarea></label>
+          <p class="hint">Первая покупка в пределах снимка. Один токен даёт паре не больше одной связи.</p>
+          <button type="submit">Запустить анализ</button>
+        </form>
+      </section>
+      <!-- The next section observes durable jobs rather than inferring completion from a click. -->
+    </div>
+    <!-- Durable job state remains visible through completion, failure and cancellation. -->
+    <section class="panel"><div class="section-head"><h2>Задачи исследования</h2><button id="refresh-jobs" class="secondary">Обновить</button></div>
+      <p id="job-status" role="status" aria-live="polite">Готово к исследованию</p><div id="jobs"></div>
+    </section>
+    <p id="error" role="alert" hidden></p>
+    <section class="panel">
+      <!-- Exact artifact IDs support reopening a result independently of the current browser session. -->
+      <form id="open-form" class="open-form"><label>Снимок или результат исследования<input id="artifact-id" pattern="[0-9a-f]{64}" minlength="64" maxlength="64" required /></label><button>Открыть</button></form>
+    </section>
+    <section id="result" hidden>
+      <div class="section-head"><div><p class="eyebrow">03 / Проверка связи</p><h2 id="result-title"></h2></div><a id="lineage" href="/">Происхождение</a></div>
+      <p id="scope" class="hint"></p><div id="metrics" class="metrics"></div>
+      <!-- Global counters describe the complete result; graph and tables are explicitly paginated. -->
+      <p class="notice">Числа выше относятся ко всему результату. Граф и таблица показывают текущую страницу.
+        Подписант и плательщик комиссии — разные роли. Суммы сделок не являются прибылью кошелька.</p>
+      <nav id="tabs" aria-label="Таблицы исследования"></nav>
+      <section id="graph-panel" class="panel" hidden><h3>Совместные покупки · текущая страница</h3><svg id="graph" viewBox="0 0 900 380" role="img" aria-label="Граф пар кошельков текущей страницы"></svg><p class="hint">Толщина связи отражает число общих токенов. Для доказательств выбери пару в таблице.</p></section>
+      <!-- Empty states never imply a failed computation was a successful empty result. -->
+      <section class="panel"><h3 id="table-title"></h3><div class="table-wrap"><table id="rows"></table></div>
+        <div class="pagination"><button id="first-page" class="secondary">Первая страница</button><span>До 25 строк на странице</span><button id="next-page" disabled>Далее →</button></div>
+      </section>
+    </section>
+  </main>
+  <!-- Observational research requires a separate causal contract before strategy use. -->
+  <footer>Наблюдения → проверка гипотезы → отдельная причинная фича → бэктест.
+    Автоматическая передача результата в стратегию не реализована.</footer>
+</body>
+</html>

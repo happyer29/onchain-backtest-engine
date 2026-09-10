@@ -21,16 +21,22 @@ class ArtifactPlacementError(ValueError):
 
 
 _SUBDIRECTORIES: Mapping[ArtifactKind, str] = {
+    # Separate directories prevent research observations being mistaken for replay data.
+    ArtifactKind.RESEARCH_SNAPSHOT: "research-snapshots",
+    ArtifactKind.RESEARCH_RESULT: "research-results",
+    # Existing artifact paths remain byte-for-byte compatible.
     ArtifactKind.SOURCE_INSPECTION: "source-inspections",
     ArtifactKind.CANONICAL_DISTRIBUTION: "canonical",
     ArtifactKind.SNAPSHOT: "snapshots",
     ArtifactKind.REPLAY_PACK: "replay",
     ArtifactKind.DELIVERY_SCHEDULE: "delivery_schedules",
+    # Causal data products retain their established independent directories.
     ArtifactKind.FEATURE_SET: "features",
     ArtifactKind.LABEL_SET: "labels",
     ArtifactKind.UNIVERSE: "universes",
     ArtifactKind.MODEL_BUNDLE: "models",
     ArtifactKind.MODEL_SCHEDULE: "model-schedules",
+    # Execution inputs and final outputs keep their original portable placement.
     ArtifactKind.PREDICTION_SET: "predictions",
     ArtifactKind.STRATEGY_BUNDLE: "strategies",
     ArtifactKind.SWEEP: "sweeps",

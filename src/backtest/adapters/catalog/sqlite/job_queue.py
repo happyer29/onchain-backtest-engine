@@ -1603,6 +1603,21 @@ class SQLiteJobQueue(JobQueue, JobCompletionQueue, SupervisorJobQueue):
             ).fetchone()
         return None if row is None else _job_from_row(row)
 
+    # Operational result lookup never marks missing filesystem bytes as committed.
+    def get_successful_result(self, job_id: JobId) -> ArtifactId | None:
+        """Return only the current successful attempt's candidate, not artifact authority."""
+
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT a.result_artifact_id FROM jobs j JOIN job_attempts a "
+                "ON a.job_id=j.job_id AND a.state_version=j.state_version "
+                # A stale, cancelled or failed attempt cannot expose another attempt's result.
+                "WHERE j.job_id=? AND j.state='SUCCEEDED' AND a.state='SUCCEEDED' "
+                "ORDER BY a.attempt_number DESC LIMIT 1",
+                (job_id.value,),
+            ).fetchone()
+        return None if row is None or row[0] is None else ArtifactId(row[0])
+
     # Define sqlite job queue list jobs as one focused operation with an explicit
     # boundary.
     def list_jobs(

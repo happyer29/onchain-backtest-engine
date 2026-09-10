@@ -68,10 +68,12 @@ Browser Web UI -> localhost Control API -> SQLite job queue
 - 32 GB RAM — рекомендованный profile;
 - один local NVMe;
 - один исследователь и один доверенный codebase;
-- batch backtests, feature builds и training jobs;
+- batch backtests, feature builds, training jobs и bounded research jobs;
 - CPU-first, optional local GPU;
 - внешний ClickHouse доступен только source-facing командам `inspect-source`,
-  `prepare-dataset` и optional metadata estimate в `plan-dataset`;
+  `prepare-dataset`, optional metadata estimate в `plan-dataset` и
+  ограниченному `research prepare` из §24.6;
+- `research analyze` читает только committed local artifacts;
 - compile, feature/ML jobs и backtest runs работают только с committed local artifacts;
 - optional Control API и Web UI работают на том же устройстве;
 - Control API по умолчанию слушает только localhost;
@@ -262,6 +264,15 @@ optimized engines и один typed CLI/API/Web UI contract. Смена mode
 order IDs и round-trip IDs, но повторно использует те же verified
 Dataset/Snapshot/ReplayPack без source extraction и compile-replay.
 
+- отдельный wallet-research сценарий §24.6: bounded successful SOL-paired
+  Pump observations, immutable ResearchSnapshot/ResearchResult, локальный
+  DuckDB activity/co-buy analysis, exact source-row evidence, durable isolated
+  jobs, CLI и same-origin `/research` dashboard. Signer/payer роли и кратность
+  строк сохраняются; completeness, finality, source consistency и causal
+  availability остаются `UNKNOWN`. Hermetic source contracts, isolated CLI/API,
+  real-browser workflow и installed-wheel CLI/child/API/assets gate прошли.
+  Live research-source capacity/fidelity не заявляются. Переводы, полный wallet
+  PnL, owner clustering и automatic strategy promotion не реализованы;
 - installable Python 3.13 package, reproducible `uv.lock`, hexagonal ports,
   Import Linter/AST guardrails и отдельные CLI/serve/child composition roots;
 - current source stack использует `bounded-source-evidence/v2`,
@@ -2578,6 +2589,96 @@ readahead и то, что будущие rows/models не меняют prior dec
 Tree/ONNX/GPU tolerance и stateful sequential runtimes остаются target extension
 points, но в current reference composition отсутствуют и fail closed.
 
+### 24.6 Исследование ончейн-активности кошельков
+
+Исследование является самостоятельным потребителем данных до появления
+стратегии. Первый сценарий анализирует наблюдаемые успешные SOL-пары из
+`pumpfun_v2_swaps` в одной Solana-сети и типизированном полуоткрытом диапазоне
+блоков. Он не ограничивается токенами, созданными в decision range, и не
+применяет Sniping non-Mayhem universe. Кратность строк источника сохраняется.
+
+Новые виды `RESEARCH_SNAPSHOT` и `RESEARCH_RESULT` используют существующие
+публикацию, проверенное чтение, leases, lineage, pins, GC и backup. Каталоги:
+`research-snapshots/` и `research-results/`. Эти артефакты не являются
+исполняемыми canonical snapshots, ReplayPack, FeatureSet, Universe или
+SuccessfulRun. Идентичности и проверки допуска Sniping не меняются.
+
+`research-dataset-spec/v1` фиксирует source ID, immutable NetworkId, схему
+позиций, диапазон, фиксированные profile/mapping/query и code/runtime digest.
+`research prepare` проверяет схему перед чтением и использует явные колонки,
+параметризованные границы, безопасный query ID, потоковые batches и серверные
+лимиты строк/байтов/времени/памяти с ошибкой при превышении. Локальные лимиты
+строк, результата и временного диска также обязательны. Ошибка схемы, строки,
+диапазона, квоты или прерванное чтение не публикует снимок.
+
+`wallet-observations/v1` сохраняет signature, source instruction position,
+block/transaction position, UTC block time секундной точности, mint/quote asset,
+BUY/SELL, целочисленные наблюдаемые суммы, signing wallet и fee payer отдельно.
+Адреса и signatures проверяются как полные Solana base58 значения. Подписант и
+плательщик не объявляются экономическим владельцем или кластером. Суммы не
+доказывают cash PnL, net proceeds или полноту комиссий. Некорректные обязательные
+поля отклоняются. Полнота, финальность, snapshot consistency и причинная
+доступность остаются UNKNOWN; успешное чтение не доказывает отсутствие других
+сделок. Исследование не разрешает ранее отклонённый Sniping cut.
+
+Наблюдения сортируются по source positions и всем остальным полям в фиксированном
+побайтовом порядке. Ordinal обозначает строку конкретного снимка, а не глобальную
+идентичность события. Payload hash не используется для deduplication. Новое
+извлечение без авторитетной source revision перечитывает ограниченный диапазон.
+Build key включает request, наблюдаемую схему, фактический canonical row digest
+и writer/runtime; content ID отдельно хеширует manifest и байты. Endpoint,
+credentials и operational extraction time исключаются из идентичности.
+
+Research runtime digest использует `backtest.research-runtime/v1` над полями
+`abi`, `dependencies`, `python` и `operating_system` существующего runtime
+manifest. Явный allowlist исходников research фиксируется отдельно. Native
+thread counts и environment settings остаются physical attempt settings,
+поэтому их изменение не переопределяет аналитический рецепт.
+
+`wallet-co-buy-analysis/v1` принимает один проверенный ResearchSnapshot,
+отсортированный необязательный список подписантов (пустой означает всех),
+неотрицательное включительное окно `window_seconds` и положительный минимум
+общих токенов. Для signer/mint выбирается первый наблюдаемый BUY в source-position
+порядке, с ordinal как tie-breaker. Пара разных подписантов получает совпадение
+по mint, если абсолютная разность reported block time не превышает окно. Один
+mint учитывается один раз независимо от повторных покупок и дублей. Пары
+лексически упорядочены; одинаковая transaction position является tie, а не
+доказательством intra-transaction порядка. Порог применяется после полной
+агрегации. Evidence хранит mint и два точных ordinal исходного снимка.
+
+Activity, distinct-mint counts, direction/tie counts, пороги и evidence должны
+сходиться. Результат фиксирует snapshot ID, recipe/code/runtime и semantic
+parameters; batch, threads, memory и оформление графика не входят в semantic
+operands. Rebuildable допустим только при сохранённых точных входах и
+code/runtime. Конфликт одного build key подчиняется обычному quarantine.
+
+DuckDB выполняет локальные sort/join/aggregate через application-owned port.
+До pair join проверяются cardinality и per-mint participant limits. Превышение
+отклоняет весь расчёт, не отбрасывает популярные токены или лишние связи.
+`PREPARE_RESEARCH` и `ANALYZE_WALLETS` используют существующие controller,
+idempotency, queue, child, progress, cancel, receipts и verified completion.
+Только prepare child получает source credentials; analysis использует точные
+локальные входы. Тяжёлого SQL внутри HTTP request нет.
+
+Same-origin UI содержит типизированные формы, job/result navigation,
+ограниченные activity/pair pages и evidence drilldown. Граф явно показывает
+только текущую pair page; общие метрики берутся из проверенного summary.
+Semantic filters создают новый результат, visual settings — нет. Wide integers
+передаются decimal strings. API принимает content IDs, закрытые table roles,
+scope-bound keyset cursors и bounded limits; SQL, paths, credentials и
+tracebacks в браузер не передаются. Локальные исследования могут превращаться
+в reviewed versioned recipes; browser SQL/Python editor не добавляется.
+
+Переход в стратегию требует отдельного причинного FeatureSpec/Universe/bundle.
+Отбор кошельков и clustering должны использовать только доступные к историческому
+решению факты. Требуются tests ролей/границ/схемы, multiplicity и batch/order
+equivalence, независимые co-buy fixtures, inclusive windows, transaction ties,
+evidence reconciliation, quota/corruption/failure non-publication, execution
+rejection исследовательских видов, CLI/API job equivalence, source-free child,
+cancel/restart/receipt integration, bounded browser smoke и installed assets.
+Live tests остаются opt-in/read-only/bounded; hermetic QA не доказывает live
+fidelity или capacity. Полный нормативный контракт: английский §24.6.
+
 ## 25. RunSpec, RunManifest и RNG
 
 Пользовательский `RunSpecDraft` может содержать удобные aliases. Он не исполняется и не
@@ -3156,7 +3257,8 @@ engine/strategy/feature/model states, queues, ledger/audit chain, RNG coordinate
 - Этот opt-in не является защитой и означает принятие риска перехвата
   credential, раскрытия запросов/результатов и изменения source bytes
   посредником. Он действует только для исходящих read-only ClickHouse операций
-  `inspect-source`, optional estimate и `prepare-dataset`; он не разрешает
+  `inspect-source`, optional estimate, `prepare-dataset` и bounded
+  `research prepare`; он не разрешает
   public bind Control API/UI.
 - Transport opt-in является operational deployment setting и не входит в
   RunSpec/artifact semantic identities. Он не повышает source fidelity,

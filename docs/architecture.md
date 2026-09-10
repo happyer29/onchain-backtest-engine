@@ -8,6 +8,21 @@ Status: accepted as a synchronized overview
 > the deep dive governs, and any discrepancy found must be corrected in both
 > documents.
 
+## Approved wallet-research extension
+
+[Deep dive §24.6](architecture-deep-dive.md#246-on-chain-wallet-research)
+defines a separate observational research consumer: bounded `research prepare`
+creates a verified immutable participant snapshot; local `research analyze`
+builds activity, shared-mint pairs and exact observation evidence in DuckDB.
+The same durable job/publication lifecycle and same-origin bounded dashboard
+apply. Signer and fee payer remain distinct roles, source-row multiplicity is
+preserved, and completeness/finality remain UNKNOWN. Research artifacts cannot
+enter replay or Strategy directly. Existing Sniping gates and identities are
+unchanged. The first slice is implemented and verified on hermetic source,
+CLI/API/child and browser workflows. Live-source fidelity/capacity, transfers,
+full wallet PnL, ownership clustering and automatic strategy promotion remain
+outside this closure. See the [wallet research guide](wallet-research.md).
+
 ## 1. The decision in one paragraph
 
 The platform is **one Python modular monolith with hexagonal boundaries** that
@@ -126,8 +141,8 @@ Guarantees and constraints:
 - one trusted codebase and one Python environment;
 - 16 GB RAM is the minimum supported profile; 32 GB is recommended;
 - one local NVMe; CPU-first, with an optional local GPU;
-- the source is accessible only to `inspect-source`, `prepare-dataset`, and an
-  optional estimate in `plan-dataset`;
+- the source is accessible only to `inspect-source`, `prepare-dataset`,
+  bounded `research prepare`, and an optional estimate in `plan-dataset`;
 - compile, feature/ML, and backtest jobs read only committed local artifacts;
 - a `CANONICAL_EXACT` run with the same logical identity produces a
   byte-identical normalized audit/result regardless of Parquet/ReplayPack,
@@ -564,6 +579,7 @@ snapshot/ReplayPack rebuild with three-way exact equivalence.
 ## 6. Ports and extension contracts
 
 Primary use cases are `inspect-source`, `plan-dataset`, `prepare-dataset`,
+`research prepare`, `research analyze`,
 `compile-replay`, `compile-delivery-schedule`, `run-backtest`, `run-sweep`,
 `build-features`, `train`, `predict`, submit/cancel/query jobs/runs, verify, and
 GC. A `RunSpecDraft` with aliases/defaults is not executable: the resolver

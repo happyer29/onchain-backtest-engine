@@ -11,6 +11,8 @@
 4. [Project layout](project-layout.md) — packages, tests, and local artifacts.
 5. [Performance measurement](performance-baseline.md) — benchmark commands,
    comparison methodology, and admission criteria.
+6. [Wallet research](wallet-research.md) — observed activity, shared purchases,
+   exact trade evidence and the boundary between a hypothesis and a strategy.
 
 ## Architecture and contributions
 
@@ -23,10 +25,12 @@ Section 3.4 of the deep dive describes the implemented boundary. Target
 extension points are not available merely because a port or catalog entry
 exists. Unsupported semantics stop with a typed error.
 
-Live source admission requires generated evidence for the exact selected
+Live replay-source admission requires generated evidence for the exact selected
 range and source mapping. Fixture verification does not establish the
 completeness or fidelity of an external source. Measurements apply only to
 their verified input, execution mode, hardware, and physical settings.
+Research-only snapshots preserve `UNKNOWN` source fidelity and cannot replace
+this execution admission.
 
 English files without a language suffix are canonical. Russian files are
 translations; if they disagree, the English version applies.

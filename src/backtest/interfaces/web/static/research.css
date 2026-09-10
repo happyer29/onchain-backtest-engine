@@ -1,0 +1,21 @@
+/* Shared local tooling aesthetic, with bounded layouts for long public keys. */
+:root{color-scheme:dark;font-family:system-ui,sans-serif;background:#10151b;color:#e6edf5;line-height:1.5}
+*{box-sizing:border-box}body{margin:0}main,header,footer{max-width:1280px;margin:auto;padding:24px}
+header{display:flex;justify-content:space-between;border-bottom:1px solid #2c3642;font-size:13px}
+a{color:#94ddd0}h1{font-size:clamp(32px,4vw,52px);line-height:1.12;letter-spacing:-1.5px;margin:8px 0 20px}
+h2{font-size:21px;margin:6px 0 16px}h3{font-size:16px}.intro{max-width:900px;padding:20px 0}
+/* Numbered forms make acquisition and local analysis distinct, sequential steps. */
+.eyebrow{font-size:11px;letter-spacing:2px;color:#86cdbc;text-transform:uppercase}.hint,footer{font-size:13px;color:#a3b0c0}
+.workflow{display:grid;grid-template-columns:1fr 1fr;gap:20px}.panel{background:#171f28;border:1px solid #303c49;border-radius:12px;padding:24px;margin:16px 0}
+label{display:flex;flex-direction:column;gap:6px;font-size:13px;margin-bottom:14px}input,textarea{font:inherit;color:inherit;background:#10171f;border:1px solid #465362;border-radius:6px;padding:10px;min-width:0;width:100%}
+textarea{resize:vertical}button{font:inherit;background:#9de0cb;color:#122822;border:0;border-radius:6px;padding:10px 16px;cursor:pointer;font-weight:600}button:disabled{opacity:.45;cursor:default}
+.secondary{background:#273341;color:#dce7f2}.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}.notice{border-left:3px solid #bbaa75;background:#24251f;padding:13px 17px;font-size:13px;color:#d6d2ba}
+/* Long identities can scroll inside a table without expanding the entire page. */
+.open-form{display:flex;gap:16px;align-items:end}.open-form label{flex:1;margin:0}.section-head{display:flex;justify-content:space-between;align-items:center;gap:16px}
+.metrics{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}.metric{padding:16px;background:#1b2630;border-radius:8px}.metric strong{display:block;font-size:28px}.metric span{font-size:12px;color:#a3b0c0}
+.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;padding:12px 10px;border-bottom:1px solid #34404d;white-space:nowrap}th{color:#a3b0c0;font-weight:500}td code{font-size:11px}
+.pagination,nav{display:flex;gap:12px;align-items:center;margin:18px 0}.pagination{justify-content:space-between;font-size:12px}.job{display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid #303c49}.job code{flex:1;overflow:hidden;text-overflow:ellipsis}
+#error{color:#ffd0c8;background:#422523;padding:16px;border-radius:8px}#graph{display:block;width:100%;max-height:380px}footer{border-top:1px solid #303c49;margin-top:32px}[hidden]{display:none!important}
+/* Keyboard focus and narrow layouts preserve access to every research action. */
+:focus-visible{outline:3px solid #f1ce79;outline-offset:3px}nav button[aria-pressed=true]{background:#9de0cb;color:#122822}
+@media(max-width:760px){.workflow{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(2,1fr)}.open-form{display:block}.open-form button{margin-top:12px}.job{flex-wrap:wrap}main,header,footer{padding:16px}.panel{padding:16px}}

@@ -397,13 +397,29 @@ def build_runtime_container(
     )
     maintenance = build_maintenance_services(settings, artifacts)
     # Assemble control once so the build runtime container workflow shares one value.
-    submit_job = SubmitJob(jobs, prepare_job_resolver)
+    from backtest.bootstrap.research import build_research_use_cases
+
+    # Local mappings pin the acquisition network; no remote inspection runs in HTTP.
+    research = build_research_use_cases(
+        settings,
+        artifacts,
+        network_id=source.chain_identity()[0] if capabilities else None,
+        runtime_manifest=runtime_manifest,
+        # Only the controller resolves job status to a candidate result artifact.
+        jobs=jobs,
+        # The controller's operational result lookup is absent from isolated child composition.
+    )
+    submit_job = SubmitJob(jobs, prepare_job_resolver, research)
     if canonical_reconciler is not None and prepare_job_resolver is not None:
+        # Preserve canonical shard reconciliation without bypassing research's resolver.
         submit_job = ReconciledPrepareDatasetSubmitJob(
             jobs,
             prepare_job_resolver,
             canonical_reconciler,
+            # The specialized dataset submitter still validates research commands identically.
+            research,
         )
+    # All transports share this single set of application services and exact command builders.
     control = ControlUseCases(
         inspect_source=inspect_source,
         plan_dataset=plan_dataset,
@@ -419,6 +435,8 @@ def build_runtime_container(
         # The same SQLite adapter supplies a manifest-bound, rebuildable Run index.
         query_runs=QueryRuns(artifact_queries, catalog),
         query_run_results=QueryRunResults(LocalParquetRunResultReaderFactory(artifacts)),
+        # Research artifacts have their own bounded readers and never enter run-result decoding.
+        research=research,
         system_resources=resource_probe,
         resolve_run_spec=resolve_run_spec,
         resolve_sweep_spec=resolve_sweep_spec,

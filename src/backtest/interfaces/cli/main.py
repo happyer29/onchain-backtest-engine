@@ -85,6 +85,9 @@ from backtest.application.use_cases.query_run_results import (
     RunResultQueryError,
 )
 from backtest.application.use_cases.query_runs import RunIndexQueryError, RunSummaryView
+from backtest.application.use_cases.research import ResearchUseCases
+
+# Replay commands retain their separate execution contract alongside research.
 from backtest.application.use_cases.run_backtest import (
     # Include run backtest request so the run backtest dependency remains explicit.
     RunBacktestRequest,
@@ -155,6 +158,11 @@ class CliUsageError(RuntimeError):
 
 
 class CliBackend(Protocol):
+    # Research commands resolve through the same application service used by the API.
+    def research_use_cases(self) -> ResearchUseCases: ...
+
+    def execute_research(self, job_type: JobType, payload: bytes) -> CommittedArtifact: ...
+
     """Operations required by the CLI, implemented by the composition root."""
 
     def inspect_source(
@@ -300,7 +308,12 @@ def create_cli(
         help="On-Chain Backtest Engine control plane.",
         # Complete Typer only after its backtest and value inputs are visible in create cli.
     )
+    # Keep the independent research command group outside the existing replay CLI flows.
+    from backtest.interfaces.cli.research import register_research_commands
 
+    register_research_commands(cli, backend_factory)
+
+    # Existing source inspection remains an independent, bounded command.
     @cli.command()
     def inspect_source(
         config: ConfigPath = Path("configs/local-16gb.toml"),

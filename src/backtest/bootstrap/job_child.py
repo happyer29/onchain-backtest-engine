@@ -79,6 +79,9 @@ _MAX_ENVELOPE_BYTES: Final = 3 * 1024 * 1024
 _USER_ERROR_EXIT: Final = 78
 _INTERNAL_ERROR_EXIT: Final = 70
 _EXECUTION_STAGES: Final = {
+    # The existing progress/receipt lifecycle also governs isolated research jobs.
+    JobType.PREPARE_RESEARCH: ProgressStage.PREPARING_RESEARCH,
+    JobType.ANALYZE_WALLETS: ProgressStage.ANALYZING_WALLETS,
     JobType.PREPARE_DATASET: ProgressStage.PREPARING_DATASET,
     # Keep the job type component named inside the execution stages contract.
     JobType.COMPILE_REPLAY: ProgressStage.COMPILING_REPLAY,
@@ -209,6 +212,20 @@ def execute_envelope(
                 if item.artifact.artifact_id not in reused_ids
             ),
         )
+    # The research worker shares process isolation and receipts while keeping replay untouched.
+    elif envelope.spec.job_type in {JobType.PREPARE_RESEARCH, JobType.ANALYZE_WALLETS}:
+        from backtest.bootstrap.research import execute_research_job
+
+        # Research uses the same isolated completion receipt and output verification.
+        reporter.publish(_EXECUTION_STAGES[envelope.spec.job_type])
+        artifacts, result_artifact = execute_research_job(
+            settings,
+            envelope.spec.job_type,
+            envelope.spec.canonical_payload,
+            # Source mapping is usable only for acquisition, never for wallet analysis.
+            capabilities_file=capabilities_file,
+        )
+        outputs = (result_artifact,)
     # Route all remaining cases through the explicit alternative branch.
     else:
         # Handle the execute envelope complement of job type, prepare dataset and spec

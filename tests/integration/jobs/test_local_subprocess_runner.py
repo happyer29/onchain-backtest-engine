@@ -141,12 +141,23 @@ with open(sys.argv[1], "w", encoding="utf-8") as stream:
     assert tuple(envelopes.iterdir()) == ()
 
 
+# Source preparation and local consumption have different inherited-secret permissions.
 @pytest.mark.integration
+@pytest.mark.parametrize(
+    "preparation_type,execution_type",
+    [
+        # Both bounded source workflows receive secrets; local consumers never do.
+        (JobType.PREPARE_DATASET, JobType.RUN_BACKTEST),
+        (JobType.PREPARE_RESEARCH, JobType.ANALYZE_WALLETS),
+    ],
+)
 def test_only_prepare_child_receives_configured_source_secret(
     # Keep the tmp path input explicit in the test only prepare child receives configured
     # source secret contract.
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    preparation_type: JobType,
+    execution_type: JobType,
 ) -> None:
     # Execute the test only prepare child receives configured source secret workflow in
     # explicit, reviewable steps.
@@ -178,14 +189,14 @@ with open(sys.argv[1], "w", encoding="utf-8") as stream:
         # test only prepare child receives configured source secret.
     )
 
-    run_handle = runner.spawn(_attempt(), native_threads=1)
+    run_handle = runner.spawn(_attempt(execution_type), native_threads=1)
     assert _wait_for_exit(runner, run_handle) == 0
     observed = json.loads(output.read_text())
     assert observed == {"secret": None, "secret_in_envelope": False}
 
     # Assemble prepare handle once so the test only prepare child receives configured
     # source secret workflow shares one value.
-    prepare_handle = runner.spawn(_attempt(JobType.PREPARE_DATASET), native_threads=1)
+    prepare_handle = runner.spawn(_attempt(preparation_type), native_threads=1)
     assert _wait_for_exit(runner, prepare_handle) == 0
     observed = json.loads(output.read_text())
     assert observed == {"secret": secret, "secret_in_envelope": False}

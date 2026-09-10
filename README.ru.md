@@ -94,7 +94,7 @@ flowchart LR
 ```
 
 К внешнему источнику обращаются `inspect-source`, bounded `prepare-dataset`
-и необязательная remote estimate в `plan-dataset`.
+и `research prepare`, а также необязательная remote estimate в `plan-dataset`.
 Compile, feature/ML и backtest paths читают только проверенные committed local
 artifacts. Engine и Strategy не получают SQL-клиент, credentials или future
 labels.
@@ -167,6 +167,7 @@ inspect-source
 | Область | Основные команды |
 |---|---|
 | Source и dataset | `inspect-source`, `plan-dataset`, `prepare-dataset` |
+| Исследование кошельков | `research prepare`, `research analyze`, `research show`, `research rows` |
 | Replay | `compile-replay`, `compile-delivery-schedule` |
 | Execution | `resolve-run`, `run`, `sweep` |
 | Results | `list-runs`, `describe-run-contract`, `show-run-summary`, `list-roundtrips` |
@@ -174,6 +175,18 @@ inspect-source
 
 Актуальный синтаксис всегда доступен через `backtest <command> --help`; подробные
 примеры собраны в [CLI reference](docs/cli-reference.ru.md).
+
+## Исследование кошельков
+
+Раздел `/research` и CLI `backtest research` реализуют ограниченное исследование
+подписантов Pump.fun: активность, пары по общим покупкам токенов и исходные
+сделки на неизменяемых локальных снимках. Начни с
+[инструкции](docs/wallet-research.ru.md). Контракт описан в
+[deep dive §24.6](docs/architecture-deep-dive.md#246-on-chain-wallet-research).
+Hermetic source/CLI/API/child и браузерный сценарий проверены. Полнота источника
+и причинная доступность остаются `UNKNOWN`. Live research capacity, переводы,
+полный wallet PnL, owner clustering и автоматический перенос в стратегию
+не заявляются. Это не расширяет допуск источника для Sniping.
 
 ## Честные ограничения
 
@@ -207,6 +220,7 @@ deep dive расходятся, нормативным источником яв
 | [Начало работы](docs/getting-started.ru.md) | Настроить source, подготовить snapshot и запустить первый backtest |
 | [Конфигурация](docs/configuration.ru.md) | Понять TOML, secret refs, transport и resource limits |
 | [CLI reference](docs/cli-reference.ru.md) | Найти команды, exact IDs и рабочие сценарии |
+| [Исследование кошельков](docs/wallet-research.ru.md) | Проверить активность и совместные покупки до написания стратегии |
 | [Project layout](docs/project-layout.ru.md) | Разобраться в структуре репозитория и local data root |
 | [Architecture overview](docs/architecture.ru.md) | Получить краткую карту системы |
 | [Architecture deep dive](docs/architecture-deep-dive.ru.md) | Проверить нормативные invariants, identity и failure semantics |

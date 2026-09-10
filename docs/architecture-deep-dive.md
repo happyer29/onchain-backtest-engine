@@ -67,11 +67,12 @@ The target single-host envelope is:
 - 32 GB RAM as the recommended profile;
 - one local NVMe;
 - one researcher and one trusted codebase;
-- batch backtests, feature builds, and training jobs;
+- batch backtests, feature builds, training jobs, and bounded research jobs;
 - CPU-first, with an optional local GPU;
-- external ClickHouse available only to the source-facing `inspect-source` and
-  `prepare-dataset` commands and the optional metadata estimate in
-  `plan-dataset`;
+- external ClickHouse available only to source-facing `inspect-source`,
+  `prepare-dataset`, the optional metadata estimate in `plan-dataset`, and
+  the bounded research-only `research prepare` acquisition in section 24.6;
+- `research analyze` is local-artifact-only;
 - compilation, feature/ML jobs, and backtest runs using only committed local
   artifacts;
 - optional Control API and Web UI on the same device;
@@ -274,6 +275,16 @@ produces a different `logical_run_id`, order IDs, and round-trip IDs, but
 reuses the same verified Dataset/Snapshot/ReplayPack without source
 re-extraction or ReplayPack recompilation.
 
+- the separate §24.6 wallet-research slice: bounded successful SOL-paired
+  Pump observations, immutable ResearchSnapshot/ResearchResult, local DuckDB
+  activity/co-buy analysis, exact source-row evidence, durable isolated jobs,
+  CLI and same-origin `/research` dashboard. Signer/payer roles and duplicate
+  multiplicity are preserved; completeness, finality, source consistency and
+  causal availability remain `UNKNOWN`. Hermetic source contracts and isolated
+  CLI/API execution are verified; the real-browser workflow and installed-wheel
+  CLI/child/API/assets gate passed. Live research-source capacity/fidelity is
+  not claimed. Transfers, full wallet PnL, owner clustering and automatic
+  strategy promotion remain unimplemented;
 - an installable Python 3.13 package, reproducible `uv.lock`, hexagonal ports,
   Import Linter/AST guardrails, and separate CLI/serve/child composition roots;
 - the current source stack uses `bounded-source-evidence/v2`, network-aware
@@ -2686,6 +2697,138 @@ decisions.
 Tree/ONNX/GPU tolerance and stateful sequential runtimes remain target extension
 points but are absent from current reference composition and fail closed.
 
+### 24.6 On-chain wallet research
+
+Research is an independent data consumer before a strategy exists. The first
+slice studies observed successful SOL-paired `pumpfun_v2_swaps` participation
+on one Solana network and a typed half-open block range. It does not join to
+decision-range launches or apply the Sniping non-Mayhem universe. Every
+returned source row is retained, including identical rows with multiplicity.
+The exact observation scope is visible in every result and dashboard.
+
+Two new artifact kinds, `RESEARCH_SNAPSHOT` and `RESEARCH_RESULT`, use the
+existing publication, verified-reader, lease, lineage, pin, GC and backup
+protocols. Their top-level directories are `research-snapshots/` and
+`research-results/`. Neither kind is an executable canonical snapshot,
+ReplayPack, FeatureSet, Universe or SuccessfulRun. Existing artifact IDs and
+Sniping source-evidence/settlement gates are not redefined or relaxed.
+
+`research-dataset-spec/v1` pins one source ID, immutable NetworkId and position
+schema, exact block range, the fixed source profile/mapping/query digest, and
+the installed research code/runtime digest. Acquisition accepts no SQL, table
+name, path or executable code through a transport DTO. The fixed adapter
+checks the required source columns/types before its first data scan and uses
+explicit columns, parameterized block bounds, a unique credential-free query
+ID, streaming batches, and throw-on-excess server row/byte/time/memory limits.
+Local row, output and temporary quotas are mandatory too. A schema change,
+malformed row, limit failure or interrupted scan publishes no snapshot.
+
+The `wallet-observations/v1` table preserves source signature, source instruction
+position, block/transaction position, second-resolution UTC source block time,
+mint and quote asset, BUY/SELL, integer source-reported amount legs, signing
+wallet and fee payer as separate roles. Addresses and signatures are validated
+as complete Solana base58 values. A signer or fee payer is not automatically a
+beneficial owner, creator, token-account owner or cluster. Amount legs are
+source observations; they do not establish wallet cash PnL, net proceeds or
+complete fee accounting. Invalid/null required roles or amounts fail closed.
+
+Source completeness, finality, snapshot consistency and causal availability
+remain `UNKNOWN` unless independently proven by an applicable source contract.
+The initial research profile does not claim these proofs. Successful local
+validation proves only that the bounded scan completed and its observed rows
+satisfy the declared schema/range. It cannot establish the absence of trades
+or relationships outside those observations. In particular, a research
+snapshot cannot admit the rejected two-day Sniping cut or become evidence for
+exact replay. No research-mode flag changes an existing execution validator.
+
+Rows are canonical-sorted by source chain coordinates followed by all observed
+fields with a fixed bytewise string order. A stable row ordinal identifies an
+observation inside its exact snapshot, not a globally unique on-chain event.
+No payload hash is used for deduplication. Identical observations remain
+separate rows; metrics called row counts explicitly count source rows. Query
+batch boundaries and source delivery order do not affect logical row digests.
+Without an authoritative source revision, a new acquisition performs a fresh
+bounded scan rather than treating an old range as current. Its build key pins
+the request, observed schema, actual canonical observation digest and writer/
+runtime contract; committed content ID remains a separate manifest/byte hash.
+Operational extraction time and endpoint/credentials are excluded from both.
+
+The installed research runtime digest uses `backtest.research-runtime/v1`
+over the existing runtime manifest's `abi`, `dependencies`, `python` and
+`operating_system` fields. An explicit research source-code allowlist is pinned
+separately. Native thread counts and environment settings remain physical
+attempt settings, so changing them does not redefine an analytical recipe.
+
+`wallet-co-buy-analysis/v1` is a closed, versioned recipe over exactly one
+verified ResearchSnapshot. Parameters are a canonical sorted optional signer
+selection, a nonnegative inclusive `window_seconds`, and a positive minimum
+shared-mint count. An empty selection means all observed signers. The recipe
+publishes source-row activity counts, per-signer distinct-mint participation,
+and evidence-backed signer pairs. It has no wallet-PnL, common-owner, transfer,
+profitability, predictive-power or strategy-executability claim.
+
+For each selected signer/mint, choose the first observed BUY in source-position
+order within the snapshot, breaking otherwise equal coordinates by canonical
+observation ordinal. Two different signers form one candidate for that mint;
+the candidate qualifies when the absolute difference of those two reported
+block timestamps is at most `window_seconds`. Each mint contributes at most
+once to a pair, regardless of repeated buys or duplicate source rows. Pairs
+use lexical signer order; a direction count describes only which first
+observation precedes the other in reported source position. Same transaction
+positions are tied, not an inferred intra-transaction trading sequence.
+The minimum shared-mint filter is applied after complete candidate aggregation.
+
+Pair evidence stores the mint and both exact snapshot row ordinals. Drilldown
+reopens that snapshot and verifies those references. Activity, pair counts,
+thresholds, direction/tie counts and evidence totals reconcile. Result identity
+pins snapshot ID, recipe/code/runtime digest and canonical semantic parameters;
+physical batch size, thread count, memory budgets and chart styling are not
+semantic operands. A deterministic rebuild declaration is valid only with
+transitively retained exact inputs and code/runtime. A build key producing
+different bytes follows the existing collision/quarantine protocol.
+
+DuckDB performs bounded local sorting, joins and aggregation through an
+application-owned port; domain/application import no DuckDB or PyArrow.
+Candidate cardinality and per-mint participant limits are checked before the
+pair join. Exceeding a hard limit rejects the complete calculation, never
+silently drops a popular token, truncates a relation or computes a top-k sample
+while describing it as complete. Source rows, result rows, native threads,
+memory, spill, output and wall time are bounded under existing admission.
+
+`PREPARE_RESEARCH` and `ANALYZE_WALLETS` are strict resolved job types using the
+same controller, idempotency, queue, isolated child, progress, cancellation,
+receipt and completion-verification path as existing heavy jobs. Only the
+prepare child can receive source credentials. Analysis resolves and rechecks
+the exact input schema/code/runtime before queue admission and child mutation.
+No browser or heavy HTTP handler reads Parquet or runs a scan.
+
+The same-origin research page provides typed acquisition/analysis forms,
+job/result navigation, bounded activity/pair pages and pair-evidence drilldown.
+The graph is an explicitly bounded projection of an exact pair page, not a
+claim to show all market connections. Whole-result counters come from verified
+summary metadata, not the currently loaded page. Filters that affect an
+analysis create a new result; display changes do not. Responses preserve wide
+integers as decimal strings and accept exact artifact IDs, closed table roles,
+scope-bound keyset cursors and bounded limits. Raw SQL, file paths, source
+credentials, traces and execution artifacts remain unavailable to the browser.
+
+New exploratory calculations may be developed in trusted local code over
+verified artifacts and promoted to reviewed versioned recipes. This does not
+introduce a browser SQL/Python editor or unverified plugin execution. A
+research finding enters a strategy only through a separately admitted causal
+FeatureSpec/Universe/strategy bundle. Wallet selection and clustering used for
+decisions must be fitted only from information available at the historical
+decision boundary; future poisoning must not change earlier decisions.
+
+Acceptance requires observed-role/range/schema validation, multiplicity and
+batch/order equivalence, independently specified co-buy fixtures, inclusive
+window boundaries, same-transaction ties, evidence reconciliation, quota/
+corruption/failure non-publication, exact-input/identity checks, research-kind
+rejection by execution readers, CLI/API resolved-job equivalence, isolated
+source-free analysis, cancellation/restart/receipt integration, bounded browser
+smoke, and installed-package assets. Live extraction remains opt-in, read-only
+and bounded; hermetic tests do not claim live source fidelity or capacity.
+
 ## 25. RunSpec, RunManifest, and RNG
 
 A user's `RunSpecDraft` may contain convenient aliases. It is not executable
@@ -3300,7 +3443,8 @@ component prohibits resume. Pickle is not used.
 - This opt-in is not protection and means accepting the risk of credential
   interception, disclosure of queries/results, and modification of source
   bytes by an intermediary. It applies only to outgoing read-only ClickHouse
-  operations: `inspect-source`, the optional estimate, and `prepare-dataset`;
+  operations: `inspect-source`, the optional estimate, `prepare-dataset`, and
+  the bounded `research prepare` acquisition;
   it does not permit public binding of the Control API/UI.
 - The transport opt-in is an operational deployment setting and is not part of
   RunSpec/artifact semantic identities. It does not raise source fidelity,
