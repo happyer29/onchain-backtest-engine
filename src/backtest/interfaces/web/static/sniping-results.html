@@ -1,10 +1,11 @@
 <!doctype html>
-<html lang="ru">
+<html lang="ru" data-theme="warm">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="color-scheme" content="dark" />
+    <meta name="color-scheme" content="light dark" />
     <title>Sniping result · On-Chain Backtest Engine</title>
+    <script src="/static/theme.js"></script>
     <link rel="stylesheet" href="/static/styles.css" />
     <script defer src="/static/sniping-results.js"></script>
   </head>
@@ -18,6 +19,17 @@
         </p>
       </div>
       <div class="dashboard-header-actions">
+        <div class="theme-control">
+          <label class="theme-picker" for="theme-select">
+            <span class="theme-swatch" aria-hidden="true"></span>
+            <span>Тема</span>
+            <select id="theme-select">
+              <option value="warm">Тёплый закат</option>
+              <option value="dark">Тёмная</option>
+            </select>
+          </label>
+          <span id="theme-persistence" class="theme-note" role="status" hidden>Только для этой вкладки</span>
+        </div>
         <a class="button-link secondary" href="/">← Control UI</a>
         <div id="dashboard-status" class="status" role="status" aria-live="polite">
           Ожидаю Run artifact ID
