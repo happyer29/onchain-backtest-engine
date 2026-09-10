@@ -39,13 +39,31 @@ function element(tag, text = "", className = "") {
   return node;
 }
 
-// Error state is independent of the retained artifact and can be replaced after a retry.
-function showError(error) {
-  // Display only the finite code emitted by the API or a local transport failure.
-  $("#error").textContent = String(error.message || "Ошибка запроса");
-  $("#error").hidden = false;
+// Known API rejects explain the next action without exposing deployment details.
+const errorMessages = {
+  RESEARCH_SOURCE_NOT_CONFIGURED: "Источник данных для этого сервера не настроен. Снимок не создан. Запусти сервер с настроенным профилем источника; сохранённые снимки можно анализировать без подключения.",
+  RESEARCH_INVALID_FORM: "Проверь значения полей: границы блоков и параметры анализа должны быть целыми числами в допустимых пределах.",
+  RESEARCH_RERESOLVE_REQUIRED: "Версия исследовательского рецепта изменилась. Обнови страницу и повтори отправку.",
+  // A failed artifact read must not be presented as a valid empty result.
+  RESEARCH_ARTIFACT_UNAVAILABLE: "Не удалось проверить выбранный снимок или результат. Проверь его ID и доступность локальных данных."
+};
+
+// A command error belongs beside its form; background polling keeps a separate alert.
+function showError(error, target = $("#error")) {
+  const code = /^[A-Z][A-Z0-9_]{0,95}$/.test(error.message || "") ? error.message : "RESEARCH_REQUEST_FAILED";
+  target.textContent = errorMessages[code] || `Запрос не выполнен (${code}). Проверь соединение и параметры запроса.`;
+  target.hidden = false;
+  // Alert semantics announce failure separately from the form's pending status.
+  target.classList.add("error");
+  target.setAttribute("role", "alert");
+  // Only user-initiated form failures move focus; background polling must not steal it.
+  if (target.id !== "error") {
+    target.focus({preventScroll: true});
+    target.scrollIntoView({block: "nearest"});
+  }
 }
 
+// The shared transport retains same-origin credentials, CSRF and response bounds.
 async function api(path, options = {}) {
   // Requests stay same-origin and have a deadline, including job polling.
   const response = await fetch(path, {...options, credentials: "same-origin", signal: AbortSignal.timeout(15000),
@@ -61,24 +79,41 @@ async function api(path, options = {}) {
 // Disable the originating form until its durable submission outcome is known.
 async function submit(form, kind, body) {
   const button = form.querySelector("button");
+  const feedback = form.querySelector(".form-feedback");
+  const buttonLabel = button.textContent;
+  // Sending a command is visible immediately, before a durable job exists.
   button.disabled = true;
+  button.textContent = "Отправляем…";
+  form.setAttribute("aria-busy", "true");
+  feedback.hidden = false;
+  feedback.classList.remove("error");
+  // Repeated submissions replace the previous outcome with a fresh live status.
+  feedback.setAttribute("role", "status");
+  feedback.textContent = "Отправляем запрос на создание задачи…";
   $("#error").hidden = true;
-  // An uncertain network response keeps the same idempotency key for a retry.
-  const serialized = JSON.stringify(body);
-  const intent = kind + serialized;
-  if (!pending.has(intent)) pending.set(intent, crypto.randomUUID());
   try {
+    // An uncertain network response keeps the same idempotency key for a retry.
+    const serialized = JSON.stringify(body);
+    const intent = kind + serialized;
+    if (!pending.has(intent)) pending.set(intent, crypto.randomUUID());
     // A repeated uncertain request carries the exact same semantic form and idempotency key.
     const job = await api(`/api/v1/research/${kind}`, {method: "POST", body: serialized,
       headers: {"Idempotency-Key": pending.get(intent)}});
     // A confirmed new click is a new acquisition intent, even for the same source interval.
     pending.delete(intent);
     activeJobId = job.job_id;
+    feedback.textContent = `Задача создана: ${job.job_id}. Статус: ${job.state}. Ход выполнения показан в разделе «Задачи исследования».`;
     $("#job-status").textContent = `${job.job_type}: ${job.state} · ${job.job_id}`;
-    await refreshJobs();
-  // Restore the control on both transport failure and confirmed admission.
+    // A polling failure does not negate a confirmed durable submission.
+    await refreshJobs().catch(showError);
+  } catch (error) {
+    showError(error, feedback);
+  // Restore both forms after rejection, timeout, or confirmed admission.
   } finally {
     button.disabled = false;
+    button.textContent = buttonLabel;
+    form.removeAttribute("aria-busy");
+    // Restoring submission controls does not cancel or change the durable job.
   }
 }
 

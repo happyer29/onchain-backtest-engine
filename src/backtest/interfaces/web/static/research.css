@@ -15,7 +15,9 @@ textarea{resize:vertical}button{font:inherit;background:#9de0cb;color:#122822;bo
 .metrics{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}.metric{padding:16px;background:#1b2630;border-radius:8px}.metric strong{display:block;font-size:28px}.metric span{font-size:12px;color:#a3b0c0}
 .table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;padding:12px 10px;border-bottom:1px solid #34404d;white-space:nowrap}th{color:#a3b0c0;font-weight:500}td code{font-size:11px}
 .pagination,nav{display:flex;gap:12px;align-items:center;margin:18px 0}.pagination{justify-content:space-between;font-size:12px}.job{display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid #303c49}.job code{flex:1;overflow:hidden;text-overflow:ellipsis}
-#error{color:#ffd0c8;background:#422523;padding:16px;border-radius:8px}#graph{display:block;width:100%;max-height:380px}footer{border-top:1px solid #303c49;margin-top:32px}[hidden]{display:none!important}
+#error,.form-feedback.error{color:#ffd0c8;background:#422523;padding:16px;border-radius:8px}#graph{display:block;width:100%;max-height:380px}footer{border-top:1px solid #303c49;margin-top:32px}[hidden]{display:none!important}
+/* Form outcomes remain readable beside their action and wrap long durable job IDs. */
+.form-feedback{font-size:13px;color:#a9e0cf;overflow-wrap:anywhere;margin:12px 0 0}
 /* Keyboard focus and narrow layouts preserve access to every research action. */
 :focus-visible{outline:3px solid #f1ce79;outline-offset:3px}nav button[aria-pressed=true]{background:#9de0cb;color:#122822}
 @media(max-width:760px){.workflow{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(2,1fr)}.open-form{display:block}.open-form button{margin-top:12px}.job{flex-wrap:wrap}main,header,footer{padding:16px}.panel{padding:16px}}

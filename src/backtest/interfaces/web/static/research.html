@@ -29,7 +29,9 @@
           <label>До блока, не включая<input name="to_block" type="number" min="1" max="4294967296" required /></label>
           <!-- Hard limits describe actual rejection rules, rather than promising partial scans. -->
           <p class="hint">До 300 000 блоков и 2 млн строк. Источник и сеть берутся из локального профиля.</p>
-          <button type="submit">Подготовить снимок</button>
+          <button type="submit" aria-describedby="prepare-feedback">Подготовить снимок</button>
+          <!-- Submission feedback stays beside its action, even when results are open below. -->
+          <p id="prepare-feedback" class="form-feedback" role="status" aria-live="polite" tabindex="-1" hidden></p>
         </form>
       </section>
       <section class="panel"><p class="eyebrow">02 / Гипотеза</p><h2>Найти совместные покупки</h2>
@@ -41,7 +43,9 @@
           <!-- An empty signer selection means all observed signers, never a sampled top list. -->
           <label>Подписанты, необязательно<textarea name="wallets" rows="2" placeholder="Адреса через пробел или с новой строки; до 128"></textarea></label>
           <p class="hint">Первая покупка в пределах снимка. Один токен даёт паре не больше одной связи.</p>
-          <button type="submit">Запустить анализ</button>
+          <button type="submit" aria-describedby="analyze-feedback">Запустить анализ</button>
+          <!-- Analysis has an independent outcome so source errors cannot hide its status. -->
+          <p id="analyze-feedback" class="form-feedback" role="status" aria-live="polite" tabindex="-1" hidden></p>
         </form>
       </section>
       <!-- The next section observes durable jobs rather than inferring completion from a click. -->

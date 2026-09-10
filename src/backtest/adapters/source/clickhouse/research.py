@@ -70,7 +70,7 @@ def profile_digest() -> ContentDigest:
             "sql": RESEARCH_SQL,
             "columns": SOURCE_COLUMNS,
             # A changed interpretation of the same physical columns requires a new identity.
-            "schema_policy": "required-nonnull-numeric-string-second-time/v1",
+            "schema_policy": "required-nonnull-numeric-string-second-time/v2",
             "multiplicity": "retain-all-observations/v1",
         },
     )
@@ -193,6 +193,9 @@ def _accepted_type(name: str, value: str) -> bool:
         return value in _INTEGER_TYPES or (name == "failed" and value == "Bool")
     if name == "block_time":
         return value == "DateTime" or (value.startswith("DateTime('") and value.endswith("')"))
+    # Dictionary-encoded non-null strings keep their values; nullable/numeric wrappers reject.
+    if value == "LowCardinality(String)":
+        return True
     # FixedString is normalized only by removing its physical trailing NUL padding.
     return value == "String" or value in {f"FixedString({size})" for size in (44, 64, 88, 128)}
 

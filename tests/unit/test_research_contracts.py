@@ -38,7 +38,7 @@ from backtest.application.research import (
 from backtest.application.research_pages import cursor_after, page_cursor
 from backtest.bootstrap.config import load_settings
 from backtest.bootstrap.research import _prepare, build_research_use_cases
-from backtest.domain.identifiers import ArtifactId
+from backtest.domain.identifiers import ArtifactId, ContentDigest
 
 # The independent fixture explicitly distinguishes signer from fee payer.
 from tests.support.research import DIGEST, NETWORK, configuration, dataset, key, observations
@@ -202,8 +202,13 @@ def test_source_is_explicit_bounded_multiplicity_preserving_and_closes() -> None
         ("block_time", "DateTime64(3)"),
         # A floating physical amount cannot be justified by the integer fixture values.
         ("base_coin_amount", "Float64"),
+        # Dictionary encoding cannot hide nullability or redefine integer amount types.
+        ("signing_wallet", "LowCardinality(Nullable(String))"),
+        ("direction", "Nullable(LowCardinality(String))"),
+        ("base_coin_amount", "LowCardinality(UInt64)"),
     ],
 )
+# Unsupported storage types must fail during inspection, before the first data scan.
 def test_source_rejects_unproven_schema_before_scanning(column: str, type_name: str) -> None:
     """Inspection must reject unsupported physical types before opening the trade stream."""
     client = _Client()
@@ -215,6 +220,40 @@ def test_source_rejects_unproven_schema_before_scanning(column: str, type_name: 
     with pytest.raises(ResearchError, match="SCHEMA_MISMATCH"):
         source.inspect(replace(dataset(), profile_digest=profile_digest()))
     assert len(client.calls) == 1 and client.metadata.closed
+
+
+@pytest.mark.parametrize("column", ["quote_coin", "direction", "signing_wallet"])
+def test_dictionary_encoded_strings_preserve_rows_and_physical_schema_identity(column: str) -> None:
+    """Live source string dictionaries preserve values while retaining their observed type."""
+    client = _Client()
+    source = ClickHouseResearchSource(client, database="source")
+    spec = replace(dataset(), profile_digest=profile_digest())
+    plain_schema = source.inspect(spec)
+    # Dictionary storage is accepted only as the exact non-null String specialization.
+    client.metadata.result_rows = [
+        (name, "LowCardinality(String)" if name == column else kind)
+        for name, kind in client.metadata.result_rows
+    ]
+    assert source.inspect(spec) != plain_schema
+    assert client.metadata.closed
+    # Decoding retains every value and duplicate; it adds no completeness claim.
+    assert tuple(source.batches(spec)) == (observations(),)
+    assert client.closed
+
+
+def test_previous_source_profile_cannot_execute_under_new_schema_policy() -> None:
+    """A queued v1 schema-policy request must be resolved again before any source read."""
+    previous = ContentDigest("a607a90b95002460fa676b79e28ead390ae928418c61216a7756c9978de0e577")
+    assert profile_digest() != previous
+    client = _Client()
+    source = ClickHouseResearchSource(client, database="source")
+    spec = replace(dataset(), profile_digest=previous)
+    # Both metadata and row paths check the installed profile before opening remote work.
+    with pytest.raises(ResearchError, match="SOURCE_PROFILE_MISMATCH"):
+        source.inspect(spec)
+    with pytest.raises(ResearchError, match="SOURCE_PROFILE_MISMATCH"):
+        tuple(source.batches(spec))
+    assert not client.calls
 
 
 def test_source_range_failure_closes_stream_and_keeps_no_partial_success() -> None:
