@@ -180,7 +180,10 @@ Pump.fun signing-wallet activity, shared-token purchase pairs and original
 trade evidence over immutable local snapshots. The page explains first buys
 per wallet/token and missed later coincidences. Its locally bundled Cytoscape.js
 graph supports zoom, pan, node dragging, selection and purchase drilldown for
-the current page (at most 25 pairs / 50 nodes). Start with the
+the current page (at most 25 pairs / 50 nodes) or an explicitly selected whole
+result (up to 200,000 pairs / 5,000 participating wallets). The full graph has
+progress/cancellation, exact completeness checks, wallet search and paginated
+neighbours; it persists when the table changes page. Start with the
 [wallet research guide](docs/wallet-research.md). The contract is in
 [deep dive §24.6](docs/architecture-deep-dive.md#246-on-chain-wallet-research).
 Hermetic source/CLI/API/child and browser workflows are verified. Local analysis

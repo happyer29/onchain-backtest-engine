@@ -18,6 +18,9 @@ The same durable job/publication lifecycle and same-origin bounded dashboard
 apply. The page explains first purchases and their limitations; locally bundled
 Cytoscape.js adds zoom/pan/drag and accessible exact-pair evidence navigation
 within 25 page pairs / 50 nodes, without changing research identity.
+The §24.6 whole-result mode adds up to 200,000 pairs / 5,000 participating
+wallets: bounded sequential loading, progress/cancellation, exact completeness
+checks and all-neighbour search. Table pagination preserves this graph.
 Signer and fee payer remain distinct roles, source-row multiplicity is
 preserved, and completeness/finality remain UNKNOWN. Research artifacts cannot
 enter replay or Strategy directly. Existing Sniping gates and identities are

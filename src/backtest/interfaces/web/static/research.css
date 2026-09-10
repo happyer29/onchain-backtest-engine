@@ -35,7 +35,7 @@ textarea{resize:vertical}button{font:inherit;background:#9de0cb;color:#122822;bo
 .graph-inspector h4{margin:20px 0 10px}.graph-inspector p{font-size:13px}.wallet-address{font-family:monospace;overflow-wrap:anywhere}.graph-neighbours{display:grid;gap:8px}.graph-neighbours button{font-size:11px;font-family:monospace;text-align:left;overflow-wrap:anywhere}
 #graph-selection>button{font-size:12px;width:100%}#graph-clear{font-size:12px}#graph-status{min-height:20px}
 /* On narrow screens the full graph stays above its keyboard-accessible inspector. */
-@media(max-width:900px){.graph-workspace{grid-template-columns:1fr}.graph-inspector,.graph-expanded .graph-inspector{max-height:320px}.graph-inspector label{max-width:100%}}
+@media(max-width:900px){.graph-workspace{grid-template-columns:minmax(0,1fr)}.graph-inspector,.graph-expanded .graph-inspector{max-height:320px}.graph-inspector label{max-width:100%}}
 @media(max-width:760px){.method-steps{grid-template-columns:1fr;gap:14px}#graph{height:380px}.graph-expanded #graph{min-height:380px}.graph-controls button{flex-grow:1}}
 
 /* Separate native labels exclude the current option text from the accessible control name. */
@@ -43,3 +43,10 @@ textarea{resize:vertical}button{font:inherit;background:#9de0cb;color:#122822;bo
 
 /* Full network identities must wrap instead of widening the mobile research result. */
 #scope{overflow-wrap:anywhere}
+
+/* Scope switches and progress are independent of the graph's disabled construction controls. */
+.graph-controls button[aria-pressed=true]{background:#9de0cb;color:#122822}#graph-progress{width:100%;accent-color:#9de0cb;height:10px}
+#graph-search-status{min-height:20px}#graph-status{overflow-wrap:anywhere}.graph-neighbours+.pagination{justify-content:space-between}
+
+/* Canvas and native select intrinsic widths cannot expand a narrow grid track after full loading. */
+#graph,.graph-inspector,.graph-neighbours{min-width:0;max-width:100%}.graph-neighbours{grid-template-columns:minmax(0,1fr)}

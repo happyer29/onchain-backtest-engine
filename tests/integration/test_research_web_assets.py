@@ -49,6 +49,7 @@ def test_graph_assets_are_local_pinned_and_serve_under_unchanged_csp(tmp_path: P
         "/static/vendor/cytoscape-3.34.3.min.js",
         # The graph adapter receives typed page rows from the existing controller client.
         "/static/research-graph.js",
+        "/static/research-graph-load.js",
         "/static/research.js",
     ]
     assert all("defer" in script for script in page.scripts)

@@ -281,8 +281,12 @@ re-extraction or ReplayPack recompilation.
   CLI and same-origin `/research` dashboard. The page explains first BUY per
   signer/mint within the snapshot, including missed later co-buys, and ships
   pinned local Cytoscape.js with zoom/pan/drag, accessible selection and exact
-  pair-evidence navigation for at most 25 page pairs / 50 nodes. Graph layout
-  and selection are presentation only. Signer/payer roles and duplicate
+  pair-evidence navigation. Graph scope is either 25 page pairs / 50 nodes or
+  an opt-in whole result up to 200,000 pairs / 5,000 participating wallets.
+  The latter loads verified pages with progress, cancellation and exact
+  completeness checks; search covers all loaded wallets, neighbour controls
+  are paginated, and table navigation preserves the complete graph. Graph
+  layout and selection are presentation only. Signer/payer roles and duplicate
   multiplicity are preserved; completeness, finality, source consistency and
   causal availability remain `UNKNOWN`. Hermetic source contracts and isolated
   CLI/API execution are verified; the real-browser workflow and installed-wheel
@@ -2812,13 +2816,37 @@ No browser or heavy HTTP handler reads Parquet or runs a scan.
 
 The same-origin research page provides typed acquisition/analysis forms,
 job/result navigation, bounded activity/pair pages and pair-evidence drilldown.
-The graph is an explicitly bounded projection of an exact pair page, not a
+The graph has two explicit display scopes: the current pair page (at most 25
+pairs / 50 wallets), and an opt-in whole-result view (at most 200,000 pairs /
+5,000 participating wallets). The latter includes every qualifying pair in
+one exact committed result, independently of table pagination; it is not a
 claim to show all market connections. Whole-result counters come from verified
 summary metadata, not the currently loaded page. Filters that affect an
 analysis create a new result; display changes do not. Responses preserve wide
 integers as decimal strings and accept exact artifact IDs, closed table roles,
 scope-bound keyset cursors and bounded limits. Raw SQL, file paths, source
 credentials, traces and execution artifacts remain unavailable to the browser.
+
+Whole-result loading uses the existing verified keyset API in sequential pages
+of at most 200 rows, with a 2 MiB response cap, 128 MiB cumulative transport cap,
+15-second request deadline and 180-second overall load/build deadline. One
+active loader and one graph instance are retained. Before declaring completion,
+the client checks exact artifact/table scope, contiguous pair ordinals from
+zero, cursor exhaustion and equality with the verified summary pair count.
+Exceeding a row, wallet, byte or time bound rejects the whole view explicitly;
+no truncation, top-k selection or partially loaded graph is labelled complete.
+Cancellation, result replacement and display-scope replacement release pending
+requests, buffers and graph instances, and stale callbacks cannot alter the
+replacement view. Construction yields in bounded chunks; the whole view uses
+a bounded geometric layout rather than an unbounded force calculation.
+
+Search and selection operate on all participating wallets and their complete
+incident connections in the loaded scope. Inspector controls are separately
+paginated so neither a wallet's degree nor the full result becomes unbounded
+DOM. Exact pair ordinals continue to drive verified purchase drilldown, even
+when the pair is outside the table page. Display scope, search, selection and
+layout never change recipe identity, source fidelity, artifacts or strategy
+inputs. No new analytical query, source read or graph artifact is introduced.
 
 New exploratory calculations may be developed in trusted local code over
 verified artifacts and promoted to reviewed versioned recipes. This does not

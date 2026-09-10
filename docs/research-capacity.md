@@ -164,3 +164,80 @@ The same full gate after the compact-key change passed 1,371 tests with 80.81%
 coverage, one opt-in external test skipped and the same three performance tests
 deselected. Formatting, lint, types and all five import contracts passed too.
 No live source query was needed for this follow-up.
+
+
+## Whole-result graph display (2026-09-10)
+
+The display-only §24.6 mode was checked on the retained 1,000-second result
+`11a963e2dd0a3d23918fe10af03c16ed29f5a50e267659f0ac095dabd9a9c0e5`:
+153,869 exact pairs and 2,924 distinct pair participants. Its 10,075 activity
+signers are a different population. No source scan or analytical recalculation
+was performed; the research code digest remained
+`f11599e40d55acf7f9b3599937fa6f04878c740ce9ac18a44b9c8fa011cc8e72`.
+
+The actual static loader and real Cytoscape 3.34.3 model were measured with
+Node 24.15.0 on macOS arm64. The `tests/web/research-graph.test.cjs` harness
+replaced only browser geometry/mounting. This measures transfer/model costs,
+not browser canvas rendering or frame rate:
+
+| Phase | Wall time | RSS after phase | Process high-water RSS |
+|---|---:|---:|---:|
+| Read all 770 bounded API pages | 4.279 s | — | — |
+| Construct 25-row page from the already loaded input | 0.014 s | 221,741,056 B | 216,544 KiB |
+| Construct all 153,869 edges in batches of 1,000 | 3.731 s | 656,359,424 B | 675,184 KiB |
+| Select first wallet and all 37 incident edges | 0.816 s | 712,556,544 B | 697,744 KiB |
+
+The page measurement retains the same full input for comparison and is not
+normal page-only browser memory. After selection, process resource counters
+were 59,205 minor / 1,282 major page faults, zero swapped-out pages and zero
+filesystem input/output operations reported by Node `resourceUsage`. Loader
+byte accounting recorded 39,002,095 response-body bytes. API storage I/O is
+outside the Node process, so these counters do not imply zero server disk I/O
+or a system-wide no-swap guarantee. The independent earlier 2,000-row / ten
+GET probe took 0.054 seconds.
+
+In the real in-app Chromium browser, complete load and canvas construction
+reported 8.1 and 8.2 seconds before concurrent full-suite execution. Manual
+checks covered cancellation/retry, mode replacement during loading, search of
+all pair wallets, exact pair 25 purchase evidence beyond the first 25-row table
+page, preserved graph/selection while paginating the table, and narrow 375px
+and wide 1280px viewports. The full view uses a geometric grid with straight
+edges and no overlapping per-edge labels. Large selection changes yield in
+bounded style batches; small changes reuse the mounted canvas. Complete
+high-degree inspector pagination and stale selection/build races are also
+covered by the JavaScript tests.
+
+The 200,000-edge / 5,000-wallet, response/total-byte and deadline caps reject an
+oversized or incomplete whole view rather than sample it. These are display
+bounds, not a performance SLA for every browser/device or proof of source
+completeness. Dense views cost substantially more than a page; source fidelity
+and all analytical/execution admission limits retain their existing meanings.
+
+
+Verification for this display slice followed deep-dive §§3.4, 6, 24.6, 31,
+34.2 and 38. Only the static Web UI, documentation and tests changed; existing
+query ports, source access, recipe identity, causality and UNKNOWN fidelity
+were preserved. The approved graph count/byte/time limits remain fail closed;
+research artifacts still cannot enter replay or Strategy directly.
+
+- `.venv/bin/ruff format --check src tests`: passed (434 files).
+- `.venv/bin/ruff check src tests`: passed.
+- `.venv/bin/mypy src/backtest`: passed (284 source files).
+- `.venv/bin/lint-imports`: passed (5 contracts).
+- `.venv/bin/pytest --cov=backtest --cov-report=term-missing`: final quiet run
+  passed, 1,372 tests, 80.81% coverage, one explicitly opt-in live ClickHouse
+  test skipped and three performance-marked tests deselected by project policy.
+- `node --test tests/web/research-graph*.test.cjs`: 22 passed, including limits,
+  scope/ordinal/cursor completeness, stream cancellation, exact evidence,
+  inspector pagination, prefix-address ordering and replacement races.
+- Offline wheel build, installed CLI/API/CSP/SRI and all 13 static assets:
+  passed. No credentials, local configuration or extracted data entered the
+  wheel or feature diff. No dependency was added.
+
+One intermediate full run had an unchanged existing replay-benchmark worker
+initialization failure in
+`test_scan_semantic_hash_is_identical_for_serial_and_two_independent_workers`.
+The isolated test then passed in 7.26 seconds, and the final full run passed
+without parallel graph benchmarking. The replay worker code/tests were not
+modified or weakened to obtain that result; the intermittent failure is
+recorded rather than treated as graph evidence or hidden by a skip.

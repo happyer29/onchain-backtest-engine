@@ -1,9 +1,11 @@
 "use strict";
 
-// The browser retains one immutable artifact and one bounded table page at a time.
+// The browser retains one immutable artifact, one table page and an independently bounded graph.
 const $ = (selector) => document.querySelector(selector);
 const state = {artifact: null, table: null, pair: null, cursor: null, next: null, version: 0};
 const pending = new Map();
+// Table navigation never invalidates a whole-result loader; changing artifacts always does.
+const graphView = {mode: "page", controller: null, total: null};
 // Track the last submitted job without replacing unchanged controls on every poll.
 let activeJobId = null;
 let jobsSignature = "";
@@ -193,7 +195,9 @@ async function openArtifact(id) {
   $("#error").hidden = true;
   $("#result").hidden = true;
   // Release the previous page before resolving a different immutable artifact.
-  ResearchGraph.clear();
+  stopGraph();
+  graphView.mode = "page";
+  updateGraphScope();
   // Keep the previous view hidden until its replacement manifest is verified by the server.
   const summary = await api(`/api/v1/research/${id}`);
   // A slower request must never overwrite a more recently selected artifact.
@@ -202,6 +206,8 @@ async function openArtifact(id) {
   $("#artifact-id").value = id;
   history.replaceState(null, "", `/research?artifact=${id}`);
   const snapshot = summary.kind === "RESEARCH_SNAPSHOT";
+  // Only verified result metadata admits a full graph; snapshots expose observations instead.
+  graphView.total = snapshot ? null : summary.counts.pairs;
   // Selecting a snapshot fills the analysis form without auto-running another job.
   if (snapshot) $("[name=snapshot_id]").value = id;
   else {
@@ -250,8 +256,8 @@ async function selectTable(table, pair = null) {
 async function loadPage(cursor) {
   const version = ++state.version;
   const {artifact, table, pair} = state;
-  // Retire old evidence callbacks while the replacement page is being verified.
-  ResearchGraph.clear("Загружаем текущую страницу…");
+  // Page scope waits for its replacement rows; whole scope retains its independent evidence callbacks.
+  if (graphView.mode === "page") ResearchGraph.clear("Загружаем текущую страницу…");
   $("#graph-next-page").disabled = true;
   const query = new URLSearchParams({limit: "25"});
   if (cursor) query.set("cursor", cursor);
@@ -265,14 +271,97 @@ async function loadPage(cursor) {
   $("#table-title").textContent = names[table] + (pair === null ? "" : ` · пара ${pair}`);
   renderRows(page.rows, table);
   $("#next-page").disabled = !page.next_cursor;
-  $("#graph-panel").hidden = table !== "pairs";
+  $("#graph-panel").hidden = table !== "pairs" && graphView.mode !== "whole";
   // Canvas and table drilldown share the same exact result-local pair ordinal.
-  if (table === "pairs") ResearchGraph.render(page.rows, (rowId) => {
+  if (table === "pairs" && graphView.mode === "page") ResearchGraph.render(page.rows, (rowId) => {
     selectTable("evidence", rowId).catch(showError);
   });
   $("#graph-next-page").disabled = !page.next_cursor;
   // Selected tabs stay keyboard navigable and announce their active state.
   for (const button of $("#tabs").children) button.setAttribute("aria-pressed", String(button.dataset.table === table));
+}
+
+// Switching scope discards graph resources without cancelling or altering any analytical job.
+function stopGraph(message = "") {
+  if (graphView.controller) graphView.controller.abort();
+  graphView.controller = null;
+  ResearchGraph.clear(message);
+  $("#graph-cancel").hidden = true;
+  // The retry action remains explicit after cancellation, rejection or a disconnected read.
+  $("#graph-progress").hidden = true;
+  $("#graph-mode-whole").disabled = false;
+}
+
+// Scope controls are outside the renderer so they remain usable while it is loading or empty.
+function updateGraphScope() {
+  const whole = graphView.mode === "whole";
+  $("#graph-mode-page").setAttribute("aria-pressed", String(!whole));
+  $("#graph-mode-whole").setAttribute("aria-pressed", String(whole));
+  // Paging buttons apply only to the page scope; the table retains separate navigation.
+  $("#graph-mode-page").disabled = !whole;
+  $("#graph-page-navigation").hidden = whole;
+}
+
+// An explicit click begins one bounded immutable-result read; no table page drives its lifetime.
+async function wholeGraph() {
+  stopGraph();
+  graphView.mode = "whole";
+  updateGraphScope();
+  const controller = new AbortController();
+  // Replacement aborts this exact controller before another load can acquire display ownership.
+  graphView.controller = controller;
+  // This single deadline includes both sequential transfer and incremental graph construction.
+  const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(ResearchGraphLoad.limits.deadline)]);
+  const artifact = state.artifact;
+  const started = performance.now();
+  // Elapsed time measures display work only, never analytical identity or source event time.
+  $("#graph-mode-whole").disabled = true;
+  $("#graph-cancel").hidden = false;
+  $("#graph-progress").hidden = false;
+  // A fresh visible progress value cannot accidentally retain the last completed graph's count.
+  $("#graph-progress").value = 0;
+  $("#graph-status").textContent = "Проверяем и загружаем все связи результата…";
+  const owned = () => graphView.controller === controller && state.artifact === artifact;
+  let data = null;
+  try {
+    // Summary counts bound admission before the first read; cursors and final counts prove completeness.
+    data = await ResearchGraphLoad.load(artifact, graphView.total, signal, (loaded, total, wallets) => {
+      if (!owned()) return;
+      $("#graph-status").textContent = `Загружено ${loaded} из ${total} связей · ${wallets} кошельков. Полный граф ещё не готов.`;
+      $("#graph-progress").value = total ? loaded / total * 0.8 : 0.8;
+    });
+    // A completed response still loses ownership if a newer result was opened while it arrived.
+    if (!owned()) return;
+    // Evidence always uses the originating result, even after the table has moved to another page.
+    await ResearchGraph.renderWhole(data, (rowId) => {
+      if (state.artifact === artifact) selectTable("evidence", rowId).catch(showError);
+    }, signal, (built, total) => {
+      if (!owned()) return;
+      // Rendering yields between chunks; cancellation remains available throughout construction.
+      $("#graph-status").textContent = `Все связи загружены. Строим граф: ${built} из ${total}…`;
+      $("#graph-progress").value = total ? 0.8 + built / total * 0.2 : 1;
+    });
+    if (!owned()) return;
+    // Publish completion and elapsed display time only after a successful complete mount.
+    $("#graph-progress").value = 1;
+    $("#graph-status").textContent += ` Загрузка и построение: ${((performance.now() - started) / 1000).toFixed(1)} с.`;
+  // Only this loader may clear its renderer; stale errors cannot destroy the replacement graph.
+  } catch (error) {
+    if (!owned()) return;
+    const message = signal.aborted ? "Время загрузки истекло. Полный граф не построен; можно повторить."
+      : /^[А-ЯЁ]/.test(error.message || "") ? error.message : "Не удалось построить полный граф. Повтори загрузку.";
+    // Clear every partial renderer before making retry available.
+    stopGraph(message);
+  } finally {
+    // The renderer owns accepted row objects; discard the redundant transport array after completion.
+    if (data) data.rows.length = 0;
+    if (owned()) {
+      graphView.controller = null;
+      // Terminal display state exposes neither stale cancellation nor an unfinished progress bar.
+      $("#graph-cancel").hidden = true;
+      $("#graph-progress").hidden = true;
+    }
+  }
 }
 
 // Rebuild only the bounded current table page, with no hidden full-result DOM.
@@ -316,7 +405,17 @@ function renderRows(rows, table) {
 $("#open-form").addEventListener("submit", (event) => {event.preventDefault(); openArtifact($("#artifact-id").value.trim()).catch(showError);});
 $("#first-page").addEventListener("click", () => loadPage(null).catch(showError));
 $("#next-page").addEventListener("click", () => loadPage(state.next).catch(showError));
-// Graph pagination shares the table cursor without loading hidden pages or recalculating pairs.
+// The independent whole view persists across table pages; a mode switch explicitly releases it.
+$("#graph-mode-whole").addEventListener("click", wholeGraph);
+$("#graph-cancel").addEventListener("click", () => stopGraph("Загрузка отменена. Полный граф не построен; можно повторить."));
+$("#graph-mode-page").addEventListener("click", () => {
+  stopGraph();
+  graphView.mode = "page";
+  // Reopen the current pair page, or the first pair page after evidence/activity navigation.
+  updateGraphScope();
+  (state.table === "pairs" ? loadPage(state.cursor) : selectTable("pairs")).catch(showError);
+});
+// Graph pagination in page scope uses the table's exact server cursor.
 $("#graph-first-page").addEventListener("click", () => loadPage(null).catch(showError));
 $("#graph-next-page").addEventListener("click", () => loadPage(state.next).catch(showError));
 $("#refresh-jobs").addEventListener("click", () => refreshJobs().catch(showError));

@@ -25,7 +25,7 @@ class Control {
   get firstElementChild() {return this.children[0];}
   // Event handlers are invoked through controls, rather than calling private renderer helpers.
   addEventListener(name, fn) {this.events[name] = fn;}
-  fire(name) {this.events[name]({target: this});}
+  fire(name) {return this.events[name]({target: this});}
   setAttribute() {}
   querySelectorAll() {return this.children;}
 }
@@ -39,7 +39,7 @@ function harness(withLibrary = true) {
     // Reusing one control per selector models the static dashboard elements.
   };
   const context = {document: {querySelector: find, createElement: () => new Control()},
-    ResizeObserver: class {observe() {}}, console, setTimeout, clearTimeout};
+    ResizeObserver: class {observe() {}}, console, setTimeout, clearTimeout, DOMException};
   vm.createContext(context);
   // Load library and integration into one realm, matching browser plain-object and array semantics.
   if (withLibrary) {
@@ -50,6 +50,9 @@ function harness(withLibrary = true) {
         // Disable only canvas geometry; retain real collections, events, styles and viewport state.
         const core = installedGraph({...options, container: undefined, headless: true, styleEnabled: true});
         core.layout = () => ({run() {}});
+        core.mount = () => core;
+        core.unmount = () => core;
+        // Expose identity only after geometry has been isolated from the real graph collections.
         testCore = core;
         return core;
       };
@@ -83,7 +86,7 @@ test("node and edge selection preserve exact pair evidence and complete addresse
   assert.equal(h.find("#graph-wallet").value, "A");
   assert.equal(core.getElementById("wallet:C").hasClass("muted"), true);
   // Neighbour navigation uses the same edge path as a direct canvas tap.
-  h.find("#graph-selection").children.at(-1).children[0].fire("click");
+  h.find("#graph-selection").children.find((child) => child.className === "graph-neighbours").children[0].fire("click");
   h.find("#graph-selection").children.at(-1).fire("click");
   assert.deepEqual(opened, ["9007199254740993"]);
   core.getElementById("pair:8").emit("tap");
@@ -149,4 +152,80 @@ test("graph input is bounded and library absence is explicit", (context) => {
   unavailable.renderer.render([pair("0")], () => {});
   assert.match(unavailable.find("#graph-status").textContent, /не загрузилась/);
   assert.equal(unavailable.find("#graph-wallet").disabled, true);
+});
+
+// A full graph has no implicit page cap, and its bounded inspector can reach every exact edge.
+test("whole graph retains all edges, searches all wallets and paginates high-degree evidence", async (context) => {
+  const h = harness();
+  context.after(() => h.renderer.clear());
+  const rows = Array.from({length: 123}, (_, i) => pair(String(i), "A", `B${String(i).padStart(3, "0")}`));
+  const wallets = ["A", ...rows.map((row) => row.signer_b)], opened = [];
+  // The actual Cytoscape model is used, including its adjacency and event implementations.
+  await h.renderer.renderWhole({rows, wallets}, (id) => opened.push(id), new AbortController().signal, () => {});
+  assert.equal(h.core().edges().length, 123);
+  h.find("#graph-search").value = "B122";
+  h.find("#graph-search").fire("input");
+  assert.deepEqual(h.find("#graph-wallet").children.map((option) => option.value), ["", "B122"]);
+  // The last wallet and pair are outside both the first 25 table rows and first 100 search suggestions.
+  h.find("#graph-wallet").value = "B122";
+  await h.find("#graph-wallet").fire("change");
+  assert.equal(h.core().getElementById("wallet:B122").selected(), true);
+  h.find("#graph-wallet").value = "A";
+  await h.find("#graph-wallet").fire("change");
+  // DOM cardinality is checked separately from the complete graph degree.
+  const neighbourButtons = () => h.find("#graph-selection").children.find((node) => node.className === "graph-neighbours").children;
+  // All 123 incident edges are represented, while at most 50 neighbour actions are live.
+  assert.equal(neighbourButtons().length, 50);
+  h.find("#graph-selection").children.at(-1).children[1].fire("click");
+  h.find("#graph-selection").children.at(-1).children[1].fire("click");
+  assert.equal(neighbourButtons().length, 23);
+  await neighbourButtons().at(-1).fire("click");
+  // Evidence navigation preserves the result-local row ordinal despite independent inspector pagination.
+  h.find("#graph-selection").children.at(-1).fire("click");
+  assert.deepEqual(opened, ["122"]);
+  await h.find("#graph-clear").fire("click");
+  assert.equal(h.core().elements(".muted").length, 0);
+});
+
+// A stale asynchronous build must never overwrite the page graph that replaced it during a yield.
+test("whole construction honours cancellation and scope replacement", async (context) => {
+  const h = harness();
+  context.after(() => h.renderer.clear());
+  const controller = new AbortController();
+  const building = h.renderer.renderWhole({rows: [pair("0")], wallets: ["A", "B"]}, () => {}, controller.signal, () => {});
+  // Hold the original instance so destruction is verified independently of the new graph.
+  const old = h.core();
+  // Switching to a normal page destroys the in-progress headless instance before the next batch.
+  controller.abort();
+  h.renderer.render([pair("25", "C", "D")], () => {});
+  await assert.rejects(building, {name: "AbortError"});
+  assert.equal(old.destroyed(), true);
+  assert.equal(h.core().edges()[0].data("row").row_id, "25");
+  // Accepted whole-result bounds do not weaken explicit oversize rejection.
+  await assert.rejects(h.renderer.renderWhole({rows: [pair("0")], wallets: Array(5001).fill("A")}, () => {}, controller.signal, () => {}), /лимит/);
+});
+
+// A newer focus request or scope replacement retires a yielded display update without stale remounts.
+test("whole selection races preserve the latest focus and release replaced instances", async (context) => {
+  const h = harness();
+  context.after(() => h.renderer.clear());
+  const rows = Array.from({length: 80}, (_, i) => pair(String(i), "A", `B${i}`));
+  await h.renderer.renderWhole({rows, wallets: ["A", ...rows.map((row) => row.signer_b)]}, () => {}, new AbortController().signal, () => {});
+  // Trigger two overlapping focus changes through keyboard controls while the first awaits a style batch.
+  h.find("#graph-wallet").value = "B0";
+  const first = h.find("#graph-wallet").fire("change");
+  h.find("#graph-wallet").value = "B79";
+  const last = h.find("#graph-wallet").fire("change");
+  await Promise.all([first, last]);
+  // Only the final wallet's full incident edge remains visible, without removing any stored edge.
+  assert.equal(h.core().getElementById("wallet:B79").selected(), true);
+  assert.equal(h.core().edges().filter((edge) => !edge.hasClass("muted")).length, 1);
+  assert.equal(h.core().edges().length, 80);
+  const old = h.core();
+  const clearing = h.find("#graph-clear").fire("click");
+  // Replacing the scope during reset cannot reattach the discarded whole model afterward.
+  h.renderer.render([pair("25", "C", "D")], () => {});
+  await clearing;
+  assert.equal(old.destroyed(), true);
+  assert.equal(h.core().edges()[0].data("row").row_id, "25");
 });

@@ -112,19 +112,45 @@ controller.
 | Summary counters | The whole immutable result, independent of pagination |
 | Activity | All observed BUY/SELL rows, distinct mints, block bounds and source SOL-leg sums |
 | Pairs | Shared mints and direction by reported transaction positions |
-| Graph | Current page only: at most 25 pairs and 50 nodes |
+| Page graph | Current table page: at most 25 pairs and 50 nodes |
+| Whole-result graph | Every pair in the exact result, up to 200,000 edges and 5,000 participating wallets |
 | Purchase evidence | Mint and both original purchases, including full signatures, signers and fee payers |
 | Lineage | The exact retained input snapshot |
 
 The bundled Cytoscape.js graph supports wheel/pinch zoom, canvas panning and
 node dragging. Use Fit to restore the viewport, Reset layout to undo manual
-positions, and Expand for more space. Select a node or choose its full address
-in the keyboard-accessible current-page selector; the inspector lists only
-its current-page neighbours. Select an edge or neighbour, then open its exact
-pair's purchase evidence. Graph page buttons use the same table cursor and
-replace, rather than accumulate, nodes. The first page is not a strongest-pair
-ranking; layout distance does not establish a cluster or statistical strength.
-The table remains available if the graph library cannot load.
+positions, and Expand for more space. The default **Текущая страница** mode
+uses the table cursor and replaces its graph when the table changes page.
+
+Select **Весь результат** above the graph to read every pair from the selected
+result. Progress reports downloaded and constructed edges; **Отменить загрузку
+графа** cancels this display operation. This does not submit an analysis job or
+read the external indexer. Completion requires all contiguous pair ordinals,
+cursor exhaustion and equality with the verified summary count. The limit is
+200,000 edges / 5,000 wallets that actually participate in pairs; the activity
+summary may include additional wallets without qualifying pairs. Exceeding a
+limit rejects the full graph explicitly, without sampling or displaying a
+partial graph as complete. Requests contain at most 200 rows and 2 MiB each;
+total transport is capped at 128 MiB, each request at 15 seconds, and the whole
+load/build at 3 minutes. Large views consume more browser memory than a page.
+
+**Найти кошелёк в графе** searches full addresses or case-sensitive substrings
+across all loaded wallets. At most 100 suggestions are displayed, with their
+full match count and a prompt to refine the search. Selecting a wallet keeps
+all its incident connections visible; the inspector lists every neighbour in
+pages of 50. Selecting a neighbour or edge opens the exact pair and its
+**Открыть исходные покупки** action, including pairs outside the table's current
+page. **Снять выделение** restores the complete loaded graph. Dense display
+updates show a separate status and yield between batches. Table pagination,
+activity and evidence navigation preserve the full graph and selected pair.
+Switching to page mode or opening another artifact releases it.
+
+The full graph uses straight edges without thousands of overlapping counter
+labels; exact counts appear in the inspector. Its grid is a bounded visual
+layout, not clustering. Neither layout distance nor the first page establishes
+statistical strength or a strongest-pair ranking. This is the complete selected
+result, not every connection in the market. The table remains available when
+the graph library is unavailable or full-view admission fails.
 
 The evidence total sums pair/mint contributions; it is not a market-wide
 distinct-token count. Activity deliberately retains duplicate source rows.
@@ -155,7 +181,8 @@ Preparation permits at most 300,000 blocks and 2 million rows. Analysis limits
 the window to 0–3,600 seconds, each mint to 2,048 participants and the candidate
 join to 4 million pair/mint combinations **before** the time filter. Memory,
 spill, output and query time are bounded; source-server limits may reject a
-scan earlier. API pages allow at most 200 rows and the UI requests 25.
+scan earlier. API pages allow at most 200 rows. Tables request 25; explicit
+whole-graph loading uses sequential pages of 200.
 
 Limit failures reject the whole computation. They never drop popular tokens,
 truncate observations or silently sample a top list. Narrow the range or
@@ -164,8 +191,8 @@ not remove the prejoin candidate check.
 
 Leave the signer field empty to analyze all observed signers. A saved
 97,040-row cut with 10,075 signers passed at 180 seconds and a minimum of two
-shared mints: 81,645 pairs and 213,851 pair/mint evidence rows. The graph still
-shows the current page. [Capacity evidence](research-capacity.md) records this
+shared mints: 81,645 pairs and 213,851 pair/mint evidence rows. Graph scope is
+chosen separately from table pagination. [Capacity evidence](research-capacity.md) records this
 specific workload. Windows of 1,000 and 3,600 seconds also pass on this cut:
 compact temporary keys reduce repeated address storage while the published
 rows keep full addresses and exact observation references. Larger or denser

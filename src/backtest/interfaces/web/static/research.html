@@ -9,6 +9,8 @@
   <!-- The pinned graph library is shipped locally; deferred order keeps the client synchronous. -->
   <script defer src="/static/vendor/cytoscape-3.34.3.min.js" integrity="sha384-qPKQxl9uMXOw7vSTUDAnpUilhLuulovw6P5Z4db4bqxW5VhumS7przEmHX0iM0Oc"></script>
   <script defer src="/static/research-graph.js"></script>
+  <!-- Whole-result reads use only the existing bounded same-origin pair endpoint. -->
+  <script defer src="/static/research-graph-load.js"></script>
   <script defer src="/static/research.js"></script>
 </head>
 <body>
@@ -115,13 +117,21 @@
     <section id="result" hidden>
       <div class="section-head"><div><p class="eyebrow">03 / Проверка связи</p><h2 id="result-title"></h2></div><a id="lineage" href="/">Происхождение</a></div>
       <p id="scope" class="hint"></p><div id="metrics" class="metrics"></div>
-      <!-- Global counters describe the complete result; graph and tables are explicitly paginated. -->
-      <p class="notice">Числа выше относятся ко всему результату. Граф и таблица показывают текущую страницу.
+      <!-- Whole-result counters and graph scope are independent from the bounded table page. -->
+      <p class="notice">Числа выше относятся ко всему результату. Таблица постраничная; охват графа выбирается отдельно.
         Подписант и плательщик комиссии — разные роли. Суммы сделок не являются прибылью кошелька.</p>
       <nav id="tabs" aria-label="Таблицы исследования"></nav>
-      <!-- Canvas interactions and keyboard controls operate on the same exact bounded pair page. -->
+      <!-- Canvas and keyboard controls operate on the same exact data in the selected graph scope. -->
       <section id="graph-panel" class="panel" hidden>
-        <div class="section-head"><h3>Совместные покупки · текущая страница</h3><span class="graph-badge">Cytoscape.js</span></div>
+        <div class="section-head"><h3>Совместные покупки</h3><span class="graph-badge">Cytoscape.js</span></div>
+        <!-- Whole-result mode is opt-in, bounded, cancellable and independent of table navigation. -->
+        <div class="graph-controls" role="group" aria-label="Охват графа">
+          <button id="graph-mode-page" class="secondary" aria-pressed="true">Текущая страница</button>
+          <button id="graph-mode-whole" class="secondary" aria-pressed="false">Весь результат</button>
+          <button id="graph-cancel" class="secondary" hidden>Отменить загрузку графа</button>
+        </div>
+        <!-- Completion requires all rows, not just the last progress update. -->
+        <progress id="graph-progress" max="1" value="0" aria-label="Загрузка полного графа" hidden></progress>
         <p id="graph-status" class="hint" role="status" aria-live="polite"></p>
         <div id="graph-controls" class="graph-controls" role="group" aria-label="Управление графом">
           <button id="graph-zoom-in" class="secondary" aria-label="Приблизить граф">＋</button>
@@ -130,26 +140,34 @@
           <output id="graph-zoom" aria-label="Масштаб графа">100%</output>
           <button id="graph-fit" class="secondary">Уместить граф</button>
           <button id="graph-reset" class="secondary">Сбросить расположение</button>
-          <!-- Expansion changes viewport space while retaining the same bounded data page. -->
+          <!-- Expansion changes viewport space while retaining the same admitted graph data. -->
           <button id="graph-expand" class="secondary" aria-pressed="false">Развернуть граф</button>
         </div>
-        <!-- The page-scoped selector provides a keyboard equivalent to selecting a canvas node. -->
+        <!-- Scope-wide search provides a keyboard equivalent to selecting a canvas node. -->
         <div class="graph-workspace">
-          <div id="graph" role="img" aria-label="Граф пар текущей страницы; выбор кошелька доступен в списке рядом" aria-describedby="graph-help"></div>
+          <div id="graph" role="img" aria-label="Граф совместных покупок; поиск и выбор кошелька доступны рядом" aria-describedby="graph-help"></div>
           <aside class="graph-inspector" aria-label="Выбранный элемент графа">
-            <label for="graph-wallet">Кошелёк на текущей странице</label><select id="graph-wallet" disabled><option value="">Выбери кошелёк…</option></select>
+            <!-- Search covers every loaded wallet; the suggestion list has its own visible bound. -->
+            <label for="graph-search">Найти кошелёк в графе</label><input id="graph-search" type="search" maxlength="44" placeholder="Адрес или его часть" disabled />
+            <p id="graph-search-status" class="hint"></p>
+            <label for="graph-wallet">Выбрать кошелёк</label><select id="graph-wallet" disabled><option value="">Выбери кошелёк…</option></select>
             <button id="graph-clear" class="secondary" disabled>Снять выделение</button>
             <!-- Details and evidence actions retain full identities beside shortened canvas labels. -->
+            <p id="graph-selection-status" class="hint" role="status"></p>
             <div id="graph-selection" aria-live="polite"><p class="hint">Выбери узел или связь на графе.</p></div>
           </aside>
         </div>
+        <!-- Edge labels are intentionally suppressed only in the dense whole-result presentation. -->
         <p id="graph-help" class="hint">Колесо или жест двумя пальцами — масштаб; перетаскивание фона — перемещение;
-          узла — его положение. Нажми связь, чтобы открыть покупки. Толщина и подпись связи — число общих токенов.</p>
+          узла — его положение. Нажми связь, чтобы открыть покупки. На странице толщина и подпись — число общих токенов;
+          в полном графе числа доступны при выборе связи.</p>
         <!-- Layout must not be mistaken for a cluster, a rank or a complete market network. -->
-        <p class="hint">До 25 пар и 50 кошельков. Следующая страница заменяет граф; это не весь граф рынка
-          и не топ связей. Расстояния и положение узлов не имеют аналитического смысла.</p>
+        <p class="hint">«Текущая страница» — до 25 пар / 50 кошельков. «Весь результат» — все найденные пары,
+          до 200 000 связей / 5 000 кошельков, независимо от страниц таблицы. В граф входят только участники найденных пар. Загрузка — до 3 минут.
+          Выбор кошелька в полном графе оставляет видимыми все его связи; «Снять выделение» возвращает весь граф.
+          Это связи внутри выбранного результата, а не всего рынка. Расстояния и расположение узлов не означают кластеры.</p>
         <!-- Page navigation is also available beside the graph, using the same exact table cursors. -->
-        <div class="pagination"><button id="graph-first-page" class="secondary">К первым парам</button>
+        <div id="graph-page-navigation" class="pagination"><button id="graph-first-page" class="secondary">К первым парам</button>
           <button id="graph-next-page" disabled>Следующие пары →</button></div>
       </section>
       <!-- Empty states never imply a failed computation was a successful empty result. -->
