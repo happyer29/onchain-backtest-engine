@@ -15,7 +15,7 @@ import typer
 from backtest.application.models import JobType
 
 # This module imports no adapters, bootstrap, runtime, SQL or filesystem readers.
-from backtest.application.research import ResearchTable
+from backtest.application.research import ResearchMode, ResearchTable
 from backtest.application.research_pages import cursor_after, page_cursor
 from backtest.domain.identifiers import ArtifactId
 
@@ -75,6 +75,8 @@ def register_research_commands(cli: typer.Typer, factory: CliBackendFactory) -> 
         # These filters affect the recipe; physical execution tuning is not accepted here.
         minimum_shared_mints: Annotated[int, typer.Option(min=1)] = 2,
         wallet: Annotated[list[str] | None, typer.Option()] = None,
+        # Token filtering is part of the immutable recipe, shared with the web form.
+        mode: Annotated[ResearchMode, typer.Option()] = ResearchMode.NON_MAYHEM,
     ) -> None:
         """Analyze an exact local snapshot; repeat --wallet to restrict the signer set."""
 
@@ -85,6 +87,7 @@ def register_research_commands(cli: typer.Typer, factory: CliBackendFactory) -> 
             minimum_shared_mints=minimum_shared_mints,
             # Canonical address ordering and full-key validation belong to the use case.
             wallets=tuple(wallet or ()),
+            mode=mode,
         )
         # Existing direct execution owns retries, cancellation, admission and receipts.
         artifact = backend.execute_research(JobType.ANALYZE_WALLETS, command.canonical_bytes())

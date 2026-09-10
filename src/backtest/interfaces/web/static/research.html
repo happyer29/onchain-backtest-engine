@@ -36,7 +36,7 @@
           <label>От блока, включительно<input name="from_block" type="number" min="0" max="4294967295" required /></label>
           <label>До блока, не включая<input name="to_block" type="number" min="1" max="4294967296" required /></label>
           <!-- Hard limits describe actual rejection rules, rather than promising partial scans. -->
-          <p class="hint">До 300 000 блоков и 2 млн строк. Источник и сеть берутся из локального профиля.</p>
+          <p class="hint">До 300 000 блоков, 2 млн сделок и 50 000 токенов. Снимок сохраняет сделки и доступные сведения о режиме токенов из того же источника.</p>
           <button type="submit" aria-describedby="prepare-feedback">Подготовить снимок</button>
           <!-- Submission feedback stays beside its action, even when results are open below. -->
           <p id="prepare-feedback" class="form-feedback" role="status" aria-live="polite" tabindex="-1" hidden></p>
@@ -48,6 +48,16 @@
           <label>Research snapshot ID<input name="snapshot_id" pattern="[0-9a-f]{64}" minlength="64" maxlength="64" required /></label>
           <div class="two"><label>Окно, секунд<input name="window_seconds" type="number" min="0" max="3600" value="60" required /></label>
             <label>Минимум общих токенов<input name="minimum_shared_mints" type="number" min="1" max="2000000" value="2" required /></label></div>
+          <!-- Mode changes the complete analysis recipe before first buys and pair thresholds. -->
+          <label for="research-mode">Режим токенов</label>
+          <select id="research-mode" name="mode" aria-describedby="mode-help">
+            <option value="NON_MAYHEM" selected>Без Mayhem</option>
+            <option value="ALL">Все режимы</option>
+          </select>
+          <p id="mode-help" class="hint">«Без Mayhem» учитывает только токены с подтверждённым обычным режимом.
+            Mayhem и токены с неизвестным режимом исключаются до подсчёта общих токенов.
+            Кошелёк остаётся в анализе, если у него есть подходящие сделки. Для смены режима запусти анализ заново.</p>
+          <p id="mode-availability" class="notice" hidden></p>
           <!-- An empty signer selection means all observed signers, never a sampled top list. -->
           <label>Подписанты, необязательно<textarea name="wallets" rows="2" placeholder="Адреса через пробел или с новой строки; до 128"></textarea></label>
           <p class="hint">Сравниваем первую покупку <strong>каждого токена каждым кошельком внутри снимка</strong>.
@@ -69,7 +79,7 @@
         блоков, транзакций и инструкций в выбранном снимке.</p>
       <!-- The comparison window is independent of the snapshot's total observation period. -->
       <ol class="method-steps">
-        <li><strong>Выбрать первые покупки.</strong> История до начала снимка не проверяется:
+        <li><strong>Применить режим токенов и выбрать первые покупки.</strong> Mayhem не даёт связи в режиме «Без Mayhem». История до начала снимка не проверяется:
           это не обязательно первая покупка токена за всю жизнь кошелька.</li>
         <li><strong>Сравнить время у двух кошельков.</strong> Для одного и того же токена разница
           времён блоков должна быть не больше окна. При окне 60 с ровно 60 с тоже считается.</li>
@@ -120,6 +130,12 @@
     <section id="result" hidden>
       <div class="section-head"><div><p class="eyebrow">03 / Проверка связи</p><h2 id="result-title"></h2></div><a id="lineage" href="/">Происхождение</a></div>
       <p id="scope" class="hint"></p><div id="metrics" class="metrics"></div>
+      <p id="mode-summary" class="notice"></p>
+      <!-- A warning names the data defect and links to its complete paginated mint list. -->
+      <div id="data-issues-warning" class="notice" role="status" hidden>
+        <p id="data-issues-summary"></p>
+        <button id="show-data-issues" class="secondary" type="button">Показать проблемные токены</button>
+      </div>
       <!-- Whole-result counters and graph scope are independent from the bounded table page. -->
       <p class="notice">Числа выше относятся ко всему результату. Таблица постраничная; охват графа выбирается отдельно.
         Подписант и плательщик комиссии — разные роли. Суммы сделок не являются прибылью кошелька.</p>

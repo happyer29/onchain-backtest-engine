@@ -2,6 +2,10 @@
 
 Date: 2026-09-10. This records one saved live-source cut under
 [deep dive §24.6](architecture-deep-dive.md#246-on-chain-wallet-research).
+This historical measurement uses v1 snapshots and **all token modes**. Under
+v2, reproduce its selection with `--mode ALL` over the original v1 snapshot;
+a fresh v2 snapshot also applies explicit data-quality exclusions. This historical
+measurement does not measure the new non-Mayhem subset or creation lookup.
 It calibrates existing finite implementation guards; it does not establish
 general live-source capacity, completeness, finality or causal availability.
 
@@ -69,7 +73,7 @@ With the exact snapshot retained in the selected profile's data root:
 
 ```bash
 backtest research analyze <SNAPSHOT_ID> --window-seconds 180 \
-  --minimum-shared-mints 2 --config <LOCAL_PROFILE>
+  --minimum-shared-mints 2 --mode ALL --config <LOCAL_PROFILE>
 ```
 
 Omit `--wallet`, or leave the dashboard signer field empty. A different code
@@ -321,3 +325,49 @@ presentation nor its grouping policy makes research results causal strategy
 inputs or raises UNKNOWN fidelity. Over-limit and incomplete loading still
 reject the whole view explicitly; no market completeness or owner clustering
 is claimed.
+
+
+## Research v2 mode filtering and incomplete-creation warnings
+
+The same bounded `[445840000,445852744)` cut completed live preparation and
+NON_MAYHEM analysis on 2026-09-10 through the same-origin browser and isolated
+supervisor jobs. Parameters: all signers, window 1,000 seconds, minimum 2 shared
+mints. The source adapter used the already approved deployment-local HTTP opt-in;
+this grants no source completeness, causal-availability or replay fidelity.
+
+- Snapshot: `be09be3b8fd92afff781d7ebe2974b6593ea0ed25b0fb48580b178b3311bb3f1`.
+- Result: `59d707f189ed6f4b23d0fe88a25752e0ba257ef446f51dcf570938dc80e98d93`.
+- All 97,040 swap observations remain stored, from 10,075 signers and 2,176 mints.
+- Reported ordinary mode: 1,656 mints / 53,011 rows; Mayhem: 498 / 44,001;
+  missing creation records: 22 / 28, explicitly UNKNOWN.
+- Exactly 40 ordinary-mode mints have empty creation signatures, affecting 100
+  observation rows. Both snapshot and result warn and list all 40 addresses with
+  reasons and row counts. Browser pagination showed 25 + 15 rows and then ended.
+- NON_MAYHEM retains 52,911 rows and 9,846 signers; the complete result contains
+  150,233 pairs and 367,792 pair-mint evidence rows. Exclusions reconcile as
+  `97,040 - 44,001 - 28 - 100 = 52,911`.
+- The browser loaded all 150,233 pairs without truncation: 2,752 participating
+  wallets and 78 visual groups, in 8.2 seconds on this attempt. Group 1 opened
+  all 26,850 internal pairs across 644 wallets; wallet-neighbour navigation
+  remains independent of the paginated warning and pair tables.
+
+These are observations for this exact cut and physical browser attempt, not a
+new general capacity admission. Mayhem and partial-creation metadata remain
+research facts only; Sniping source-evidence gates are unchanged. Legacy v1
+artifacts retain their exact original semantics.
+
+
+Verification for the v2 extension and approved empty-signature exception:
+
+- `ruff format --check src tests` and `ruff check src tests`: passed.
+- `mypy src/backtest`: 284 source files passed; `lint-imports`: all 5 contracts kept.
+- `pytest --cov=backtest --cov-report=term-missing`: 1,420 passed, 1 external
+  read-only test skipped without opt-in, 3 opt-in performance tests deselected;
+  coverage 80.92%, 176.70 seconds. The bounded live browser run above is separate.
+- All 29 existing Node graph/model/loader tests passed.
+- Wheel build, clean installed-package import, installed CLI mode selector,
+  API/CSP/SRI and byte equality for all 15 packaged static assets passed.
+- Browser warning pagination, complete graph and all three levels passed;
+  no browser warning/error log entries were observed and viewport size was restored.
+- Changed Markdown local links and `git diff --check` passed. No credentials,
+  local source profiles, extracted data or operational artifacts are in the change.

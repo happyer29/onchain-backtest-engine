@@ -1,6 +1,6 @@
 """Replaceable acquisition, columnar research and verified-query seams."""
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from typing import Protocol
 
 # Ports exchange immutable application values; native batch types stay in adapters.
@@ -8,6 +8,7 @@ from backtest.application.models import CommittedArtifact, JobRecord
 from backtest.application.research import (
     ResearchDatasetSpec,
     ResearchTable,
+    ResearchTokenMode,
     # These specs carry exact content IDs and fixed recipes, never executable SQL.
     WalletAnalysisSpec,
     WalletObservation,
@@ -15,6 +16,9 @@ from backtest.application.research import (
 
 # Port signatures use bounded Python values, never Arrow/DuckDB objects or paths.
 from backtest.domain.identifiers import ArtifactId, ContentDigest, JobId
+
+# A source callback is available only while preparing one snapshot, never during analysis.
+ResearchModeReader = Callable[[tuple[str, ...]], tuple[ResearchTokenMode, ...]]
 
 
 class ResearchJobQuery(Protocol):
@@ -32,6 +36,11 @@ class ResearchSource(Protocol):
 
     def batches(self, spec: ResearchDatasetSpec) -> Iterator[tuple[WalletObservation, ...]]: ...
 
+    # Classify only the complete bounded set of observed mints, preserving source provenance.
+    def modes(
+        self, spec: ResearchDatasetSpec, mints: tuple[str, ...]
+    ) -> tuple[ResearchTokenMode, ...]: ...
+
 
 class ResearchStore(Protocol):
     """Publication and local analysis share the existing artifact repository."""
@@ -42,6 +51,9 @@ class ResearchStore(Protocol):
         schema_digest: ContentDigest,
         # The source stream is consumed once under hard preparation limits.
         batches: Iterator[tuple[WalletObservation, ...]],
+        # V2 publication requires a complete explicit classification source.
+        *,
+        classify: ResearchModeReader | None = None,
     ) -> CommittedArtifact: ...
 
     # A complete recipe produces one immutable result; no partial success is returned.

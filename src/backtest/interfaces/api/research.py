@@ -1,7 +1,7 @@
 """Typed same-origin research commands and bounded immutable table views."""
 
 from collections.abc import Awaitable, Callable
-from typing import Annotated, cast
+from typing import Annotated, Literal, cast
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 # The transport calls application use cases and has no data, SQL or filesystem adapter.
 from backtest.application.canonical_json import canonicalize_job_payload
 from backtest.application.models import JobType
-from backtest.application.research import ResearchError, ResearchTable
+from backtest.application.research import ResearchError, ResearchMode, ResearchTable
 from backtest.application.research_pages import cursor_after, page_cursor
 from backtest.application.use_cases.research import ResearchUseCases
 
@@ -39,6 +39,8 @@ class AnalyzeWalletsForm(ResearchModel):
     snapshot_id: DigestText
     window_seconds: int = Field(default=60, ge=0, le=3600)
     minimum_shared_mints: int = Field(default=2, ge=1, le=2_000_000)
+    # The shared resolver receives an explicit closed semantic mode.
+    mode: Literal["NON_MAYHEM", "ALL"] = "NON_MAYHEM"
     # Public keys are bounded here and fully decoded by the application contract.
     wallets: list[Annotated[str, Field(min_length=32, max_length=44)]] = Field(
         default_factory=list,
@@ -134,6 +136,7 @@ def research_router(
             minimum_shared_mints=form.minimum_shared_mints,
             # Full address validation and canonical selection ordering belong to the use case.
             wallets=tuple(form.wallets),
+            mode=ResearchMode(form.mode),
         )
         # Canonical bytes cross the shared queue boundary, exactly as for CLI execution.
         return submit(request, response, JobType.ANALYZE_WALLETS, command.canonical_bytes())
@@ -148,6 +151,8 @@ def research_router(
         dataset = cast(dict[str, object], document["dataset"])
         # Dataset metadata is already validated against the closed immutable manifest schema.
         counts = cast(dict[str, int], document["counts"])
+        issues = cast(dict[str, int], document.get("data_issue_counts", {}))
+        # A legacy artifact has no invented warning metadata; v2 carries reconciled totals.
         return {
             "artifact_id": artifact_id,
             "kind": document["kind"],
@@ -156,6 +161,13 @@ def research_router(
             "counts": {key: str(value) for key, value in counts.items()},
             "quality": document["quality"],
             "analysis": document.get("analysis"),
+            # Legacy summaries retain an explicit absence of creation classifications.
+            "mode_counts": {
+                key: str(value)
+                for key, value in cast(dict[str, int], document.get("mode_counts", {})).items()
+            },
+            # Issue totals are bounded metadata; individual addresses use typed table pagination.
+            "data_issue_counts": {key: str(value) for key, value in issues.items()},
         }
 
     # Successful job navigation still authenticates the exact committed result manifest.

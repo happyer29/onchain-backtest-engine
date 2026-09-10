@@ -25,8 +25,12 @@ capability mapping pins the network's complete genesis hash. Configure the
 connection and environment-backed `secret_ref` using the
 [configuration guide](configuration.md).
 
-Start with a small interval. Research does not join trades to launches inside
-the decision range or apply the Sniping non-Mayhem universe. It observes this
+Start with a small interval. Research v2 preserves all successful observed trades
+and separately looks up creation metadata for their exact mints in the same
+source. Creation may predate the observation range. Each mint is classified as
+ordinary, Mayhem or unknown, with its source creation reference and repeat count.
+Missing metadata stays unknown; conflicting, null or malformed metadata rejects
+preparation. This does not apply the Sniping execution universe. It observes this
 Pump.fun source scope, not the entire Solana market. Existing Sniping snapshots
 have a different scope and lack the required wallet roles, so they cannot be
 used as research snapshots.
@@ -50,20 +54,50 @@ submit through its web form; a direct CLI job cannot create a second controller.
 ## Analyze shared purchases
 
 Defaults are a 60-second inclusive window, at least two shared tokens, and all
-observed signers. Optionally select up to 128 complete wallet addresses; this
+observed signers, and **Без Mayhem** (`NON_MAYHEM`). Optionally select up to 128 complete wallet addresses; this
 changes the calculation's participant set, not just graph display.
 
 ```bash
 backtest research analyze <SNAPSHOT_ID> \
   --config configs/local-16gb.toml \
-  --window-seconds 60 --minimum-shared-mints 2
+  --window-seconds 60 --minimum-shared-mints 2 --mode NON_MAYHEM
 ```
 
+Choose **Все режимы** (`--mode ALL`) to include all token modes, subject to data-issue exclusions below. In
+**Без Mayhem**, only explicitly ordinary tokens remain; Mayhem and unknown
+modes are excluded with separate visible counts. The filter runs before first
+buys, pair counts and the minimum threshold. A pair with two shared tokens,
+one ordinary and one Mayhem, has a count of one after filtering and disappears
+at a minimum of two. Its wallets are still eligible through ordinary trades.
+Changing the selector requires running a new analysis; it does not hide edges
+in the old result. All three graph levels use the new complete pair result.
+
+**Data completeness warnings.** A literal empty creation `signature` in
+`pumpfun_token_creation` excludes the mint in both modes. The warning shows
+mint/row totals; **Показать проблемные токены** opens **Проблемы данных**, listing
+every affected address, reason and observation-row count through pagination.
+Snapshot warnings cover all swaps; result warnings cover the selected signers
+before filters. Source swaps, partial coordinates and the reported mode remain
+stored; the issue never fabricates a transaction identity. Invalid/nonempty
+signatures, invalid/null modes and conflicting creation records still reject.
+
+The mode summary counts rows and distinct tokens **among the selected signers
+before the mode filter**. Activity and `selected_rows` describe the retained
+subset. Snapshot counts cover all original observations. The **Режимы токенов**
+table exposes classification and creation provenance independently of swaps.
+
+Old v1 snapshots/results remain readable as all-mode observations. They have no
+Mayhem evidence: a new `NON_MAYHEM` command returns
+`RESEARCH_REPREPARE_REQUIRED`. Prepare a new snapshot for the desired block range;
+then open that successful job and analyze its new ID. The page fills empty block
+fields from the opened artifact. Explicit ALL analysis on v1 remains local-only
+and reports mode counts as unknown; existing bytes are never rewritten.
+
 Repeat `--wallet <ADDRESS>` to select signers. Changed window, threshold or
-selection produces a new identity-bearing result. Analysis requires only
+selection or token mode produces a new identity-bearing result. Analysis requires only
 verified committed local files and no source connection.
 
-1. For each signer/mint, select the first observed BUY **within this snapshot**
+1. Apply signer and token-mode filters. For each retained signer/mint, select the first observed BUY **within this snapshot**
    by block, transaction, instruction and canonical observation ordinal.
 2. Two different signers qualify for that mint if the absolute difference of
    their reported block timestamps is no larger than the window. Exactly
@@ -110,7 +144,7 @@ controller.
 | View | Meaning |
 |---|---|
 | Summary counters | The whole immutable result, independent of pagination |
-| Activity | All observed BUY/SELL rows, distinct mints, block bounds and source SOL-leg sums |
+| Activity | Selected BUY/SELL rows after signer and mode filters, distinct mints, block bounds and source SOL-leg sums |
 | Pairs | Shared mints and direction by reported transaction positions |
 | Page graph | Current table page: at most 25 pairs and 50 nodes |
 | Whole-result graph | Every pair in the exact result, up to 200,000 edges and 5,000 participating wallets |
@@ -202,7 +236,10 @@ bounded read of valid observed rows, not that the source contains every trade.
 Transfers, full balance history, wallet PnL and ownership clustering are not
 implemented. Source amount-leg sums are not wallet profit.
 
-Preparation permits at most 300,000 blocks and 2 million rows. Analysis limits
+Preparation permits at most 300,000 swap blocks, 2 million swap rows and
+50,000 observed mints. Its separate exact-mint creation lookup has its own
+20-million scanned-row / 2-GiB scanned-byte / 2-million result-row / 1-GiB
+result-byte / 120-second caps; any violation aborts the entire snapshot. Analysis limits
 the window to 0–3,600 seconds, each mint to 2,048 participants and the candidate
 join to 4 million pair/mint combinations **before** the time filter. Memory,
 spill, output and query time are bounded; source-server limits may reject a
@@ -215,7 +252,7 @@ explicitly select signers and run a new analysis. A smaller time window does
 not remove the prejoin candidate check.
 
 Leave the signer field empty to analyze all observed signers. A saved
-97,040-row cut with 10,075 signers passed at 180 seconds and a minimum of two
+97,040-row **v1, all-mode** cut with 10,075 signers passed at 180 seconds and a minimum of two
 shared mints: 81,645 pairs and 213,851 pair/mint evidence rows. Graph scope is
 chosen separately from table pagination. [Capacity evidence](research-capacity.md) records this
 specific workload. Windows of 1,000 and 3,600 seconds also pass on this cut:

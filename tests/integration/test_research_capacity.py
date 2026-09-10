@@ -17,7 +17,7 @@ from backtest.application.research import (
     WalletAnalysisSpec,
     WalletObservation,
 )
-from tests.support.research import DIGEST, dataset, key, observation, observations
+from tests.support.research import DIGEST, dataset, key, observation, observations, ordinary_modes
 
 
 def _signer(index: int) -> str:
@@ -53,7 +53,8 @@ def test_empty_signer_selection_includes_dense_tokens_and_every_wallet(tmp_path:
     """1200 buyers of three mints exceed both old guards but have one provable shared pair."""
     store = LocalResearchStore(LocalArtifactRepository(tmp_path), memory_mb=256)
     rows = tuple(_dense_rows(1200, 3))
-    snapshot = store.publish_snapshot(dataset(), DIGEST, iter((rows,)))
+    # This fixture explicitly classifies ordinary launches before the observed trades.
+    snapshot = store.publish_snapshot(dataset(), DIGEST, iter((rows,)), classify=ordinary_modes)
     # The empty selection is the actual public default, with no top-wallet fallback.
     spec = WalletAnalysisSpec(snapshot.artifact_id, DIGEST, DIGEST, window_seconds=180)
     assert spec.wallets == ()
@@ -82,7 +83,8 @@ def test_capacity_overflow_aborts(tmp_path: Path, participants: int, mints: int)
     """Reject per-mint overflow independently of total-candidate overflow before publication."""
     store = LocalResearchStore(LocalArtifactRepository(tmp_path), memory_mb=256)
     rows = tuple(_dense_rows(participants, mints))
-    snapshot = store.publish_snapshot(dataset(), DIGEST, iter((rows,)))
+    # This fixture explicitly classifies ordinary launches before the observed trades.
+    snapshot = store.publish_snapshot(dataset(), DIGEST, iter((rows,)), classify=ordinary_modes)
     spec = WalletAnalysisSpec(snapshot.artifact_id, DIGEST, DIGEST, window_seconds=180)
     # Respectively 2049 buyers or 4,332,450 potential pairs exceed the calibrated envelope.
     with pytest.raises(ResearchError, match="PAIR_CANDIDATE_LIMIT"):
@@ -100,7 +102,8 @@ def test_wide_window_dense_result_fits_bounded_workspace(tmp_path: Path) -> None
     rows = tuple(
         replace(row, block_time_s=1000 + row.transaction_index) for row in _dense_rows(600, 2)
     )
-    snapshot = store.publish_snapshot(dataset(), DIGEST, iter((rows,)))
+    # This fixture explicitly classifies ordinary launches before the observed trades.
+    snapshot = store.publish_snapshot(dataset(), DIGEST, iter((rows,)), classify=ordinary_modes)
     # Expected counts follow n*(n-1)/2 independently of the SQL execution strategy.
     spec = WalletAnalysisSpec(snapshot.artifact_id, DIGEST, DIGEST, window_seconds=1000)
     result = store.analyze(spec)
@@ -131,7 +134,10 @@ def test_compact_work_preserves_original_table_bytes(tmp_path: Path, threads: in
     }
     # These hashes were recorded from the prior string-based recipe, not the compact query.
     store = LocalResearchStore(LocalArtifactRepository(tmp_path), threads=threads)
-    snapshot = store.publish_snapshot(dataset(), DIGEST, iter((observations(),)))
+    # This fixture explicitly classifies ordinary launches before the observed trades.
+    snapshot = store.publish_snapshot(
+        dataset(), DIGEST, iter((observations(),)), classify=ordinary_modes
+    )
     spec = WalletAnalysisSpec(snapshot.artifact_id, DIGEST, DIGEST, window_seconds=1000)
     result = store.analyze(spec)
     # Verify physical Parquet bytes as well as the independently asserted semantic fixture.
@@ -146,7 +152,7 @@ def test_compact_work_still_rejects_exhausted_spill(tmp_path: Path) -> None:
     repository = LocalArtifactRepository(tmp_path)
     source = LocalResearchStore(repository)
     rows = tuple(replace(row, block_time_s=1000) for row in _dense_rows(1200, 2))
-    snapshot = source.publish_snapshot(dataset(), DIGEST, iter((rows,)))
+    snapshot = source.publish_snapshot(dataset(), DIGEST, iter((rows,)), classify=ordinary_modes)
     # The candidate guards admit this input, but native spill remains a separate hard bound.
     limited = LocalResearchStore(repository, memory_mb=64, temporary_bytes=1024)
     spec = WalletAnalysisSpec(snapshot.artifact_id, DIGEST, DIGEST, window_seconds=1000)

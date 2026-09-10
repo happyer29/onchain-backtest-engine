@@ -19,7 +19,7 @@ from backtest.application.research import ResearchError, ResearchTable, WalletAn
 from backtest.domain.identifiers import RuntimeLockId, SnapshotId
 
 # Expected values come from a small source fixture with independently known roles and counts.
-from tests.support.research import DIGEST, dataset, key, observations
+from tests.support.research import DIGEST, dataset, key, observations, ordinary_modes
 
 
 def test_activity_pairs_and_evidence_keep_roles_multiplicity_and_exact_amounts(
@@ -28,7 +28,10 @@ def test_activity_pairs_and_evidence_keep_roles_multiplicity_and_exact_amounts(
     """One mint votes once for a pair, while every observed source row counts in activity."""
 
     store = LocalResearchStore(LocalArtifactRepository(tmp_path))
-    snapshot = store.publish_snapshot(dataset(), DIGEST, iter((observations(),)))
+    # This fixture explicitly classifies ordinary launches before the observed trades.
+    snapshot = store.publish_snapshot(
+        dataset(), DIGEST, iter((observations(),)), classify=ordinary_modes
+    )
     spec = WalletAnalysisSpec(snapshot.artifact_id, DIGEST, DIGEST)
     result = store.analyze(spec)
     # Two mints qualify at the inclusive 60-second boundary; the rebuy adds no evidence.
@@ -70,10 +73,16 @@ def test_input_order_batches_threads_and_selection_have_explicit_identity(tmp_pa
 
     repository = LocalArtifactRepository(tmp_path)
     store = LocalResearchStore(repository)
-    snapshot = store.publish_snapshot(dataset(), DIGEST, iter((observations(),)))
+    # This fixture explicitly classifies ordinary launches before the observed trades.
+    snapshot = store.publish_snapshot(
+        dataset(), DIGEST, iter((observations(),)), classify=ordinary_modes
+    )
     reordered = tuple(reversed(observations()))
     # A fresh acquisition with the same observations must reproduce the same content ID.
-    second = store.publish_snapshot(dataset(), DIGEST, iter((reordered[:2], reordered[2:])))
+    second = store.publish_snapshot(
+        dataset(), DIGEST, iter((reordered[:2], reordered[2:])), classify=ordinary_modes
+    )
+    # Reordered source batches must reproduce both snapshot tables and the same root.
     assert snapshot.artifact_id == second.artifact_id
     spec = WalletAnalysisSpec(snapshot.artifact_id, DIGEST, DIGEST)
     result = store.analyze(spec)
@@ -104,10 +113,14 @@ def test_limits_abort_without_publishing_partial_results(tmp_path: Path) -> None
             dataset(),
             DIGEST,
             iter((observations(),)),
+            classify=ordinary_modes,
         )
     # A failed source scan leaves no committed snapshot or retained root.
     assert not tuple((tmp_path / "research-snapshots").glob("**/COMMITTED"))
-    snapshot = store.publish_snapshot(dataset(), DIGEST, iter((observations(),)))
+    # This fixture explicitly classifies ordinary launches before the observed trades.
+    snapshot = store.publish_snapshot(
+        dataset(), DIGEST, iter((observations(),)), classify=ordinary_modes
+    )
     # Prejoin fanout rejection leaves the already committed input intact.
     with pytest.raises(ResearchError, match="PAIR_CANDIDATE_LIMIT"):
         LocalResearchStore(repository, maximum_pair_candidates=1).analyze(
@@ -128,7 +141,7 @@ def test_source_failure_and_disk_budget_do_not_publish_partial_snapshot(tmp_path
         raise OSError("synthetic read failure")
 
     with pytest.raises(OSError, match="synthetic read failure"):
-        store.publish_snapshot(dataset(), DIGEST, failing_source())
+        store.publish_snapshot(dataset(), DIGEST, failing_source(), classify=ordinary_modes)
     # A complete input still cannot publish when its authoritative output exceeds quota.
     with pytest.raises(ResearchError, match="BYTE_LIMIT"):
         LocalResearchStore(store.artifacts, output_bytes=1024).publish_snapshot(
@@ -136,6 +149,7 @@ def test_source_failure_and_disk_budget_do_not_publish_partial_snapshot(tmp_path
             # The tiny disk budget is deliberately below a complete Parquet artifact.
             DIGEST,
             iter((observations(),)),
+            classify=ordinary_modes,
         )
     # Neither publication nor staging may retain a partial output after quota rejection.
     assert not tuple((tmp_path / "research-snapshots").glob("**/COMMITTED"))
@@ -146,7 +160,8 @@ def test_empty_completed_scan_is_distinct_from_source_failure(tmp_path: Path) ->
     """A genuinely empty bounded scan yields verified empty activity, never invented rows."""
 
     store = LocalResearchStore(LocalArtifactRepository(tmp_path))
-    snapshot = store.publish_snapshot(dataset(), DIGEST, iter(()))
+    # This fixture explicitly classifies ordinary launches before the observed trades.
+    snapshot = store.publish_snapshot(dataset(), DIGEST, iter(()), classify=ordinary_modes)
     result = store.analyze(WalletAnalysisSpec(snapshot.artifact_id, DIGEST, DIGEST))
     assert set(store.summary(result.artifact_id)["counts"].values()) == {0}
     assert store.page(result.artifact_id, ResearchTable.PAIRS, after=-1, limit=25) == ()
@@ -159,8 +174,12 @@ def test_corrupt_input_is_rejected_before_analysis_publication(tmp_path: Path) -
     """A cached prior read cannot authenticate changed bytes under an immutable ID."""
 
     store = LocalResearchStore(LocalArtifactRepository(tmp_path))
-    snapshot = store.publish_snapshot(dataset(), DIGEST, iter((observations(),)))
+    # This fixture explicitly classifies ordinary launches before the observed trades.
+    snapshot = store.publish_snapshot(
+        dataset(), DIGEST, iter((observations(),)), classify=ordinary_modes
+    )
     store.summary(snapshot.artifact_id)
+    # Corruption targets committed bytes only after their initial verified read succeeds.
     path = tmp_path / "research-snapshots" / snapshot.artifact_id.hex / "observations.parquet"
     original = path.read_bytes()
     # Deliberately damage this isolated test artifact, preserving its old manifest and ID.
@@ -173,7 +192,10 @@ def test_corrupt_input_is_rejected_before_analysis_publication(tmp_path: Path) -
 def test_page_scope_rejects_pair_leakage_and_other_artifact_kind(tmp_path: Path) -> None:
     """View roles and pair scope remain binding even when IDs are valid artifacts."""
     store = LocalResearchStore(LocalArtifactRepository(tmp_path))
-    snapshot = store.publish_snapshot(dataset(), DIGEST, iter((observations(),)))
+    # This fixture explicitly classifies ordinary launches before the observed trades.
+    snapshot = store.publish_snapshot(
+        dataset(), DIGEST, iter((observations(),)), classify=ordinary_modes
+    )
     result = store.analyze(WalletAnalysisSpec(snapshot.artifact_id, DIGEST, DIGEST))
     with pytest.raises(ResearchError, match="TABLE_UNAVAILABLE"):
         store.page(snapshot.artifact_id, ResearchTable.PAIRS, after=-1, limit=25)
@@ -192,7 +214,10 @@ def test_research_artifacts_cannot_enter_replay_compilation(tmp_path: Path) -> N
 
     repository = LocalArtifactRepository(tmp_path)
     store = LocalResearchStore(repository)
-    snapshot = store.publish_snapshot(dataset(), DIGEST, iter((observations(),)))
+    # This fixture explicitly classifies ordinary launches before the observed trades.
+    snapshot = store.publish_snapshot(
+        dataset(), DIGEST, iter((observations(),)), classify=ordinary_modes
+    )
     result = store.analyze(WalletAnalysisSpec(snapshot.artifact_id, DIGEST, DIGEST))
 
     def no_source(snapshot_id: SnapshotId):

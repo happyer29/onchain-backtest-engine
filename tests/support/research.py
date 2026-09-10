@@ -3,7 +3,15 @@
 import json
 from pathlib import Path
 
-from backtest.application.research import SOL_QUOTE, ResearchDatasetSpec, WalletObservation
+# Explicit mode fixtures exercise the production classification seam without live claims.
+from backtest.application.research import (
+    SOL_QUOTE,
+    ResearchDatasetSpec,
+    ResearchTokenMode,
+    TokenMode,
+    # Swap multiplicity and participant roles remain separate from creation metadata.
+    WalletObservation,
+)
 
 # Fixtures use the same explicit network and coordinate schema as production contracts.
 from backtest.domain.chain import BLOCK32_TRANSACTION32_POSITION_SCHEMA_ID
@@ -94,3 +102,11 @@ def configuration(path: Path, data_root: Path) -> Path:
         encoding="utf-8",
     )
     return path
+
+
+def ordinary_modes(mints: tuple[str, ...]) -> tuple[ResearchTokenMode, ...]:
+    """Explicit hermetic metadata places ordinary launches before every fixture observation."""
+
+    return tuple(
+        ResearchTokenMode(mint, TokenMode.NON_MAYHEM, (90, 1, 0, key(90, 64)), 1) for mint in mints
+    )

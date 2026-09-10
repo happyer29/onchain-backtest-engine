@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+# Serialization is confined to immutable documents and creation references.
+import json
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Final
@@ -13,14 +15,21 @@ from backtest.domain.hashing import canonical_json_bytes, domain_digest
 from backtest.domain.identifiers import ArtifactId, ContentDigest, NetworkId, SourceId
 from backtest.domain.time import BlockRange
 
-DATASET_SCHEMA: Final = "research-dataset-spec/v1"
+DATASET_SCHEMA: Final = "research-dataset-spec/v2"
+LEGACY_DATASET_SCHEMA: Final = "research-dataset-spec/v1"
 # Artifact schemas are independent of existing canonical execution formats.
-SNAPSHOT_SCHEMA: Final = "wallet-research-snapshot/v1"
-ANALYSIS_SCHEMA: Final = "wallet-co-buy-analysis/v1"
-RESULT_SCHEMA: Final = "wallet-research-result/v1"
+SNAPSHOT_SCHEMA: Final = "wallet-research-snapshot/v2"
+ANALYSIS_SCHEMA: Final = "wallet-co-buy-analysis/v2"
+RESULT_SCHEMA: Final = "wallet-research-result/v2"
+# Old committed artifacts retain their original schema, scope and derivation-key domain.
+LEGACY_SNAPSHOT_SCHEMA: Final = "wallet-research-snapshot/v1"
+LEGACY_ANALYSIS_SCHEMA: Final = "wallet-co-buy-analysis/v1"
+LEGACY_RESULT_SCHEMA: Final = "wallet-research-result/v1"
 
 # The initial source profile describes observations, not economic ownership.
-SOURCE_PROFILE: Final = "pumpfun-v2-observed-sol-participation/v1"
+SOURCE_PROFILE: Final = "pumpfun-v2-observed-sol-participation/v2"
+LEGACY_SOURCE_PROFILE: Final = "pumpfun-v2-observed-sol-participation/v1"
+# The observation row contract remains unchanged across snapshot generations.
 OBSERVATION_SCHEMA: Final = "wallet-observations/v1"
 SOL_QUOTE: Final = "So11111111111111111111111111111111111111112"
 MAX_PAGE_SIZE: Final = 200
@@ -28,7 +37,9 @@ MAX_BLOCK_SPAN: Final = 300_000
 
 # Calibrated dense-market caps retain all signers; native memory/time/spill guards still apply.
 MAX_SOURCE_ROWS: Final = 2_000_000
+MAX_MODE_MINTS: Final = 50_000
 MAX_PAIR_CANDIDATES: Final = 4_000_000
+# Join fanout and public signer selection have separate resource bounds.
 MAX_SIGNERS_PER_MINT: Final = 2_048
 MAX_SELECTED_WALLETS: Final = 128
 MAX_WINDOW_SECONDS: Final = 3_600
@@ -51,9 +62,28 @@ class ResearchTable(StrEnum):
     """Closed result table roles; callers never provide a filename or SQL."""
 
     OBSERVATIONS = "observations"
+    TOKEN_MODES = "token_modes"
+    DATA_ISSUES = "data_issues"
+    # Derived views remain distinct from the two snapshot source tables.
     ACTIVITY = "activity"
     PAIRS = "pairs"
     EVIDENCE = "evidence"
+
+
+# Modes are finite recipe operands rather than client-side graph visibility settings.
+class ResearchMode(StrEnum):
+    """A complete recipe operand, distinct from local graph presentation."""
+
+    NON_MAYHEM = "NON_MAYHEM"
+    ALL = "ALL"
+
+
+class TokenMode(StrEnum):
+    """Only explicit source false means ordinary; absence never acquires that meaning."""
+
+    NON_MAYHEM = "NON_MAYHEM"
+    MAYHEM = "MAYHEM"
+    UNKNOWN = "UNKNOWN"
 
 
 def integer(value: object, *, minimum: int = 0, maximum: int = _UINT64) -> int:
@@ -111,11 +141,14 @@ class ResearchDatasetSpec:
     profile_digest: ContentDigest
     code_digest: ContentDigest
     runtime_digest: ContentDigest
+    # V1 is accepted only for reading its original persisted identity.
+    schema_version: int = 2
 
     # Typed identity operands are checked even when a trusted caller skips transport parsing.
     def __post_init__(self) -> None:
         """A narrow single-network range is mandatory even for observation-only work."""
 
+        integer(self.schema_version, minimum=1, maximum=2)
         if not isinstance(self.source_id, SourceId) or not isinstance(self.block_range, BlockRange):
             raise ResearchError("RESEARCH_INVALID_DATASET")
         if not self.block_range.network_id.value.startswith("solana:"):
@@ -135,14 +168,14 @@ class ResearchDatasetSpec:
         """Serialize the complete immutable request, excluding physical limits."""
 
         return {
-            "schema": DATASET_SCHEMA,
+            "schema": DATASET_SCHEMA if self.schema_version == 2 else LEGACY_DATASET_SCHEMA,
             "source_id": self.source_id.value,
             "network_id": self.block_range.network_id.value,
             # Chain coordinates remain authoritative; UTC is a reported attribute.
             "position_schema_id": self.block_range.position_schema_id.value,
             "from_block_ordinal": self.block_range.from_block_ordinal,
             "to_block_ordinal": self.block_range.to_block_ordinal,
-            "profile": SOURCE_PROFILE,
+            "profile": SOURCE_PROFILE if self.schema_version == 2 else LEGACY_SOURCE_PROFILE,
             "profile_digest": self.profile_digest.hex,
             # Exact installed code and native runtime are rechecked by the child.
             "code_digest": self.code_digest.hex,
@@ -163,8 +196,12 @@ def dataset_spec(value: object) -> ResearchDatasetSpec:
     fields.update({"code_digest", "runtime_digest"})
     document = exact_object(value, fields)
     # Research cannot select a different SQL/profile through a persisted command.
-    if document["schema"] != DATASET_SCHEMA or document["profile"] != SOURCE_PROFILE:
+    schema = text(document["schema"])
+    version = 2 if schema == DATASET_SCHEMA else 1
+    schemas = {DATASET_SCHEMA: SOURCE_PROFILE, LEGACY_DATASET_SCHEMA: LEGACY_SOURCE_PROFILE}
+    if schema not in schemas or schemas[schema] != document["profile"]:
         raise ResearchError("RESEARCH_UNSUPPORTED_SCHEMA")
+    # A recognized profile still requires the exact immutable chain reference.
     network = NetworkId(text(document["network_id"]))
     # Reconstruct generic core coordinates; only the source adapter knows Solana slots.
     block_range = BlockRange(
@@ -185,9 +222,11 @@ def dataset_spec(value: object) -> ResearchDatasetSpec:
         # Existing digest validation rejects aliases and malformed hashes.
         ContentDigest(text(document["code_digest"])),
         ContentDigest(text(document["runtime_digest"])),
+        schema_version=version,
     )
 
 
+# Analysis identity never grants research observations replay execution authority.
 @dataclass(frozen=True, slots=True)
 class WalletAnalysisSpec:
     """One reviewed recipe over one exact observation snapshot."""
@@ -199,10 +238,19 @@ class WalletAnalysisSpec:
     minimum_shared_mints: int = 2
     # An empty immutable selection means all observed signing-wallet addresses.
     wallets: tuple[str, ...] = ()
+    # Scope is explicit in documents; CLI/API resolution defaults to NON_MAYHEM.
+    mode: ResearchMode = ResearchMode.ALL
+    schema_version: int = 2
 
     def __post_init__(self) -> None:
         """Reject lossy, ambiguous or unbounded recipe parameters before enqueue."""
 
+        integer(self.schema_version, minimum=1, maximum=2)
+        if not isinstance(self.mode, ResearchMode) or (
+            self.schema_version == 1 and self.mode is not ResearchMode.ALL
+        ):
+            raise ResearchError("RESEARCH_INVALID_MODE")
+        # Legacy recipes remain ALL; newer defaults are materialized only by the shared resolver.
         integer(self.window_seconds, maximum=MAX_WINDOW_SECONDS)
         integer(self.minimum_shared_mints, minimum=1, maximum=MAX_SOURCE_ROWS)
         if not isinstance(self.wallets, tuple) or len(self.wallets) > MAX_SELECTED_WALLETS:
@@ -225,7 +273,7 @@ class WalletAnalysisSpec:
         """Keep presentation settings and operational quotas out of recipe identity."""
 
         return {
-            "schema": ANALYSIS_SCHEMA,
+            "schema": ANALYSIS_SCHEMA if self.schema_version == 2 else LEGACY_ANALYSIS_SCHEMA,
             "snapshot_id": self.snapshot_id.hex,
             "code_digest": self.code_digest.hex,
             "runtime_digest": self.runtime_digest.hex,
@@ -234,6 +282,8 @@ class WalletAnalysisSpec:
             # The threshold is applied to complete counts, never a truncated sample.
             "minimum_shared_mints": self.minimum_shared_mints,
             "wallets": list(self.wallets),
+            # No new field may be retroactively inserted into an old recipe identity.
+            **({"mode": self.mode.value} if self.schema_version == 2 else {}),
         }
 
     def canonical_bytes(self) -> bytes:
@@ -245,7 +295,8 @@ class WalletAnalysisSpec:
     def build_key(self) -> ContentDigest:
         """Separate deterministic recipe lookup from the eventual artifact content ID."""
 
-        return domain_digest(ANALYSIS_SCHEMA, self.document())
+        schema = ANALYSIS_SCHEMA if self.schema_version == 2 else LEGACY_ANALYSIS_SCHEMA
+        return domain_digest(schema, self.document())
 
 
 def analysis_spec(value: object) -> WalletAnalysisSpec:
@@ -253,8 +304,15 @@ def analysis_spec(value: object) -> WalletAnalysisSpec:
 
     fields = {"schema", "snapshot_id", "code_digest", "runtime_digest"}
     fields.update({"window_seconds", "minimum_shared_mints", "wallets"})
+    version = 2 if isinstance(value, dict) and value.get("schema") == ANALYSIS_SCHEMA else 1
+    if version == 2:
+        fields.add("mode")
+    # Only this version-specific field set may enter the persisted recipe.
     document = exact_object(value, fields)
-    if document["schema"] != ANALYSIS_SCHEMA or not isinstance(document["wallets"], list):
+    # A recognized legacy document has ALL semantics; unknown schemas are never executable.
+    if document["schema"] not in {ANALYSIS_SCHEMA, LEGACY_ANALYSIS_SCHEMA} or not isinstance(
+        document["wallets"], list
+    ):
         raise ResearchError("RESEARCH_UNSUPPORTED_SCHEMA")
     # The dataclass validates selection order, size and complete Solana addresses.
     wallets = tuple(text(item) for item in document["wallets"])
@@ -266,6 +324,9 @@ def analysis_spec(value: object) -> WalletAnalysisSpec:
         integer(document["window_seconds"]),
         integer(document["minimum_shared_mints"]),
         wallets,
+        # Only v2 carries a mode; v1 retains its historical complete-row scope.
+        mode=research_mode(document["mode"]) if version == 2 else ResearchMode.ALL,
+        schema_version=version,
     )
 
 
@@ -332,3 +393,89 @@ class WalletObservation:
             self.signing_wallet,
             self.fee_payer,
         )
+
+
+def research_mode(value: object) -> ResearchMode:
+    """Accept only the closed recipe mode literals, without coercion or fallback."""
+
+    if not isinstance(value, str) or value not in {item.value for item in ResearchMode}:
+        raise ResearchError("RESEARCH_INVALID_MODE")
+    return ResearchMode(value)
+
+
+@dataclass(frozen=True, slots=True)
+class ResearchTokenMode:
+    """One observed mint classification with an exact creation reference and multiplicity."""
+
+    mint: str
+    mode: TokenMode
+    creation: tuple[int, int, int, str] | None
+    source_rows: int
+    # Only this approved data-completeness issue can bypass full signature validation.
+    issue: str = ""
+
+    def __post_init__(self) -> None:
+        """Absence is explicit; a positive classification requires a complete creation identity."""
+
+        solana_base58(self.mint)
+        integer(self.source_rows, maximum=MAX_SOURCE_ROWS)
+        if not isinstance(self.mode, TokenMode):
+            raise ResearchError("RESEARCH_INVALID_MODE")
+        # Data issues form a closed domain and cannot admit arbitrary malformed metadata.
+        if self.issue not in {"", "MISSING_CREATION_SIGNATURE"}:
+            raise ResearchError("RESEARCH_INVALID_MODE_PROVENANCE")
+        # Missing creation is a recorded unknown, not a fabricated false mode or position.
+        if self.mode is TokenMode.UNKNOWN:
+            if self.creation is not None or self.source_rows != 0 or self.issue:
+                raise ResearchError("RESEARCH_INVALID_MODE_PROVENANCE")
+            return
+        # Every positive classification requires an actual source creation identity.
+        if not isinstance(self.creation, tuple) or len(self.creation) != 4 or not self.source_rows:
+            raise ResearchError("RESEARCH_INVALID_MODE_PROVENANCE")
+        # Exact coordinates and full signature identify the source creation, not an inferred owner.
+        for value in self.creation[:3]:
+            integer(value, maximum=_UINT32)
+        # An explicit issue preserves partial coordinates without inventing a signature.
+        if self.issue:
+            if self.creation[3] != "":
+                raise ResearchError("RESEARCH_INVALID_MODE_PROVENANCE")
+        else:
+            solana_base58(self.creation[3], size=64)
+
+    def values(self) -> tuple[str, str, str, int, str]:
+        """Keep absent creation explicit without synthetic positions."""
+
+        reference = "" if self.creation is None else canonical_json_bytes(self.creation).decode()
+        return self.mint, self.mode.value, reference, self.source_rows, self.issue
+
+
+def token_mode_row(
+    mint: object, mode: object, reference: object, count: object, issue: object = ""
+) -> ResearchTokenMode:
+    """Revalidate a stored classification independently of its Parquet/container hash."""
+
+    if not isinstance(mode, str) or mode not in {item.value for item in TokenMode}:
+        raise ResearchError("RESEARCH_INVALID_MODE")
+    if not isinstance(reference, str) or len(reference) > 512:
+        raise ResearchError("RESEARCH_INVALID_MODE_PROVENANCE")
+    # Only one fixed four-field creation tuple is accepted; this is not executable JSON.
+    creation = None
+    if reference:
+        value = json.loads(reference)
+        # Reject alternate encodings or shapes before interpreting chain coordinates.
+        if (
+            not isinstance(value, list)
+            or len(value) != 4
+            # Equivalent but differently encoded references cannot alter artifact identity.
+            or canonical_json_bytes(value).decode() != reference
+        ):
+            raise ResearchError("RESEARCH_INVALID_MODE_PROVENANCE")
+        # Coordinate and signature validation also runs in the immutable value constructor.
+        signature = value[3]
+        if not isinstance(signature, str) or not isinstance(issue, str):
+            raise ResearchError("RESEARCH_INVALID_MODE_PROVENANCE")
+        # The value constructor admits an empty signature only with the matching issue code.
+        creation = (integer(value[0]), integer(value[1]), integer(value[2]), signature)
+    if not isinstance(issue, str):
+        raise ResearchError("RESEARCH_INVALID_MODE_PROVENANCE")
+    return ResearchTokenMode(text(mint), TokenMode(mode), creation, integer(count), issue)

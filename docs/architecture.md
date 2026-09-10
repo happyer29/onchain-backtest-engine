@@ -24,11 +24,21 @@ checks and all-neighbour search. The implemented three-level display is
 visual groups → group wallets → complete wallet neighbourhood, with reconciled
 internal/cross-group counts and exact-pair evidence. Grouping is presentation
 only; table pagination preserves the loaded result.
+Research v2 snapshots also store bounded same-source creation classifications.
+Tokens with an empty creation signature are excluded from both analysis modes;
+visible warnings list every affected mint and its source-row count through
+bounded pagination. Original observations remain stored unchanged.
+The shared CLI/API default is `NON_MAYHEM` («Без Mayhem»); `ALL` («Все режимы»)
+is explicit. Filtering excludes Mayhem and unclassified tokens before activity,
+first buys and pair thresholds, with separate visible row/mint counts.
+It never blacklists a wallet for its other Mayhem trades. V1 artifacts retain
+their original readable meaning; their missing classifications require a new
+snapshot for `NON_MAYHEM`, while a new `ALL` analysis remains supported.
 Signer and fee payer remain distinct roles, source-row multiplicity is
 preserved, and completeness/finality remain UNKNOWN. Research artifacts cannot
 enter replay or Strategy directly. Existing Sniping gates and identities are
 unchanged. The first slice is implemented and verified on hermetic source,
-CLI/API/child and browser workflows. One saved live-source cut passed local
+CLI/API/child and browser workflows. One saved v1, all-mode live-source cut passed local
 analysis of all 10,075 signers and 97,040 rows at 180, 1,000 and 3,600 seconds;
 compact intermediate keys preserve exact output under unchanged quotas.
 [Capacity evidence](research-capacity.md) records the scope. General live-source

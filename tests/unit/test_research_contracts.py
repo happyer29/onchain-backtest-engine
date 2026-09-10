@@ -15,7 +15,10 @@ from backtest.adapters.artifacts.localfs import LocalArtifactRepository
 
 # Source contracts are checked against recorded calls, without a live database.
 from backtest.adapters.source.clickhouse.research import (
+    MODE_COLUMNS,
+    MODE_SQL,
     SOURCE_COLUMNS,
+    # Test raw scan and separate metadata lookup through the real source adapter.
     ClickHouseResearchSource,
     profile_digest,
 )
@@ -147,6 +150,15 @@ class _Client:
                 for name in SOURCE_COLUMNS
             ]
         )
+        # Creation types are independently inspected; no source join can change swap multiplicity.
+        self.mode_metadata = _Result(
+            [
+                (name, "String" if name in {"mint", "signature"} else "UInt64")
+                # Each fixed creation column has a separately inspected physical type.
+                for name in MODE_COLUMNS
+            ]
+        )
+        self.mode_rows: list[tuple[object, ...]] = []
         # Separate call history and stream cleanup let failures assert resource handling.
         self.calls: list[dict[str, Any]] = []
         self.closed = False
@@ -155,14 +167,20 @@ class _Client:
     def query(self, query: str, **kwargs: Any) -> _Result:
         """Return inspection metadata without fabricating scan observations."""
         self.calls.append({"query": query, **kwargs})
-        return self.metadata
+        # The fake separates physical table schemas just as system.columns does.
+        return (
+            self.mode_metadata
+            if kwargs["parameters"]["table"] == "pumpfun_token_creation"
+            else self.metadata
+        )
 
+    # Stream cleanup is observable even when a yielded row violates the source contract.
     @contextmanager
     def query_row_block_stream(self, query: str, **kwargs: Any) -> Any:
         """Mirror the SDK context manager so rejects must close an opened stream."""
         self.calls.append({"query": query, **kwargs})
         try:
-            yield iter((self.rows,))
+            yield iter((self.mode_rows if query == MODE_SQL else self.rows,))
         # Both successful consumption and validation exceptions must release the source.
         finally:
             self.closed = True
@@ -174,6 +192,7 @@ def test_source_is_explicit_bounded_multiplicity_preserving_and_closes() -> None
     client = _Client()
     source = ClickHouseResearchSource(client, database="source")
     spec = replace(dataset(), profile_digest=profile_digest())
+    # Schema acceptance retains the explicit physical mapping in inspection identity.
     assert source.inspect(spec)
     assert client.metadata.closed
     # Both duplicate observations survive the exact half-open source read.
@@ -234,6 +253,7 @@ def test_dictionary_encoded_strings_preserve_rows_and_physical_schema_identity(c
         (name, "LowCardinality(String)" if name == column else kind)
         for name, kind in client.metadata.result_rows
     ]
+    # Schema acceptance retains the explicit physical mapping in inspection identity.
     assert source.inspect(spec) != plain_schema
     assert client.metadata.closed
     # Decoding retains every value and duplicate; it adds no completeness claim.
@@ -326,6 +346,268 @@ def test_source_publication_survives_secret_bearing_cleanup_failure(
         raise RuntimeError("synthetic-password")
 
     monkeypatch.setattr(client, "close", close, raising=False)
+    # Cleanup errors cannot disclose credentials through the public worker failure path.
     result = _prepare(settings, service, service.resolve_prepare(100, 200).canonical_bytes())
     assert service.summary(result.artifact_id)["counts"]["source_rows"] == 7
     assert client.closed and client.metadata.closed
+
+
+def test_creation_lookup_is_bounded_exact_and_multiplicity_preserving() -> None:
+    """Earlier creation and missing metadata remain distinct, without a join or latest rule."""
+
+    client = _Client()
+    row = (key(5), 90, 1, 0, key(90, 64), 0)
+    client.mode_rows = [row, row, (key(6), 95, 1, 2, key(95, 64), True)]
+    source = ClickHouseResearchSource(client, database="source")
+    spec = replace(dataset(), profile_digest=profile_digest())
+    # Exact repeats count as two source records; missing mint 7 retains no creation reference.
+    modes = source.modes(spec, (key(5), key(6), key(7)))
+    assert [mode.mode.value for mode in modes] == ["NON_MAYHEM", "MAYHEM", "UNKNOWN"]
+    assert [mode.source_rows for mode in modes] == [2, 1, 0]
+    assert modes[0].creation == (90, 1, 0, key(90, 64)) and modes[2].creation is None
+    call = client.calls[-1]
+    # The fixed authoritative creation range includes launches preceding the observation period.
+    assert call["parameters"] == {
+        "creation_start": 0,
+        "creation_stop": 200,
+        "mints": [key(5), key(6), key(7)],
+    }
+    # Scan and returned-result byte bounds independently constrain metadata acquisition.
+    assert call["settings"]["max_rows_to_read"] == 20_000_000
+    assert call["settings"]["max_bytes_to_read"] == 2 * 1024**3
+    assert call["settings"]["max_result_rows"] == 2_000_000
+    assert call["settings"]["max_result_bytes"] == 1024**3
+    # Both scan and result overflow reject; no sampling or version winner is permitted.
+    assert (
+        call["settings"]["read_overflow_mode"]
+        == call["settings"]["result_overflow_mode"]
+        == "throw"
+    )
+    # Thread/time ceilings prevent an exact mint operand from authorizing unlimited work.
+    assert call["settings"]["max_execution_time"] == 120 and call["settings"]["max_threads"] == 1
+    assert all(
+        word not in call["query"].upper()
+        for word in ("FINAL", "OFFSET", "DISTINCT", "JOIN", "SELECT *")
+    )
+    # A successful complete metadata stream releases its driver resources.
+    assert client.closed
+    # Reordering exact source records cannot change classification or provenance counts.
+    client.mode_rows.reverse()
+    assert source.modes(spec, (key(5), key(6), key(7))) == modes
+
+
+# Row validation rejects every malformed source category, not just a missing flag.
+@pytest.mark.parametrize(
+    "field,value",
+    [(5, None), (5, 2), (5, "0"), (5, 0.0), (1, 200), (0, key(8)), (2, -1), (4, key(1))],
+)
+def test_invalid_creation_row_closes_lookup(field: int, value: object) -> None:
+    """Null modes and out-of-scope or malformed identities never become ordinary tokens."""
+
+    client = _Client()
+    row: list[object] = [key(5), 90, 1, 0, key(90, 64), 0]
+    row[field] = value
+    client.mode_rows = [tuple(row)]
+    source = ClickHouseResearchSource(client, database="source")
+    # A typed source rejection closes the stream and returns no partial classification.
+    with pytest.raises(ResearchError):
+        source.modes(replace(dataset(), profile_digest=profile_digest()), (key(5),))
+    assert client.closed
+
+
+# Identity disagreement is fatal even when the mode itself stays unchanged.
+@pytest.mark.parametrize(
+    "field,value", [(5, 1), (1, 91), (2, 2), (3, 1), (4, key(91, 64)), (4, "")]
+)
+def test_creation_conflict_has_no_latest_first_or_majority_fallback(
+    field: int, value: object
+) -> None:
+    """Every relevant creation identity component and mode must agree across source versions."""
+
+    client = _Client()
+    first: list[object] = [key(5), 90, 1, 0, key(90, 64), 0]
+    conflicting = first.copy()
+    conflicting[field] = value
+    client.mode_rows = [tuple(first), tuple(first), tuple(conflicting)]
+    # A majority of one version cannot legitimize a conflicting source record.
+    source = ClickHouseResearchSource(client, database="source")
+    with pytest.raises(ResearchError, match="MODE_CONFLICT"):
+        source.modes(replace(dataset(), profile_digest=profile_digest()), (key(5),))
+    assert client.closed
+
+
+def test_creation_schema_is_required_and_nullable_modes_fail_inspection() -> None:
+    """A valid swap schema cannot hide an unsupported nullable classification source."""
+
+    client = _Client()
+    client.mode_metadata.result_rows = [
+        (name, "Nullable(UInt8)" if name == "mayhem_mode" else kind)
+        for name, kind in client.mode_metadata.result_rows
+    ]
+    # A valid swap schema cannot compensate for unproven creation types.
+    source = ClickHouseResearchSource(client, database="source")
+    with pytest.raises(ResearchError, match="SCHEMA_MISMATCH"):
+        source.inspect(replace(dataset(), profile_digest=profile_digest()))
+    # Both metadata handles close before any data query is allowed.
+    assert client.metadata.closed and client.mode_metadata.closed and len(client.calls) == 2
+
+
+def test_creation_limits_and_legacy_command_reject_before_scan(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Empty inputs skip IO; invalid operands and oversized source batches reject."""
+
+    client = _Client()
+    source = ClickHouseResearchSource(client, database="source")
+    spec = replace(dataset(), profile_digest=profile_digest())
+    assert source.modes(spec, ()) == () and not client.calls
+    for mints in ((key(5), key(5)), (key(6), key(5)), (key(5),) * 50_001):
+        # Operand rejection precedes source contact and cannot be bypassed by duplicates.
+        with pytest.raises(ResearchError, match="MINT_LIMIT"):
+            source.modes(spec, mints)
+    with pytest.raises(ResearchError, match="PROFILE_MISMATCH"):
+        source.modes(replace(spec, schema_version=1), (key(5),))
+    assert not client.calls
+    # A small injected local cap exercises cumulative protection independently of remote settings.
+    monkeypatch.setattr("backtest.adapters.source.clickhouse.research.MAX_SOURCE_ROWS", 1)
+    client.mode_rows = [(key(5), 90, 1, 0, key(90, 64), 0)] * 2
+    with pytest.raises(ResearchError, match="ROW_LIMIT"):
+        source.modes(spec, (key(5),))
+    assert client.closed
+
+
+def test_versioned_mode_specs_and_provenance_are_closed() -> None:
+    """Legacy identity survives; unknown schemas and fabricated provenance reject."""
+
+    from backtest.application.research import (
+        ResearchMode,
+        ResearchTokenMode,
+        TokenMode,
+        # Stored provenance is independently validated after container authentication.
+        token_mode_row,
+    )
+
+    # Reconstruct the original closed envelope instead of adding v2 defaults to its bytes.
+    old = replace(dataset(), schema_version=1)
+    assert dataset_spec(old.document()) == old
+    legacy = WalletAnalysisSpec(ArtifactId("b" * 64), DIGEST, DIGEST, schema_version=1)
+    # V1 omits the mode field entirely; v2 materializes it as a semantic operand.
+    assert analysis_spec(legacy.document()) == legacy and "mode" not in legacy.document()
+    with pytest.raises(ResearchError, match="INVALID_MODE"):
+        replace(legacy, mode=ResearchMode.NON_MAYHEM)
+    # Unknown generations must reject before any dictionary lookup or source operation.
+    for schema in ("unknown", None, []):
+        with pytest.raises(ResearchError):
+            dataset_spec({**old.document(), "schema": schema})
+    # Neither a future recipe nor arbitrary extra fields may execute under a current parser.
+    with pytest.raises(ResearchError):
+        analysis_spec({**legacy.document(), "schema": "future"})
+    current = replace(legacy, schema_version=2)
+    with pytest.raises(ResearchError, match="INVALID_MODE"):
+        analysis_spec({**current.document(), "mode": "ordinary"})
+    # Missing creation is an explicit UNKNOWN with zero source records, never a false mode.
+    with pytest.raises(ResearchError, match="PROVENANCE"):
+        ResearchTokenMode(key(5), TokenMode.NON_MAYHEM, None, 0)
+    with pytest.raises(ResearchError, match="PROVENANCE"):
+        ResearchTokenMode(key(5), TokenMode.UNKNOWN, (90, 1, 0, key(90, 64)), 1)
+    # Shape, length and canonical encoding are mandatory even for an UNKNOWN classification.
+    for reference in ("[]", "null", "x" * 513):
+        with pytest.raises(ResearchError, match="PROVENANCE"):
+            token_mode_row(key(5), "UNKNOWN", reference, 0)
+    # Stored classifications have the same closed mode vocabulary as source-derived values.
+    with pytest.raises(ResearchError, match="INVALID_MODE"):
+        token_mode_row(key(5), "other", "", 0)
+
+
+def test_creation_mint_fixed_string_48_is_an_explicit_physical_mapping() -> None:
+    """Live creation mints use NUL-padded 48-byte storage without changing full address values."""
+
+    client = _Client()
+    source = ClickHouseResearchSource(client, database="source")
+    spec = replace(dataset(), profile_digest=profile_digest())
+    previous = source.inspect(spec)
+    # Admit this measured physical mint representation while preserving its schema provenance.
+    client.mode_metadata.result_rows = [
+        (name, "FixedString(48)" if name == "mint" else kind)
+        for name, kind in client.mode_metadata.result_rows
+    ]
+    # Schema acceptance retains the explicit physical mapping in inspection identity.
+    assert source.inspect(spec) != previous
+    assert "toStringCutToZero(mint)" in MODE_SQL
+    # A storage width alone cannot legitimize malformed/truncated address values after projection.
+    client.mode_rows = [("1" * 31, 90, 1, 0, key(90, 64), 0)]
+    with pytest.raises(ResearchError, match="SOLANA_VALUE"):
+        source.modes(spec, (key(5),))
+    assert client.closed
+
+
+@pytest.mark.parametrize("flag", [0, 1])
+def test_empty_creation_signature_has_explicit_issue_and_retains_mode(flag: int) -> None:
+    """Repeated partial source records preserve mode, coordinates and multiplicity."""
+
+    from backtest.application.research import token_mode_row
+
+    client = _Client()
+    client.mode_rows = [(key(5), 90, 1, 0, "", flag)] * 2
+    source = ClickHouseResearchSource(client, database="source")
+    # Empty signature is the only exception; its issue is mandatory in committed provenance.
+    row = source.modes(replace(dataset(), profile_digest=profile_digest()), (key(5),))[0]
+    assert row.issue == "MISSING_CREATION_SIGNATURE" and row.source_rows == 2
+    assert row.creation == (90, 1, 0, "")
+    assert row.mode.value == ("MAYHEM" if flag else "NON_MAYHEM")
+    # Stored partial references round-trip through the same strict immutable contract.
+    assert token_mode_row(*row.values()) == row
+    assert client.closed
+
+
+@pytest.mark.parametrize("flag", [None, 2, "0", 0.0])
+def test_empty_signature_does_not_excuse_invalid_mode(flag: object) -> None:
+    """The approved data-completeness exception cannot silently classify a malformed flag."""
+
+    client = _Client()
+    client.mode_rows = [(key(5), 90, 1, 0, "", flag)]
+    source = ClickHouseResearchSource(client, database="source")
+    # Metadata failure closes the whole stream rather than publishing a partial warning list.
+    with pytest.raises(ResearchError, match="INVALID_MODE"):
+        source.modes(replace(dataset(), profile_digest=profile_digest()), (key(5),))
+    assert client.closed
+
+
+@pytest.mark.parametrize(
+    "mode,reference,count,issue",
+    [
+        ("NON_MAYHEM", '[90,1,0,""]', 1, ""),
+        ("NON_MAYHEM", '[90,1,0,""]', 1, "other"),
+        # Unknown or absent creation cannot pretend to be a partially observed creation record.
+        ("UNKNOWN", "", 0, "MISSING_CREATION_SIGNATURE"),
+        ("NON_MAYHEM", "", 1, "MISSING_CREATION_SIGNATURE"),
+        ("NON_MAYHEM", '[90,1,0,""]', 0, "MISSING_CREATION_SIGNATURE"),
+        # The issue field is typed text, not an extensible object from a stored document.
+        ("NON_MAYHEM", '[90,1,0,""]', 1, None),
+    ],
+)
+def test_partial_creation_requires_matching_strict_provenance(
+    mode: str, reference: str, count: int, issue: object
+) -> None:
+    """Only the approved exact issue/reference combination can be reinterpreted from disk."""
+
+    from backtest.application.research import token_mode_row
+
+    with pytest.raises(ResearchError):
+        token_mode_row(key(5), mode, reference, count, issue)
+
+
+def test_issue_cannot_mark_a_complete_signature_as_missing() -> None:
+    """A contradictory warning is rejected even if its mode and creation signature are valid."""
+
+    from backtest.application.research import ResearchTokenMode, TokenMode
+
+    with pytest.raises(ResearchError, match="PROVENANCE"):
+        ResearchTokenMode(
+            key(5),
+            TokenMode.NON_MAYHEM,
+            (90, 1, 0, key(90, 64)),
+            1,
+            # Warning provenance must describe source facts, not an arbitrary caller exclusion.
+            "MISSING_CREATION_SIGNATURE",
+        )

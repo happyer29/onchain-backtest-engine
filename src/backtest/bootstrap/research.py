@@ -52,7 +52,7 @@ def research_code_digest() -> ContentDigest:
     # One canonical allowlist attests the recipe without registering it as an engine plugin.
     declaration = ReferenceBundleDeclaration.create(
         role="research:wallets",
-        contract={"recipe": "wallet-co-buy-analysis/v1"},
+        contract={"recipe": "wallet-co-buy-analysis/v2"},
         # The allowlist is canonical and never takes executable paths from a request.
         source_paths=tuple(sorted(sources)),
     )

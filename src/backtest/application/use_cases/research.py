@@ -7,10 +7,12 @@ from dataclasses import dataclass
 from backtest.application.models import AttemptState, CommittedArtifact, JobType
 from backtest.application.ports.research import ResearchJobQuery, ResearchSource, ResearchStore
 from backtest.application.research import (
+    LEGACY_SNAPSHOT_SCHEMA,
     MAX_PAGE_SIZE,
     # Immutable research contracts remain structurally separate from executable replay specs.
     ResearchDatasetSpec,
     ResearchError,
+    ResearchMode,
     # Shared command parsing preserves CLI/API/child identity across transport forms.
     ResearchTable,
     WalletAnalysisSpec,
@@ -36,7 +38,13 @@ class PrepareResearch:
     def execute(self, spec: ResearchDatasetSpec) -> CommittedArtifact:
         """A schema rejection happens before any source observation is streamed."""
         schema = self.source.inspect(spec)
-        return self.store.publish_snapshot(spec, schema, self.source.batches(spec))
+        return self.store.publish_snapshot(
+            spec,
+            schema,
+            self.source.batches(spec),
+            # Metadata is acquired after the complete observed mint set is known.
+            classify=lambda mints: self.source.modes(spec, mints),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,12 +103,15 @@ class ResearchUseCases:
         minimum_shared_mints: int = 2,
         # An omitted selection includes all source-reported signers in the exact snapshot.
         wallets: tuple[str, ...] = (),
+        mode: ResearchMode = ResearchMode.NON_MAYHEM,
     ) -> WalletAnalysisSpec:
         """Authenticate the exact snapshot before the immutable command is queued."""
 
         summary = self.summary(snapshot_id)
         if summary["kind"] != "RESEARCH_SNAPSHOT":
             raise ResearchError("RESEARCH_EXPECTED_SNAPSHOT")
+        if mode is ResearchMode.NON_MAYHEM and summary["schema"] == LEGACY_SNAPSHOT_SCHEMA:
+            raise ResearchError("RESEARCH_REPREPARE_REQUIRED")
         # Historical observation bytes remain usable; execution requires current recipe code.
         return WalletAnalysisSpec(
             snapshot_id,
@@ -110,6 +121,8 @@ class ResearchUseCases:
             window_seconds,
             minimum_shared_mints,
             tuple(sorted(set(wallets))),
+            # The selector is a semantic operand, never a graph-only visibility flag.
+            mode=mode,
         )
 
     def summary(self, artifact_id: ArtifactId) -> dict[str, object]:
@@ -143,6 +156,7 @@ class ResearchUseCases:
                 minimum_shared_mints=analysis.minimum_shared_mints,
                 # Validate complete signer selection together with the exact input manifest.
                 wallets=analysis.wallets,
+                mode=analysis.mode,
             )
             # A stale installed recipe may be reviewed, but cannot be silently executed.
             if analysis != expected_analysis:

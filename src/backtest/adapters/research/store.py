@@ -37,9 +37,14 @@ from backtest.adapters.research.layout import (
 # Research kinds remain structurally separate from canonical replay snapshots.
 from backtest.application.models import ArtifactDraft, ArtifactKind, CommittedArtifact
 from backtest.application.ports.artifacts import ArtifactHandle, ArtifactWriter
+from backtest.application.ports.research import ResearchModeReader
 
 # Strict command parsers are reused for persisted manifests and dependency checks.
 from backtest.application.research import (
+    LEGACY_RESULT_SCHEMA,
+    LEGACY_SNAPSHOT_SCHEMA,
+    MAX_MODE_MINTS,
+    # Mode classification is bounded separately from the unchanged observation stream.
     MAX_PAIR_CANDIDATES,
     MAX_SIGNERS_PER_MINT,
     MAX_SOURCE_ROWS,
@@ -48,13 +53,19 @@ from backtest.application.research import (
     SNAPSHOT_SCHEMA,
     ResearchDatasetSpec,
     ResearchError,
+    ResearchMode,
     ResearchTable,
+    # Classifications retain exact provenance independently of their analysis filter.
+    ResearchTokenMode,
+    TokenMode,
     WalletAnalysisSpec,
     # The same strict parsers validate both queued commands and stored manifest operands.
     WalletObservation,
     analysis_spec,
     dataset_spec,
     integer,
+    # Stored source metadata is revalidated before offline aggregation.
+    token_mode_row,
 )
 
 # Semantic hashing excludes operational paths, query IDs and source credentials.
@@ -122,7 +133,7 @@ class LocalResearchStore:
                 connection.execute(f"SET memory_limit='{self.memory_mb}MB'")
                 connection.execute(f"SET threads={self.threads}")
                 connection.execute("SET temp_directory=?", [str(root / "spill")])
-                connection.execute(f"SET max_temp_directory_size='{self.temporary_bytes // 3}B'")
+                connection.execute(f"SET max_temp_directory_size='{self.temporary_bytes // 4}B'")
                 # Only bundled built-in functions over trusted local paths are used.
                 connection.execute("SET autoinstall_known_extensions=false")
                 connection.execute("SET autoload_known_extensions=false")
@@ -148,13 +159,23 @@ class LocalResearchStore:
         schema_digest: ContentDigest,
         batches: Iterator[tuple[WalletObservation, ...]],
         # Batch arrival order affects neither canonical ordering nor logical content identity.
+        *,
+        classify: ResearchModeReader | None = None,
     ) -> CommittedArtifact:
         """Sort complete observations, then publish through the existing commit protocol."""
 
+        if spec.schema_version != 2 or classify is None:
+            raise ResearchError("RESEARCH_REPREPARE_REQUIRED")
+        # Disposable source spools have no artifact or retention authority.
         with self._workspace() as (root, connection):
             raw = root / "raw.parquet"
             self._spool(raw, spec, batches)
             connection.read_parquet(str(raw)).create_view("source_rows")
+            # Only the complete observed mint operand can trigger the bounded creation lookup.
+            expected = _observed_mints(connection, "source_rows")
+            modes = classify(tuple(expected))
+            _check_modes(modes, expected)
+            _register_modes(connection, modes)
             # Canonical row groups and order are independent of remote batch boundaries.
             sql = f"SELECT row_number() OVER (ORDER BY {OBSERVATION_ORDER})-1 row_id, "
             sql += f"* FROM source_rows ORDER BY {OBSERVATION_ORDER}"
@@ -165,9 +186,32 @@ class LocalResearchStore:
                     connection,
                     sql,
                     ResearchTable.OBSERVATIONS,
-                    # Raw input, sorted spool and native spill each consume at most one third.
+                    # Input, observations, modes and native spill each get one quarter.
                     stream,
-                    maximum_bytes=self.temporary_bytes // 3,
+                    maximum_bytes=self.temporary_bytes // 4,
+                )
+            # The classification table shares publication and total output quota with swaps.
+            mode_path = root / "token_modes.parquet"
+            with mode_path.open("xb") as stream:
+                mode_table = self._write_query(
+                    connection,
+                    # One canonical mint ordinal gives metadata stable physical row groups.
+                    "SELECT * FROM modes ORDER BY row_id",
+                    ResearchTable.TOKEN_MODES,
+                    # Both immutable tables are complete before acquiring publication authority.
+                    stream,
+                    maximum_bytes=self.temporary_bytes // 4,
+                )
+            # Both metadata spools share one quarter; warnings cannot increase the temp budget.
+            issue_path = root / "data_issues.parquet"
+            with issue_path.open("xb") as stream:
+                issue_table = self._write_query(
+                    connection,
+                    # The fixed query retains one warning per mint with exact duplicate counts.
+                    _issue_query("source_rows"),
+                    ResearchTable.DATA_ISSUES,
+                    stream,
+                    maximum_bytes=self.temporary_bytes // 4 - mode_path.stat().st_size,
                 )
             # A fresh mutable-source scan is keyed by its actual observed content.
             wallets_query = "SELECT count(DISTINCT signing_wallet) FROM source_rows"
@@ -181,10 +225,24 @@ class LocalResearchStore:
                 "quality": QUALITY,
                 # Logical table digests bind counts to actual rows without embedding those rows.
                 "counts": counts,
-                "tables": {"observations": table},
+                "tables": {
+                    "observations": table,
+                    "token_modes": mode_table,
+                    "data_issues": issue_table,
+                    # All roles are atomic publication operands, including an empty warning table.
+                },
+                # Warnings reconcile to the intact source rows, not a filtered acquisition.
+                "data_issue_counts": _issue_counts(connection, "source_rows"),
+                "mode_counts": _mode_counts(connection, "source_rows"),
             }
+            # Fresh observed content determines acquisition identity before atomic publication.
             build_key = domain_digest(SNAPSHOT_SCHEMA, manifest)
-            return self._publish_spooled(build_key, manifest, sorted_path)
+            return self._publish_spooled(
+                build_key,
+                manifest,
+                # The common copier enforces one output quota over every prepared spool.
+                {"observations": sorted_path, "token_modes": mode_path, "data_issues": issue_path},
+            )
 
     # Source spool IO is separate from the authoritative repository publication protocol.
     def _spool(
@@ -211,22 +269,26 @@ class LocalResearchStore:
                     raise ResearchError("RESEARCH_SOURCE_RANGE_MISMATCH")
                 if rows:
                     writer.write_batch(observation_batch(rows))
-                _require_bytes(stream.tell(), self.temporary_bytes // 3)
+                _require_bytes(stream.tell(), self.temporary_bytes // 4)
         # The Parquet footer also consumes space and must fit the same temporary quota.
-        _require_bytes(path.stat().st_size, self.temporary_bytes // 3)
+        _require_bytes(path.stat().st_size, self.temporary_bytes // 4)
 
     def _publish_spooled(
-        self, build_key: ContentDigest, manifest: dict[str, object], path: Path
+        self, build_key: ContentDigest, manifest: dict[str, object], paths: dict[str, Path]
     ) -> CommittedArtifact:
         """Only a complete validated spool may enter authoritative publication."""
 
         writer = self.artifacts.stage(ArtifactDraft(ArtifactKind.RESEARCH_SNAPSHOT, build_key))
         try:
-            # Copy in bounded blocks; the shared repository retains lock/fsync/commit authority.
-            with writer.open_binary("observations.parquet") as output, path.open("rb") as source:
-                while block := source.read(1024**2):
-                    output.write(block)
-                    _require_bytes(output.tell(), self.output_bytes)
+            # All snapshot tables share one output quota and one atomic publication transaction.
+            written = 0
+            for role, path in paths.items():
+                with writer.open_binary(role + ".parquet") as output, path.open("rb") as source:
+                    while block := source.read(1024**2):
+                        # Copy bounded chunks while retaining the existing writer's authority.
+                        output.write(block)
+                        written += len(block)
+                        _require_bytes(written, self.output_bytes)
             # The repository owns all fsync, hash, collision, rename and marker semantics.
             return writer.commit(canonical_json_bytes(manifest))
         except BaseException:
@@ -236,6 +298,8 @@ class LocalResearchStore:
     def analyze(self, spec: WalletAnalysisSpec) -> CommittedArtifact:
         """Acquire writer authority before the retained input to preserve lock order."""
 
+        if spec.schema_version != 2:
+            raise ResearchError("RESEARCH_RERESOLVE_REQUIRED")
         draft = ArtifactDraft(ArtifactKind.RESEARCH_RESULT, spec.build_key, (spec.snapshot_id,))
         writer = self.artifacts.stage(draft)
         try:
@@ -244,13 +308,24 @@ class LocalResearchStore:
                 handle = self.artifacts.open_committed(spec.snapshot_id)
                 stack.callback(handle.close)
                 manifest = self._manifest(handle, expected=ArtifactKind.RESEARCH_SNAPSHOT)
+                # Legacy inputs have no proof from which to derive a non-Mayhem subset.
+                if (
+                    spec.mode is ResearchMode.NON_MAYHEM
+                    and manifest["schema"] == LEGACY_SNAPSHOT_SCHEMA
+                ):
+                    raise ResearchError("RESEARCH_REPREPARE_REQUIRED")
                 # The input lease outlives native readers and final reference publication.
                 stream = stack.enter_context(handle.open_binary("observations.parquet"))
                 input_file = pq.ParquetFile(stream)
                 self._validate_input(input_file, manifest)
                 # Validation finishes before DuckDB can interpret the observation stream.
                 _, connection = stack.enter_context(self._workspace())
-                result = self._calculate(connection, input_file, spec, manifest, writer)
+                modes = None
+                if manifest["schema"] == SNAPSHOT_SCHEMA:
+                    mode_stream = stack.enter_context(handle.open_binary("token_modes.parquet"))
+                    modes = self._read_modes(pq.ParquetFile(mode_stream), manifest)
+                # Both verified tables remain leased throughout analysis and output commit.
+                result = self._calculate(connection, input_file, spec, manifest, writer, modes)
                 return writer.commit(canonical_json_bytes(result))
         # Any exception leaves only an aborted staging attempt, never a successful marker.
         except BaseException:
@@ -282,6 +357,35 @@ class LocalResearchStore:
         if digest.count != expected["rows"] or digest.hex != expected["digest"]:
             raise ResearchError("RESEARCH_TABLE_DIGEST_MISMATCH")
 
+    def _read_modes(
+        self, file: pq.ParquetFile, manifest: dict[str, Any]
+    ) -> tuple[ResearchTokenMode, ...]:
+        """Validate the bounded classification stream and its canonical digest before use."""
+
+        self._validate_table(file, ResearchTable.TOKEN_MODES, manifest)
+        digest = TableDigest(ResearchTable.TOKEN_MODES)
+        result = []
+        for batch in file.iter_batches(batch_size=BATCH_ROWS):
+            # Mode records have one fixed provenance shape; container hashes alone do not prove it.
+            digest.update(batch)
+            for row in batch.to_pylist():
+                result.append(
+                    token_mode_row(
+                        # Fixed source provenance fields cannot supply an alternate schema.
+                        row["mint"],
+                        row["mode"],
+                        # Creation identity and repeat count attest the source classification.
+                        row["creation_ref"],
+                        row["source_rows"],
+                        row["issue"],
+                    )
+                )
+        # Logical integrity is checked independently of physical file authentication.
+        if digest.hex != manifest["tables"]["token_modes"]["digest"]:
+            raise ResearchError("RESEARCH_TABLE_DIGEST_MISMATCH")
+        # Full mint coverage, chronology and ordering are checked against observations next.
+        return tuple(result)
+
     # This fixed native recipe is an offline application worker, never replay hot-loop code.
     def _calculate(
         self,
@@ -291,6 +395,7 @@ class LocalResearchStore:
         # Input metadata and output authority remain distinct from the native query connection.
         snapshot: dict[str, Any],
         writer: ArtifactWriter,
+        modes: tuple[ResearchTokenMode, ...] | None,
     ) -> dict[str, object]:
         """Run the fixed recipe and publish complete activity/pair/evidence tables."""
 
@@ -298,17 +403,41 @@ class LocalResearchStore:
         connection.register("input_rows", reader)
         connection.execute("CREATE TEMP TABLE observations AS SELECT * FROM input_rows")
         connection.unregister("input_rows")
+        # Mode evidence must cover the same observations that the native engine will use.
+        if modes is not None:
+            _check_modes(modes, _observed_mints(connection, "observations"))
+            _register_modes(connection, modes)
+            if _mode_counts(connection, "observations") != snapshot["mode_counts"]:
+                raise ResearchError("RESEARCH_MODE_COUNT_MISMATCH")
+            # A snapshot cannot hide partial records behind inconsistent warning totals.
+            if _issue_counts(connection, "observations") != snapshot["data_issue_counts"]:
+                raise ResearchError("RESEARCH_MODE_COUNT_MISMATCH")
+        # A v1 snapshot has no classifications; ALL retains its original complete row scope.
+        else:
+            connection.execute(
+                "CREATE TEMP VIEW modes AS SELECT DISTINCT mint, "
+                "'UNKNOWN' AS mode, '' AS issue FROM observations"
+            )
         # Signer selection is a bound value list, not interpolated SQL or an arbitrary join.
         if spec.wallets:
             connection.execute(
-                "CREATE TEMP TABLE selected AS SELECT * FROM observations "
+                "CREATE TEMP TABLE signer_selected AS SELECT * FROM observations "
                 "WHERE signing_wallet IN (SELECT unnest(?))",
                 # Wallets are bound values; they cannot change the fixed query structure.
                 [list(spec.wallets)],
             )
         # An omitted selection includes all rows; it is not a hidden top-wallet sample.
         else:
-            connection.execute("CREATE TEMP VIEW selected AS SELECT * FROM observations")
+            connection.execute("CREATE TEMP VIEW signer_selected AS SELECT * FROM observations")
+        # Counts describe the signer scope before tokens are excluded.
+        mode_counts = _mode_counts(connection, "signer_selected")
+        issue_counts = _issue_counts(connection, "signer_selected")
+        selection = "SELECT s.* FROM signer_selected s JOIN modes m USING (mint) WHERE m.issue = ''"
+        # Incomplete creation signatures exclude the whole mint in both modes.
+        if spec.mode is ResearchMode.NON_MAYHEM:
+            selection += " AND m.mode = 'NON_MAYHEM'"
+        # Filter tokens before activity, first buys, counts and the shared-mint threshold.
+        connection.execute("CREATE TEMP VIEW selected AS " + selection)
         # Dense popular-token joins are rejected before any quadratic materialization.
         connection.execute(queries.FIRST_BUYS)
         maximum_signers, candidates = connection.execute(queries.CANDIDATE_BUDGET).fetchone()
@@ -324,8 +453,10 @@ class LocalResearchStore:
             ResearchTable.ACTIVITY: queries.ACTIVITY,
             ResearchTable.PAIRS: queries.PAIR_ROWS,
             ResearchTable.EVIDENCE: queries.EVIDENCE,
+            # Warning scope is signer-selected before either data-quality or mode exclusions.
+            ResearchTable.DATA_ISSUES: _issue_query("signer_selected"),
         }
-        # One output budget is shared across all three result tables.
+        # One output budget is shared across all result tables, including warnings.
         tables: dict[str, object] = {}
         written = 0
         # Fixed-size Parquet row groups keep later HTTP reads bounded and SQL-free.
@@ -369,6 +500,9 @@ class LocalResearchStore:
             "quality": QUALITY,
             "counts": counts,
             "tables": tables,
+            "mode_counts": mode_counts,
+            # Warning totals belong to the same signer scope as pre-filter mode totals.
+            "data_issue_counts": issue_counts,
         }
 
     # Canonical batch boundaries stabilize Parquet bytes independently of source arrival order.
@@ -557,7 +691,16 @@ class LocalResearchStore:
         manifest = json.loads(raw)
         # Canonical bytes and closed fields prevent opaque schemas entering query views.
         snapshot = kind is ArtifactKind.RESEARCH_SNAPSHOT
-        keys = _SNAPSHOT_KEYS if snapshot else _RESULT_KEYS
+        if not isinstance(manifest, dict):
+            raise ResearchError("RESEARCH_INVALID_MANIFEST")
+        # Schema dispatch is explicit; unknown generations never inherit new defaults.
+        schema = SNAPSHOT_SCHEMA if snapshot else RESULT_SCHEMA
+        legacy_schema = LEGACY_SNAPSHOT_SCHEMA if snapshot else LEGACY_RESULT_SCHEMA
+        version = 2 if manifest.get("schema") == schema else 1
+        # Only the approved second version contains classification summary fields.
+        keys = (_SNAPSHOT_KEYS if snapshot else _RESULT_KEYS) | (
+            {"mode_counts", "data_issue_counts"} if version == 2 else set()
+        )
         # Canonical bytes reject duplicate keys, alternate encodings and unexpected fields.
         if (
             not isinstance(manifest, dict)
@@ -566,13 +709,19 @@ class LocalResearchStore:
         ):
             # An authenticated file hash does not excuse a noncanonical semantic envelope.
             raise ResearchError("RESEARCH_INVALID_MANIFEST")
-        schema = SNAPSHOT_SCHEMA if snapshot else RESULT_SCHEMA
         # Quality claims are fixed by this observational profile and cannot be caller-upgraded.
-        if manifest["schema"] != schema or manifest["quality"] != QUALITY:
+        if manifest["schema"] not in {schema, legacy_schema} or manifest["quality"] != QUALITY:
             raise ResearchError("RESEARCH_INVALID_MANIFEST")
         # A stored research dataset remains a typed observational request.
-        if dataset_spec(manifest["dataset"]).document() != manifest["dataset"]:
+        dataset = dataset_spec(manifest["dataset"])
+        if dataset.document() != manifest["dataset"] or (
+            snapshot and dataset.schema_version != version
+        ):
             raise ResearchError("RESEARCH_INVALID_MANIFEST")
+        # A v1 envelope cannot relabel a classified v2 acquisition.
+        if version == 1 and dataset.schema_version != 1:
+            raise ResearchError("RESEARCH_INVALID_MANIFEST")
+        # Legacy envelopes cannot acquire a v2 dataset by relabeling its metadata.
         counts = manifest["counts"]
         tables = manifest["tables"]
         # Both count and table maps are closed; unknown keys are not silently ignored.
@@ -589,6 +738,19 @@ class LocalResearchStore:
             # A selected universe cannot contain more wallets or rows than the source scan.
             raise ResearchError("RESEARCH_INVALID_MANIFEST")
         expected_tables = {"observations"} if snapshot else {"activity", "pairs", "evidence"}
+        # Only v2 includes a bounded classification reconciliation map.
+        mode_mints = 0
+        if version == 2:
+            recipe = None if snapshot else analysis_spec(manifest["analysis"])
+            # Warning deductions reconcile selected rows without removing raw source observations.
+            mode_mints = _validate_mode_counts(
+                manifest["mode_counts"], counts, recipe, manifest["data_issue_counts"]
+            )
+            expected_tables.add("data_issues")
+            # Only snapshot v2 owns a physical classification table.
+            if snapshot:
+                expected_tables.add("token_modes")
+        # Table coverage follows this envelope version, never a later schema's default.
         if set(tables) != expected_tables:
             raise ResearchError("RESEARCH_INVALID_MANIFEST")
         # Descriptor counts and exact table digests are mandatory bounded metadata.
@@ -603,8 +765,15 @@ class LocalResearchStore:
             # Per-table counts and logical hashes must agree with the bounded summary.
             if not isinstance(descriptor, dict) or set(descriptor) != {"rows", "digest"}:
                 raise ResearchError("RESEARCH_INVALID_MANIFEST")
-            if descriptor["rows"] != counts[count_fields[role]]:
+            # Each role binds its descriptor to the matching authenticated count domain.
+            if role == "data_issues":
+                expected_rows = manifest["data_issue_counts"]["mints"]
+            else:
+                expected_rows = mode_mints if role == "token_modes" else counts[count_fields[role]]
+            # Warning cardinality is bound just like source and derived table counts.
+            if descriptor["rows"] != expected_rows:
                 raise ResearchError("RESEARCH_INVALID_MANIFEST")
+            # Bounded row descriptors prevent oversized footer-driven allocations.
             integer(descriptor["rows"], maximum=MAX_SOURCE_ROWS)
             # The content digest remains distinct from the row ordinal used for local navigation.
             ContentDigest(descriptor["digest"])
@@ -612,7 +781,7 @@ class LocalResearchStore:
         if snapshot:
             ContentDigest(manifest["source_schema_digest"])
             if (
-                handle.descriptor.build_key != domain_digest(SNAPSHOT_SCHEMA, manifest)
+                handle.descriptor.build_key != domain_digest(manifest["schema"], manifest)
                 or counts["selected_rows"] != counts["source_rows"]
                 # Snapshot creation has no signer-selection phase or hidden row filter.
             ):
@@ -623,7 +792,10 @@ class LocalResearchStore:
         else:
             # Derived results retain exactly one source snapshot and the complete recipe identity.
             spec = analysis_spec(manifest["analysis"])
-            if spec.document() != manifest["analysis"]:
+            if spec.mode is ResearchMode.NON_MAYHEM and dataset.schema_version != 2:
+                raise ResearchError("RESEARCH_REPREPARE_REQUIRED")
+            # The recipe envelope and dataset classification capability must agree.
+            if spec.document() != manifest["analysis"] or spec.schema_version != version:
                 raise ResearchError("RESEARCH_INVALID_MANIFEST")
             if handle.descriptor.input_artifact_ids != (spec.snapshot_id,):
                 raise ResearchError("RESEARCH_INPUT_MISMATCH")
@@ -670,3 +842,145 @@ def _require_bytes(actual: int, maximum: int) -> None:
 
     if actual > maximum:
         raise ResearchError("RESEARCH_BYTE_LIMIT")
+
+
+def _observed_mints(connection: Any, table: str) -> dict[str, tuple[int, int, int]]:
+    """Bound Python metadata before collecting the exact mint operand and earliest positions."""
+
+    count = connection.execute(f"SELECT count(DISTINCT mint) FROM {table}").fetchone()[0]
+    if count > MAX_MODE_MINTS:
+        raise ResearchError("RESEARCH_MODE_MINT_LIMIT")
+    query = "SELECT mint, min((block_ordinal,transaction_index,source_instruction_index)) "
+    query += f"FROM {table} GROUP BY mint ORDER BY mint"
+    # Table names are internal constants; no SQL identifier originates in a transport request.
+    return dict(connection.execute(query).fetchall())
+
+
+def _check_modes(
+    modes: tuple[ResearchTokenMode, ...], expected: dict[str, tuple[int, int, int]]
+) -> None:
+    """Require one canonical classification per mint and reject late-enriched creation metadata."""
+
+    if not isinstance(modes, tuple) or len(modes) != len(expected):
+        raise ResearchError("RESEARCH_MODE_COVERAGE_MISMATCH")
+    for mode, mint in zip(modes, expected, strict=True):
+        if not isinstance(mode, ResearchTokenMode) or mode.mint != mint:
+            raise ResearchError("RESEARCH_MODE_COVERAGE_MISMATCH")
+        # A future creation cannot describe an earlier observed trade of this same mint.
+        if mode.creation is not None and mode.creation[:3] > expected[mint]:
+            raise ResearchError("RESEARCH_MODE_CREATION_AFTER_OBSERVATION")
+    if sum(mode.source_rows for mode in modes) > MAX_SOURCE_ROWS:
+        raise ResearchError("RESEARCH_SOURCE_ROW_LIMIT")
+
+
+def _register_modes(connection: Any, modes: tuple[ResearchTokenMode, ...]) -> None:
+    """Expose one bounded immutable classification table to the fixed native recipe."""
+
+    schema = table_schema(ResearchTable.TOKEN_MODES)
+    values = [(index, *mode.values()) for index, mode in enumerate(modes)]
+    # Column allocation is bounded by the complete 50,000-mint operand cap.
+    columns = [
+        pa.array([row[index] for row in values], type=field.type)
+        for index, field in enumerate(schema)
+    ]
+    # The complete operand is at most 50,000 small records, independently of swap cardinality.
+    connection.register("mode_input", pa.Table.from_arrays(columns, schema=schema))
+    connection.execute("CREATE TEMP TABLE modes AS SELECT * FROM mode_input")
+    connection.unregister("mode_input")
+
+
+def _mode_counts(connection: Any, table: str) -> dict[str, int]:
+    """Count the signer-selected scope before mode filtering, preserving duplicate observations."""
+
+    result = {
+        mode.value.lower() + suffix: 0 for mode in TokenMode for suffix in ("_rows", "_mints")
+    }
+    # A fixed one-to-one metadata join leaves observation multiplicity unchanged.
+    query = "SELECT m.mode,count(*),count(DISTINCT s.mint) "
+    query += f"FROM {table} s JOIN modes m USING (mint) GROUP BY m.mode"
+    for mode, rows, mints in connection.execute(query).fetchall():
+        # One-to-one mint coverage has already been verified, so metadata cannot multiply swaps.
+        result[mode.lower() + "_rows"] = int(rows)
+        result[mode.lower() + "_mints"] = int(mints)
+    return result
+
+
+# Manifest counters are authenticated without a heavy HTTP-side table scan.
+def _validate_mode_counts(
+    value: object, counts: dict[str, Any], recipe: WalletAnalysisSpec | None, issues: object
+) -> int:
+    """Reconcile the closed bounded counters with the exact selected analysis scope."""
+
+    keys = {mode.value.lower() + suffix for mode in TokenMode for suffix in ("_rows", "_mints")}
+    if not isinstance(value, dict) or set(value) != keys:
+        raise ResearchError("RESEARCH_INVALID_MANIFEST")
+    rows = mints = 0
+    for mode in TokenMode:
+        # Each represented mint needs at least one row; empty categories cannot claim mints.
+        category_rows = integer(value[mode.value.lower() + "_rows"], maximum=MAX_SOURCE_ROWS)
+        category_mints = integer(value[mode.value.lower() + "_mints"], maximum=MAX_SOURCE_ROWS)
+        if category_mints > category_rows or bool(category_rows) != bool(category_mints):
+            raise ResearchError("RESEARCH_INVALID_MANIFEST")
+        # Total category counts are reconciled to the exact recipe scope below.
+        rows += category_rows
+        mints += category_mints
+    # Snapshot counts cover all rows; results cover the signer selection before the mode filter.
+    selected = (
+        value["non_mayhem_rows"] if recipe and recipe.mode is ResearchMode.NON_MAYHEM else rows
+    )
+    # The explicit issue subset is excluded from either recipe, never from raw snapshot rows.
+    selected -= _validate_issue_counts(issues, value, recipe)
+    if selected != counts["selected_rows"] or rows > counts["source_rows"]:
+        raise ResearchError("RESEARCH_INVALID_MANIFEST")
+    # Snapshot classification covers every observed mint within the preparation cap.
+    if recipe is None and (rows != counts["source_rows"] or mints > MAX_MODE_MINTS):
+        raise ResearchError("RESEARCH_INVALID_MANIFEST")
+    return mints
+
+
+# Fixed warning queries share the verified one-to-one mint join used by mode counts.
+def _issue_query(table: str) -> str:
+    """List every affected mint once with its complete source-row multiplicity."""
+
+    query = "SELECT row_number() OVER (ORDER BY s.mint)-1 row_id,s.mint,m.issue,"
+    query += f"count(*) observation_rows FROM {table} s JOIN modes m USING (mint) "
+    query += "WHERE m.issue <> '' GROUP BY s.mint,m.issue ORDER BY s.mint"
+    return query
+
+
+def _issue_counts(connection: Any, table: str) -> dict[str, int]:
+    """Summarize data issues before exclusions within the exact requested signer scope."""
+
+    result = {"mints": 0, "non_mayhem_rows": 0, "mayhem_rows": 0}
+    query = "SELECT m.mode,count(*),count(DISTINCT s.mint) "
+    query += f"FROM {table} s JOIN modes m USING (mint) WHERE m.issue <> '' GROUP BY m.mode"
+    # Partial records still report literal 0/1; absent creations have no invented issue or mode.
+    for mode, rows, mints in connection.execute(query).fetchall():
+        result[mode.lower() + "_rows"] = int(rows)
+        result["mints"] += int(mints)
+    return result
+
+
+# Transport summaries validate fixed counters without scanning entire tables in the HTTP process.
+def _validate_issue_counts(
+    issues: object, modes: dict[str, Any], recipe: WalletAnalysisSpec | None
+) -> int:
+    """Require bounded warning counters and calculate the exact included-scope deduction."""
+
+    if not isinstance(issues, dict) or set(issues) != {"mints", "non_mayhem_rows", "mayhem_rows"}:
+        raise ResearchError("RESEARCH_INVALID_MANIFEST")
+    mints = integer(issues["mints"], maximum=MAX_MODE_MINTS)
+    ordinary = integer(issues["non_mayhem_rows"], maximum=modes["non_mayhem_rows"])
+    mayhem = integer(issues["mayhem_rows"], maximum=modes["mayhem_rows"])
+    # Every warned mint has at least one row and belongs to a known reported mode.
+    if (
+        mints > ordinary + mayhem
+        or bool(mints) != bool(ordinary + mayhem)
+        # Unknown mode cannot carry this issue because a literal flag is required first.
+        or mints > modes["non_mayhem_mints"] + modes["mayhem_mints"]
+    ):
+        raise ResearchError("RESEARCH_INVALID_MANIFEST")
+    # Snapshot row counts remain intact; only derived selected rows deduct data issues.
+    if recipe is None:
+        return 0
+    return ordinary if recipe.mode is ResearchMode.NON_MAYHEM else ordinary + mayhem

@@ -65,6 +65,20 @@ def table_schema(role: ResearchTable) -> pa.Schema:
     row_id = pa.field("row_id", pa.uint64(), nullable=False)
     if role is ResearchTable.OBSERVATIONS:
         return pa.schema([row_id, *raw_schema()])
+    if role is ResearchTable.TOKEN_MODES:
+        # Absent creation uses an empty reference, never synthetic chain coordinates.
+        fields = [
+            pa.field(name, pa.string(), nullable=False) for name in ("mint", "mode", "creation_ref")
+        ]
+        # The issue marks partial creation evidence without changing observed mode values.
+        count = pa.field("source_rows", pa.uint64(), nullable=False)
+        issue = pa.field("issue", pa.string(), nullable=False)
+        return pa.schema([row_id, *fields, count, issue])
+    if role is ResearchTable.DATA_ISSUES:
+        # One row per affected mint keeps warning pages bounded and inspectable.
+        fields = [pa.field(name, pa.string(), nullable=False) for name in ("mint", "issue")]
+        count = pa.field("observation_rows", pa.uint64(), nullable=False)
+        return pa.schema([row_id, *fields, count])
     if role is ResearchTable.ACTIVITY:
         # Activity groups source rows by signer and retains the observed block span.
         names: tuple[str, ...] = (

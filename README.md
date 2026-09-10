@@ -187,11 +187,21 @@ neighbours; it persists when the table changes page. Three levels show visual
 groups → wallets within a group → every neighbour of a wallet, including
 cross-group pairs. Counts reconcile to the entire result; grouped lines expose
 all original pairs. Visual groups do not establish ownership or coordination.
+Research v2 snapshots also store bounded same-source creation classifications.
+Tokens with an empty creation signature are excluded from both analysis modes;
+visible warnings list every affected mint and its source-row count through
+bounded pagination. Original observations remain stored unchanged.
+The shared CLI/API default is `NON_MAYHEM` («Без Mayhem»); `ALL` («Все режимы»)
+is explicit. Filtering excludes Mayhem and unclassified tokens before activity,
+first buys and pair thresholds, with separate visible row/mint counts.
+It never blacklists a wallet for its other Mayhem trades. V1 artifacts retain
+their original readable meaning; their missing classifications require a new
+snapshot for `NON_MAYHEM`, while a new `ALL` analysis remains supported.
 Start with the
 [wallet research guide](docs/wallet-research.md). The contract is in
 [deep dive §24.6](docs/architecture-deep-dive.md#246-on-chain-wallet-research).
 Hermetic source/CLI/API/child and browser workflows are verified. Local analysis
-of one saved live-source cut passed with all 10,075 signers, 97,040 rows and
+of one saved v1, all-mode live-source cut passed with all 10,075 signers, 97,040 rows and
 180, 1,000 and 3,600-second windows. Compact intermediate keys preserve exact
 output within unchanged quotas; see [capacity evidence](docs/research-capacity.md).
 Source completeness and causal availability remain `UNKNOWN`; general live

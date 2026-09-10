@@ -9,11 +9,14 @@ const graphView = {mode: "page", controller: null, total: null};
 // Track the last submitted job without replacing unchanged controls on every poll.
 let activeJobId = null;
 let jobsSignature = "";
-const names = {observations: "Исходные наблюдения", activity: "Активность подписантов", pairs: "Пары кошельков", evidence: "Исходные покупки пары"};
+const names = {data_issues: "Проблемы данных", token_modes: "Режимы токенов", observations: "Исходные наблюдения", activity: "Активность подписантов", pairs: "Пары кошельков", evidence: "Исходные покупки пары"};
 const labels = {source_rows: "Наблюдений в снимке", selected_rows: "Строк в выборке", wallets: "Подписантов", pairs: "Пар кошельков", evidence: "Общих токенов у пар"};
 
 // Column sets are fixed display contracts; no source-provided key becomes executable UI.
 const columns = {
+  token_modes: ["row_id", "mint", "mode", "creation_ref", "source_rows", "issue"],
+  data_issues: ["row_id", "mint", "issue", "observation_rows"],
+  // Creation provenance is displayed separately from unchanged source swap observations.
   observations: ["row_id", "block_ordinal", "transaction_index", "signature", "mint", "side", "signing_wallet", "fee_payer", "quote_amount_atomic"],
   activity: ["signing_wallet", "buy_rows", "sell_rows", "mint_count", "first_block", "last_block", "source_quote_buy_atomic", "source_quote_sell_atomic"],
   pairs: ["row_id", "signer_a", "signer_b", "shared_mints", "a_first", "b_first", "same_transaction"],
@@ -23,6 +26,9 @@ const columns = {
 
 // Source roles and amount units remain visible in the column names.
 const headings = {
+  issue: "Проблема данных", observation_rows: "Исключено наблюдений",
+  mode: "Режим токена", creation_ref: "Создание: [блок, транзакция, инструкция, подпись]", source_rows: "Записей создания",
+  // Classification absence remains visible instead of becoming an ordinary launch.
   row_id: "Строка", block_ordinal: "Блок", transaction_index: "Транзакция", signature: "Подпись транзакции", mint: "Токен", side: "Сторона",
   signing_wallet: "Подписант", fee_payer: "Плательщик комиссии", quote_amount_atomic: "SOL-часть, lamports", buy_rows: "Покупок (строк)", sell_rows: "Продаж (строк)", mint_count: "Токенов",
   first_block: "Первый блок", last_block: "Последний блок", source_quote_buy_atomic: "Покупки: SOL-часть, lamports", source_quote_sell_atomic: "Продажи: SOL-часть, lamports",
@@ -46,6 +52,10 @@ const errorMessages = {
   RESEARCH_SOURCE_NOT_CONFIGURED: "Источник данных для этого сервера не настроен. Снимок не создан. Запусти сервер с настроенным профилем источника; сохранённые снимки можно анализировать без подключения.",
   RESEARCH_INVALID_FORM: "Проверь значения полей: границы блоков и параметры анализа должны быть целыми числами в допустимых пределах.",
   RESEARCH_RERESOLVE_REQUIRED: "Версия исследовательского рецепта изменилась. Обнови страницу и повтори отправку.",
+  RESEARCH_REPREPARE_REQUIRED: "Этот снимок не содержит режимов токенов. Подготовь новый снимок для того же диапазона блоков и запусти анализ «Без Mayhem». Старый снимок можно анализировать в режиме «Все режимы».",
+  RESEARCH_MODE_CONFLICT: "Источник содержит противоречивые сведения о создании или режиме токена. Снимок не опубликован.",
+  RESEARCH_MODE_CREATION_AFTER_OBSERVATION: "Создание токена в источнике указано позже его сделки. Снимок не опубликован.",
+  RESEARCH_MODE_MINT_LIMIT: "В диапазоне больше 50 000 токенов. Уменьши период исследования.",
   // A failed artifact read must not be presented as a valid empty result.
   RESEARCH_ARTIFACT_UNAVAILABLE: "Не удалось проверить выбранный снимок или результат. Проверь его ID и доступность локальных данных."
 };
@@ -136,7 +146,7 @@ $("#analyze-form").addEventListener("submit", (event) => {
   // Only bounded identifiers and semantic recipe parameters cross this mutation boundary.
   submit(event.currentTarget, "analyze", {snapshot_id: data.get("snapshot_id"),
     window_seconds: Number(data.get("window_seconds")), minimum_shared_mints: Number(data.get("minimum_shared_mints")),
-    wallets: wallets ? wallets.split(/\s+/) : []}).catch(showError);
+    wallets: wallets ? wallets.split(/\s+/) : [], mode: data.get("mode")}).catch(showError);
 });
 
 // Only one bounded recent-job request may be in flight at once.
@@ -217,6 +227,8 @@ async function openArtifact(id) {
     $("[name=minimum_shared_mints]").value = summary.analysis.minimum_shared_mints;
     $("[name=wallets]").value = summary.analysis.wallets.join("\n");
   }
+  renderModeScope(summary, snapshot);
+  renderDataIssues(summary, snapshot);
   // The displayed range remains the source's authoritative half-open block interval.
   $("#result-title").textContent = snapshot ? "Наблюдения сохранены" : "Связи в наблюдаемой выборке";
   $("#scope").textContent = `${summary.dataset.network_id} · ${summary.dataset.source_id} · ` +
@@ -232,7 +244,8 @@ async function openArtifact(id) {
     return card;
   }));
   // A snapshot exposes source rows; derived tables belong only to a completed result.
-  const tables = snapshot ? ["observations"] : ["pairs", "activity"];
+  const tables = snapshot ? (summary.dataset.schema === "research-dataset-spec/v2" ? ["observations", "token_modes"] : ["observations"]) : ["pairs", "activity"];
+  if (Object.keys(summary.data_issue_counts || {}).length) tables.push("data_issues");
   // Tabs select fixed typed tables, never files or query strings supplied by an artifact.
   $("#tabs").replaceChildren(...tables.map((table) => {
     const button = element("button", names[table], "secondary");
@@ -243,6 +256,45 @@ async function openArtifact(id) {
   }));
   $("#result").hidden = false;
   await selectTable(tables[0]);
+}
+
+// Committed result scope and the editable form are distinct; changing a selector cannot hide edges.
+function renderModeScope(summary, snapshot) {
+  const classified = summary.dataset.schema === "research-dataset-spec/v2";
+  const mode = snapshot ? "NON_MAYHEM" : (summary.analysis.mode || "ALL");
+  $("[name=mode]").value = mode;
+  $("#mode-availability").hidden = classified;
+  // Legacy artifacts stay readable, and preparing their exact range remains an explicit action.
+  $("#mode-availability").textContent = "В этом снимке нет режимов токенов. Для «Без Mayhem» подготовь новый снимок: диапазон подставлен в форму слева. Старый результат учитывает все режимы.";
+  for (const [field, value] of [["from_block", summary.dataset.from_block_ordinal], ["to_block", summary.dataset.to_block_ordinal]]) {
+    if (!$("[name=" + field + "]").value) $("[name=" + field + "]").value = value;
+  }
+  // Counters refer to the selected signers before token filtering, never to the current page.
+  const counts = summary.mode_counts || {};
+  if (!Object.keys(counts).length) {
+    $("#mode-summary").textContent = "Все режимы. В старом снимке нет классификации Mayhem; этот результат не отфильтрован по режиму токенов.";
+    return;
+  }
+  // Each excluded category is separate so unknown source facts cannot look like ordinary launches.
+  const details = `Обычный режим: ${counts.non_mayhem_mints} токенов / ${counts.non_mayhem_rows} строк; Mayhem: ${counts.mayhem_mints} / ${counts.mayhem_rows}; неизвестный режим: ${counts.unknown_mints} / ${counts.unknown_rows}.`;
+  const scope = snapshot ? "Классификация всего снимка. " : "До фильтра режима, среди выбранных подписантов. ";
+  $("#mode-summary").textContent = scope + details;
+  // This describes the committed recipe even if the user edits the selector for a future run.
+  if (!snapshot) $("#mode-summary").textContent += mode === "NON_MAYHEM"
+    ? " Результат «Без Mayhem»: Mayhem и неизвестные исключены; связи и порог пересчитаны только по обычным токенам."
+    : " Результат «Все режимы»: все эти категории участвуют в расчёте, кроме токенов с проблемами данных, указанными ниже.";
+}
+
+// Warnings follow the committed artifact and never the current editable mode selector.
+function renderDataIssues(summary, snapshot) {
+  const counts = summary.data_issue_counts || {};
+  const affected = BigInt(counts.mints || "0");
+  $("#data-issues-warning").hidden = affected === 0n;
+  // Integer strings stay exact and warning scope matches the persisted per-mint table.
+  const rows = BigInt(counts.non_mayhem_rows || "0") + BigInt(counts.mayhem_rows || "0");
+  const action = snapshot ? "Будут пропущены при анализе" : "Пропущены при анализе";
+  $("#data-issues-summary").textContent = `Предупреждение: у ${affected} токенов не заполнена подпись транзакции создания. ${action}: ${rows} наблюдений в обоих режимах. Исходные сделки сохранены в снимке. Адреса и причины — в таблице «Проблемы данных».`;
+  $("#show-data-issues").onclick = () => selectTable("data_issues").catch(showError);
 }
 
 // Selecting a new table changes the view only; it never recalculates analytical results.
@@ -382,7 +434,8 @@ function renderRows(rows, table) {
     const tr = element("tr");
     for (const key of columns[table]) {
       // Values remain decimal strings; large atomic amounts never pass through Number.
-      const value = row[key];
+      const value = key === "issue" && row[key] === "MISSING_CREATION_SIGNATURE"
+        ? "Не заполнена подпись транзакции создания" : row[key];
       const cell = element("td", value);
       cell.title = value;
       tr.append(cell);

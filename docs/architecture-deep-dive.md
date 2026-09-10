@@ -278,7 +278,13 @@ re-extraction or ReplayPack recompilation.
 - the separate §24.6 wallet-research slice: bounded successful SOL-paired
   Pump observations, immutable ResearchSnapshot/ResearchResult, local DuckDB
   activity/co-buy analysis, exact source-row evidence, durable isolated jobs,
-  CLI and same-origin `/research` dashboard. The page explains first BUY per
+  and v2 same-source token-mode classification. Shared CLI/API resolution defaults
+  to `NON_MAYHEM`, with explicit `ALL`; empty creation signatures are skipped
+  in both modes with bounded per-mint warnings; filtering precedes activity, first buys,
+  pair aggregation and thresholds. Separate Mayhem/UNKNOWN exclusions are visible.
+  Legacy v1 remains readable and supports new ALL analyses; NON_MAYHEM on v1
+  requires a fresh preparation. The source-row layout and Sniping are unchanged.
+  The slice also provides a CLI and same-origin `/research` dashboard. The page explains first BUY per
   signer/mint within the snapshot, including missed later co-buys, and ships
   pinned local Cytoscape.js with zoom/pan/drag, accessible selection and exact
   pair-evidence navigation. Graph scope is either 25 page pairs / 50 nodes or
@@ -294,7 +300,7 @@ re-extraction or ReplayPack recompilation.
   multiplicity are preserved; completeness, finality, source consistency and
   causal availability remain `UNKNOWN`. Hermetic source contracts and isolated
   CLI/API execution are verified; the real-browser workflow and installed-wheel
-  CLI/child/API/assets gate passed. Local analysis of one saved live-source
+  CLI/child/API/assets gate passed. Local analysis of one saved v1, all-mode live-source
   cut with 97,040 rows and 10,075 signers passed at 180, 1,000 and 3,600-second
   windows with an empty signer selection. Compact native keys preserve exact
   output bytes within unchanged resource quotas; [capacity evidence](research-capacity.md)
@@ -2717,9 +2723,11 @@ points but are absent from current reference composition and fail closed.
 
 Research is an independent data consumer before a strategy exists. The first
 slice studies observed successful SOL-paired `pumpfun_v2_swaps` participation
-on one Solana network and a typed half-open block range. It does not join to
-decision-range launches or apply the Sniping non-Mayhem universe. Every
-returned source row is retained, including identical rows with multiplicity.
+on one Solana network and a typed half-open block range. Acquisition retains
+every returned swap, including identical rows with multiplicity. Version two
+additionally classifies the observed mints from creation records in the same
+source; it does not restrict swaps to launches inside the observation range
+or apply the Sniping execution universe.
 The exact observation scope is visible in every result and dashboard.
 
 Two new artifact kinds, `RESEARCH_SNAPSHOT` and `RESEARCH_RESULT`, use the
@@ -2729,7 +2737,7 @@ protocols. Their top-level directories are `research-snapshots/` and
 ReplayPack, FeatureSet, Universe or SuccessfulRun. Existing artifact IDs and
 Sniping source-evidence/settlement gates are not redefined or relaxed.
 
-`research-dataset-spec/v1` pins one source ID, immutable NetworkId and position
+`research-dataset-spec/v2` pins one source ID, immutable NetworkId and position
 schema, exact block range, the fixed source profile/mapping/query digest, and
 the installed research code/runtime digest. Acquisition accepts no SQL, table
 name, path or executable code through a transport DTO. The fixed adapter
@@ -2738,6 +2746,48 @@ explicit columns, parameterized block bounds, a unique credential-free query
 ID, streaming batches, and throw-on-excess server row/byte/time/memory limits.
 Local row, output and temporary quotas are mandatory too. A schema change,
 malformed row, limit failure or interrupted scan publishes no snapshot.
+
+The approved Mayhem extension uses `wallet-research-snapshot/v2`, retaining the
+unchanged `wallet-observations/v1` table and adding `token_modes.parquet`
+and the bounded `data_issues.parquet` warning table.
+After spooling the complete swap range, one bounded lookup selects exactly its
+canonical distinct mint set (at most 50,000) from `pumpfun_token_creation` in
+the same source/network. Its authoritative creation BlockRange is `[0, swap
+range end)`; launches before the swap range are eligible classification inputs.
+The fixed query/profile and this range rule enter DatasetSpec v2 identity.
+No `FINAL`, latest-version choice, arbitrary history mirror or source merge is
+allowed: relevant creation identity and mode must agree across all returned
+rows. Metadata duplicates are counted, never used to multiply or deduplicate
+swaps. Each of the two source streams is capped at 20 million scanned rows,
+2 GiB scanned bytes, 2 million returned rows, 1 GiB returned bytes, 120 seconds,
+one native thread and the existing remote memory budget. The mint operand is
+bounded to 50,000 full addresses. Any cap violation rejects the entire snapshot.
+
+The fixed creation projection contains mint, block/transaction/instruction,
+signature and explicit immutable creation-time `mayhem_mode`. Malformed/null/
+out-of-domain mode, inconsistent creation identity or conflicting modes reject
+preparation; a missing creation record yields explicit `UNKNOWN`, never false.
+The user-approved research-only exception is a literal empty creation signature:
+retain its reported mode and partial coordinates, record the closed issue code
+`MISSING_CREATION_SIGNATURE`, and exclude that mint from analysis in both modes.
+A nonempty malformed signature still rejects. The issue does not fabricate a
+transaction identity or imply replay eligibility. All returned creation fields
+must still agree, including the signature; an empty and nonempty version of the
+same creation remain conflicting evidence and reject. Repeated identical partial
+records preserve multiplicity. Missing/null/invalid mode is never excused by a
+missing signature. Original swap observations remain intact in the snapshot.
+A known creation must precede or coincide with the first observed source
+position for that mint. Every mint gets exactly one canonical mode row, with
+`NON_MAYHEM`, `MAYHEM` or `UNKNOWN`, exact canonical creation-reference text (empty
+only for missing creation), the count of matching source metadata rows, and
+an issue string (empty or `MISSING_CREATION_SIGNATURE`). A partial creation
+reference retains its literal empty signature only with that issue.
+This table is itself content-addressed, sorted by mint, bounded, and committed
+atomically with the observations. Mode-row coverage must equal the exact
+observed mint set; neither missing nor extra classification rows may publish.
+Snapshot metadata records reconciled mode-specific mint and observation counts.
+Classification describes source observations and does not establish past causal
+availability, source completeness/finality or executable replay admission.
 
 The `wallet-observations/v1` table preserves source signature, source instruction
 position, block/transaction position, second-resolution UTC source block time,
@@ -2775,10 +2825,49 @@ over the existing runtime manifest's `abi`, `dependencies`, `python` and
 separately. Native thread counts and environment settings remain physical
 attempt settings, so changing them does not redefine an analytical recipe.
 
-`wallet-co-buy-analysis/v1` is a closed, versioned recipe over exactly one
+`wallet-co-buy-analysis/v2` is a closed, versioned recipe over exactly one
 verified ResearchSnapshot. Parameters are a canonical sorted optional signer
-selection, a nonnegative inclusive `window_seconds`, and a positive minimum
-shared-mint count. An empty selection means all observed signers. The recipe
+selection, a nonnegative inclusive `window_seconds`, a positive minimum
+shared-mint count and an explicit `mode`: `NON_MAYHEM` or `ALL`. Shared CLI/API
+resolution materializes `NON_MAYHEM` as the default. An empty signer selection
+means all observed signers. `NON_MAYHEM` includes only explicitly classified
+ordinary mints, excluding both Mayhem and UNKNOWN mints with separate visible
+counts; `ALL` retains both plus unknowns, subject to the data-issue exclusion
+common to both modes. This is an observational allowlist,
+not a claim that UNKNOWN tokens are Mayhem. Filtering precedes activity, first
+BUY selection, pair aggregation and the minimum-shared-mint threshold. A wallet
+is not globally excluded merely because it also traded Mayhem tokens.
+
+`wallet-research-result/v2` retains the existing activity/pair/evidence schemas
+and exact snapshot observation references. Its bounded mode counts describe
+the signer-selected rows before the mode filter; ordinary + Mayhem + unknown
+counts reconcile to that scope, and the included subset reconciles to
+`selected_rows`. Changing mode creates a new analysis/build/content identity,
+never a cosmetic graph filter or reinterpretation of a committed result.
+
+Both v2 snapshot and result publish `data_issues.parquet` atomically with their
+other tables. Its fixed columns are canonical mint-sorted `row_id`, `mint`,
+`issue`, and `observation_rows`. It lists each affected mint once, at most 50,000;
+counts preserve original swap multiplicity. Snapshot warnings cover all source
+rows; result warnings cover signer-selected rows before either filter. The
+bounded `data_issue_counts` map contains `mints`, `non_mayhem_rows` and
+`mayhem_rows`, reconciled with mode counts, warning-table cardinality and the
+included row count. The partial-record issue never belongs to UNKNOWN.
+UI must show a visible warning with the excluded mint/row counts and expose
+all affected addresses and reasons through existing bounded table pagination.
+No unbounded mint list enters a manifest or HTTP response. The mode and warning
+spools share one quarter of the existing temporary quota; the other quarters
+remain raw observations, sorted observations and native spill. All published
+tables share the existing total output quota. Legacy v1 retains its original
+meaning and has no retrospective data-quality exclusions or invented warnings.
+
+Legacy dataset/snapshot/analysis/result v1 remains readable with its original
+meaning and identity; a v1 analysis means ALL and never carries fabricated mode
+information. New preparation/queued execution must resolve current v2 operands.
+A new ALL recipe may read a v1 snapshot, reporting its modes as unknown;
+NON_MAYHEM on v1 rejects with `RESEARCH_REPREPARE_REQUIRED` before queue admission
+and again before calculation. No in-place migration, silent default mode or
+fallback to ALL is permitted. The recipe
 publishes source-row activity counts, per-signer distinct-mint participation,
 and evidence-backed signer pairs. It has no wallet-PnL, common-owner, transfer,
 profitability, predictive-power or strategy-executability claim.

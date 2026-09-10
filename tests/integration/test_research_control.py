@@ -20,7 +20,7 @@ from backtest.bootstrap.config import load_settings
 from backtest.bootstrap.container import build_runtime_container
 from backtest.domain.identifiers import ArtifactId, ContentDigest, JobId
 from backtest.interfaces.api import create_app
-from tests.support.research import DIGEST, configuration, dataset, observations
+from tests.support.research import DIGEST, configuration, dataset, observations, ordinary_modes
 
 
 def test_api_queues_same_resolved_bytes_and_rejects_unsafe_queries(tmp_path: Path) -> None:
@@ -30,7 +30,10 @@ def test_api_queues_same_resolved_bytes_and_rejects_unsafe_queries(tmp_path: Pat
     service = container.control.research
     assert service is not None
     # A committed hermetic snapshot is sufficient to submit analysis without source access.
-    snapshot = service.store.publish_snapshot(dataset(), DIGEST, iter((observations(),)))
+    # Preparation fixtures supply immutable mode facts without contacting the source.
+    snapshot = service.store.publish_snapshot(
+        dataset(), DIGEST, iter((observations(),)), classify=ordinary_modes
+    )
     # No source connection or native calculation is needed for typed HTTP submission.
     client = TestClient(
         create_app(container.control, control_plane_id=DIGEST), base_url="http://127.0.0.1"
@@ -124,7 +127,10 @@ def test_direct_child_receipt_result_pages_and_lineage(tmp_path: Path) -> None:
     container = build_runtime_container(load_settings(config), profile="research-test")
     backend = RuntimeCliBackend(container, config)
     service = backend.research_use_cases()
-    snapshot = service.store.publish_snapshot(dataset(), DIGEST, iter((observations(),)))
+    # Preparation fixtures supply immutable mode facts without contacting the source.
+    snapshot = service.store.publish_snapshot(
+        dataset(), DIGEST, iter((observations(),)), classify=ordinary_modes
+    )
     # The local source fixture has no queue job; only the immutable snapshot enters analysis.
     command = service.resolve_analysis(snapshot.artifact_id)
     result = backend.execute_research(JobType.ANALYZE_WALLETS, command.canonical_bytes())
