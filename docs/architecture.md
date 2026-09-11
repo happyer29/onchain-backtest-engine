@@ -1,5 +1,10 @@
 # On-Chain Backtest Engine architecture: concise overview
 
+On-chain research is integrated into the shared React workspace at `/research`.
+Existing artifact links, preparation/analysis, warnings, paged evidence and the
+three-level whole-result graph retain the §24.6 contract. The replaced research
+HTML and global DOM scripts are removed; Cytoscape.js is bundled locally.
+
 Status: accepted as a synchronized overview
 
 > The complete normative description is in the
@@ -7,6 +12,44 @@ Status: accepted as a synchronized overview
 > map and does not introduce independent decisions. When wording is ambiguous,
 > the deep dive governs, and any discrepancy found must be corrected in both
 > documents.
+
+## Approved wallet-research extension
+
+[Deep dive §24.6](architecture-deep-dive.md#246-on-chain-wallet-research)
+defines a separate observational research consumer: bounded `research prepare`
+creates a verified immutable participant snapshot; local `research analyze`
+builds activity, shared-mint pairs and exact observation evidence in DuckDB.
+The same durable job/publication lifecycle and same-origin bounded dashboard
+apply. The page explains first purchases and their limitations; locally bundled
+Cytoscape.js adds zoom/pan/drag and accessible exact-pair evidence navigation
+within 25 page pairs / 50 nodes, without changing research identity.
+The §24.6 whole-result mode adds up to 200,000 pairs / 5,000 participating
+wallets: bounded sequential loading, progress/cancellation, exact completeness
+checks and all-neighbour search. The implemented three-level display is
+visual groups → group wallets → complete wallet neighbourhood, with reconciled
+internal/cross-group counts and exact-pair evidence. Grouping is presentation
+only; table pagination preserves the loaded result.
+Research v2 snapshots also store bounded same-source creation classifications.
+Tokens with an empty creation signature are excluded from both analysis modes;
+visible warnings list every affected mint and its source-row count through
+bounded pagination. Original observations remain stored unchanged.
+The shared CLI/API default is `NON_MAYHEM` («Без Mayhem»); `ALL` («Все режимы»)
+is explicit. Filtering excludes Mayhem and unclassified tokens before activity,
+first buys and pair thresholds, with separate visible row/mint counts.
+It never blacklists a wallet for its other Mayhem trades. V1 artifacts retain
+their original readable meaning; their missing classifications require a new
+snapshot for `NON_MAYHEM`, while a new `ALL` analysis remains supported.
+Signer and fee payer remain distinct roles, source-row multiplicity is
+preserved, and completeness/finality remain UNKNOWN. Research artifacts cannot
+enter replay or Strategy directly. Existing Sniping gates and identities are
+unchanged. The first slice is implemented and verified on hermetic source,
+CLI/API/child and browser workflows. One saved v1, all-mode live-source cut passed local
+analysis of all 10,075 signers and 97,040 rows at 180, 1,000 and 3,600 seconds;
+compact intermediate keys preserve exact output under unchanged quotas.
+[Capacity evidence](research-capacity.md) records the scope. General live-source
+fidelity/capacity, transfers, full wallet PnL, ownership clustering and automatic
+strategy promotion remain outside this closure. See the
+[wallet research guide](wallet-research.md).
 
 ## 1. The decision in one paragraph
 
@@ -131,8 +174,8 @@ Guarantees and constraints:
 - one trusted codebase and one Python environment;
 - 16 GB RAM is the minimum supported profile; 32 GB is recommended;
 - one local NVMe; CPU-first, with an optional local GPU;
-- the source is accessible only to `inspect-source`, `prepare-dataset`, and an
-  optional estimate in `plan-dataset`;
+- the source is accessible only to `inspect-source`, `prepare-dataset`,
+  bounded `research prepare`, and an optional estimate in `plan-dataset`;
 - compile, feature/ML, and backtest jobs read only committed local artifacts;
 - a `CANONICAL_EXACT` run with the same logical identity produces a
   byte-identical normalized audit/result regardless of Parquet/ReplayPack,
@@ -569,6 +612,7 @@ snapshot/ReplayPack rebuild with three-way exact equivalence.
 ## 6. Ports and extension contracts
 
 Primary use cases are `inspect-source`, `plan-dataset`, `prepare-dataset`,
+`research prepare`, `research analyze`,
 `compile-replay`, `compile-delivery-schedule`, `run-backtest`, `run-sweep`,
 `build-features`, `train`, `predict`, submit/cancel/query jobs/runs, verify, and
 GC. A `RunSpecDraft` with aliases/defaults is not executable: the resolver

@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tests/integration/jobs"))
 fixture = importlib.import_module("test_real_control_http")
 
@@ -47,6 +48,48 @@ def prepare(directory: Path, port: int) -> Path:
     request = fixture.RunBacktestRequest(spec, fixture.ContentDigest("8" * 64))
     result = fixture.RuntimeCliBackend(container, config).run_backtest(request)
     print(json.dumps({"fixture_run": result.artifact.artifact_id.hex}), flush=True)
+    # Research fixtures publish through the real store, including one explicitly incomplete mint.
+    from tests.support.research import (
+        DIGEST,
+        dataset,
+        key,
+        observation,
+        observations,
+        ordinary_modes,
+    )
+
+    from backtest.application.models import JobType
+    from backtest.application.research import ResearchTokenMode, TokenMode
+
+    research = container.control.research
+    assert research is not None
+
+    def modes(mints: tuple[str, ...]) -> tuple[ResearchTokenMode, ...]:
+        return tuple(
+            ResearchTokenMode(
+                mint, TokenMode.NON_MAYHEM, (90, 1, 0, ""), 1, "MISSING_CREATION_SIGNATURE"
+            )
+            if mint == key(8)
+            else ordinary_modes((mint,))[0]
+            for mint in mints
+        )
+
+    snapshot = research.store.publish_snapshot(
+        dataset(),
+        DIGEST,
+        iter(((*observations(), observation(1, 8, 106, 1130)),)),
+        classify=modes,
+    )
+    command = research.resolve_analysis(snapshot.artifact_id)
+    output = fixture.RuntimeCliBackend(container, config).execute_research(
+        JobType.ANALYZE_WALLETS, command.canonical_bytes()
+    )
+    # Only generated hermetic IDs go to this gitignored test-runner handoff file.
+    handoff = ROOT / "frontend/test-results/research-fixture.json"
+    handoff.parent.mkdir(parents=True, exist_ok=True)
+    handoff.write_text(
+        json.dumps({"snapshot": snapshot.artifact_id.hex, "result": output.artifact_id.hex})
+    )
     return config
 
 

@@ -1,0 +1,2 @@
+/* Cytoscape's required container rule, served externally under the existing style-src 'self'. */
+.__________cytoscape_container { position: relative; }

@@ -101,6 +101,9 @@ from backtest.application.use_cases.query_jobs import GetJobRequest
 from backtest.application.use_cases.query_run_results import RunResultSummaryView
 from backtest.application.use_cases.query_runs import RunSummaryView
 
+# Research resolution and reading use the same application service as the Control API.
+from backtest.application.use_cases.research import ResearchUseCases
+
 # Import retry job at the visible module dependency boundary.
 from backtest.application.use_cases.retry_job import RetryJobRequest
 from backtest.application.use_cases.run_backtest import RunBacktestRequest, RunBacktestResult
@@ -189,6 +192,17 @@ class RecoveryCliBackend:
 class ControlApiCliBackend(CliBackend):
     """Job-control facade over the controller that already owns this data root."""
 
+    def research_use_cases(self) -> ResearchUseCases:
+        """Direct research uses local authority; the Web form queues on an active controller."""
+
+        self._requires_local_authority()
+
+    def execute_research(self, job_type: JobType, payload: bytes) -> CommittedArtifact:
+        """Do not start a second supervisor beside the active controller."""
+
+        self._requires_local_authority()
+
+    # The facade retains only the authenticated client for the already active controller.
     client: LocalControlApiClient
 
     def default_run_physical_settings(self) -> RunPhysicalSettings:
@@ -462,6 +476,22 @@ class RuntimeCliBackend(CliBackend):
     container: RuntimeContainer
     config_path: Path = Path("configs/local-16gb.toml")
     capabilities_file: Path | None = None
+
+    # The injected application service exposes no direct filesystem or network client to CLI code.
+    def research_use_cases(self) -> ResearchUseCases:
+        """Expose shared resolution and verified read operations to the CLI adapter."""
+
+        service = self.container.control.research
+        if service is None:
+            raise CliUsageError("RESEARCH_UNAVAILABLE", "Research is not configured.")
+        return service
+
+    def execute_research(self, job_type: JobType, payload: bytes) -> CommittedArtifact:
+        """Execute through admission, supervisor, isolated child and completion verification."""
+
+        with self._controller_lock() as authority:
+            completion = self._execute_direct(job_type, payload, authority)
+        return completion.result_artifact
 
     # Define runtime cli backend default run physical settings as one focused operation
     # with an explicit boundary.

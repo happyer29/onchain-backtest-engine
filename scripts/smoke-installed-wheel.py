@@ -100,7 +100,7 @@ def _wait_for_health(process: subprocess.Popen[bytes], port: int) -> dict[str, o
 def _verify_http(port: int, package_root: Path) -> None:
     """Prove each packaged dashboard and its runtime UI assets are actually served."""
     static = package_root / "interfaces/web/static"
-    pages = ("/", "/sniping-results", "/copy-results", "/runs", "/launch", "/jobs")
+    pages = ("/", "/sniping-results", "/copy-results", "/research", "/runs", "/launch", "/jobs")
     pages += ("/data", "/ml", "/resources", "/artifacts", "/runs/" + "a" * 64)
     routes = dict.fromkeys(pages, "index.html")
     # Validate all emitted chunks, including lazy charts/lineage, without relying on fixed hashes.
@@ -113,6 +113,18 @@ def _verify_http(port: int, package_root: Path) -> None:
     assert "third-party-licenses.txt" in assets
     assert 'lang="en"' in (static / "index.html").read_text(encoding="utf-8")
     assert not (static / "app.js").exists() and not (static / "copy-results.html").exists()
+    assert "graph-canvas.css" in assets
+    for obsolete in (
+        "research.html",
+        "research.js",
+        "research.css",
+        "research-graph.js",
+        "research-hierarchy.js",
+        "vendor",
+    ):
+        assert not (static / obsolete).exists(), obsolete
+    assert 'id="__________cytoscape_stylesheet"' in (static / "index.html").read_text()
+    assert "cytoscape @ 3.34.3" in (static / "third-party-licenses.txt").read_text()
     routes.update({f"/static/{name}": name for name in assets})
     # Byte equality catches a missing, stale or incorrectly routed packaged asset.
     for route, name in routes.items():

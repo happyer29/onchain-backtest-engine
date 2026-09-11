@@ -8,6 +8,7 @@ import { Activity, ArrowUpRight, Boxes, ChartNoAxesCombined, Database, FlaskConi
 import { queryClient } from './api';
 import { Button, Card, Failure, Loading } from './ui';
 import './styles.css';
+const Research = lazy(() => import('./research/page'));
 const Workspace = lazy(() => import('./workspace').then(module => ({ default: module.Overview })));
 const Jobs = lazy(() => import('./workspace').then(module => ({ default: module.JobsPanel })));
 // Separate route chunks keep heavy charts and graph layout out of the initial shell.
@@ -19,7 +20,7 @@ const Launch = lazy(() => import('./forms').then(module => ({ default: module.La
 // Forms are ordinary React routes; no legacy markup or event handlers are embedded.
 const Data = lazy(() => import('./forms').then(module => ({ default: module.DatasetPreparation })));
 const ML = lazy(() => import('./forms').then(module => ({ default: module.MachineLearning })));
-const navigation = [ { to: '/', label: "Overview", icon: LayoutDashboard }, { to: '/runs', label: "Strategy results", icon: ChartNoAxesCombined }, { to: '/launch', label: "Launch strategy", icon: Play }, { to: '/jobs', label: "Job queue", icon: Workflow }, { to: '/data', label: "Prepare data", icon: Database }, { to: '/ml', label: "Models and features", icon: FlaskConical }, { to: '/artifacts', label: "Artifacts and lineage", icon: Layers }, { to: '/resources', label: "Resources", icon: Boxes } ];
+const navigation = [ { to: '/research', label: 'On-chain research', icon: Activity }, { to: '/', label: "Overview", icon: LayoutDashboard }, { to: '/runs', label: "Strategy results", icon: ChartNoAxesCombined }, { to: '/launch', label: "Launch strategy", icon: Play }, { to: '/jobs', label: "Job queue", icon: Workflow }, { to: '/data', label: "Prepare data", icon: Database }, { to: '/ml', label: "Models and features", icon: FlaskConical }, { to: '/artifacts', label: "Artifacts and lineage", icon: Layers }, { to: '/resources', label: "Resources", icon: Boxes } ];
 
 function ThemeControl() {
   useLocale();
@@ -73,7 +74,7 @@ function LegacyResult() {
   useLocale(); const location = useLocation(); const id = new URLSearchParams(location.search).get('run_artifact_id'); return <Navigate replace to={id ? `/runs/${encodeURIComponent(id)}` : '/runs'} />; }
 function Application() {
   useLocale();
-  return <QueryClientProvider client={queryClient}><BrowserRouter><Routes><Route element={<Shell />}><Route index element={<Workspace />} /><Route path="runs" element={<Runs />} /><Route path="runs/:runId" element={<ResultRoute />} /><Route path="launch" element={<Launch />} /><Route path="jobs" element={<Jobs />} /><Route path="data" element={<Data />} /><Route path="ml" element={<ML />} /><Route path="resources" element={<Resources />} /><Route path="artifacts" element={<ArtifactRoute />} /><Route path="artifacts/:artifactId" element={<ArtifactRoute />} /><Route path="sniping-results" element={<LegacyResult />} /><Route path="copy-results" element={<LegacyResult />} /><Route path="*" element={<Card><h1>{t("Page not found")}</h1><Button asChild><Link to="/">{t("Back to overview")}</Link></Button></Card>} /></Route></Routes></BrowserRouter></QueryClientProvider>;
+  return <QueryClientProvider client={queryClient}><BrowserRouter><Routes><Route element={<Shell />}><Route index element={<Workspace />} /><Route path="research" element={<Research />} /><Route path="runs" element={<Runs />} /><Route path="runs/:runId" element={<ResultRoute />} /><Route path="launch" element={<Launch />} /><Route path="jobs" element={<Jobs />} /><Route path="data" element={<Data />} /><Route path="ml" element={<ML />} /><Route path="resources" element={<Resources />} /><Route path="artifacts" element={<ArtifactRoute />} /><Route path="artifacts/:artifactId" element={<ArtifactRoute />} /><Route path="sniping-results" element={<LegacyResult />} /><Route path="copy-results" element={<LegacyResult />} /><Route path="*" element={<Card><h1>{t("Page not found")}</h1><Button asChild><Link to="/">{t("Back to overview")}</Link></Button></Card>} /></Route></Routes></BrowserRouter></QueryClientProvider>;
 }
 // React alone owns the mounted application tree.
 createRoot(document.getElementById('root')!).render(<Application />);

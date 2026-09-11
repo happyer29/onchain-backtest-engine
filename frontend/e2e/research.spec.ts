@@ -1,0 +1,75 @@
+import { readFileSync } from 'node:fs';
+import { test, expect } from '@playwright/test';
+const fixture = () => JSON.parse(readFileSync('test-results/research-fixture.json','utf8')) as {snapshot:string;result:string};
+
+test('research uses the shared shell, actual artifacts, all graph levels and exact evidence',async({page})=>{
+  const {result}=fixture();const errors:string[]=[];
+  page.on('pageerror',error=>errors.push(error.message));
+  await page.addInitScript(()=>window.addEventListener('securitypolicyviolation',event=>document.documentElement.setAttribute('data-csp-error',event.violatedDirective)));
+  await page.goto(`/research?artifact=${result}`);
+  await expect(page.getByRole('heading',{name:'On-chain research'})).toBeVisible();
+  await expect(page.getByRole('link',{name:'Strategy results',exact:true})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Relationships in this sample'})).toBeVisible();
+  await expect(page.getByTestId('graph-counts')).toContainText('Current page');
+  await page.getByRole('combobox',{name:'Select wallet',exact:true}).selectOption({index:1});
+  await expect(page.getByRole('heading',{name:'Incident pairs on this page · 1',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Clear selection'}).click();
+  await expect(page.getByText('Token data is incomplete',{exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Show affected tokens'}).click();
+  await expect(page.getByRole('table',{name:'Data issues'})).toContainText('MISSING_CREATION_SIGNATURE');
+  await page.getByRole('button',{name:'Whole result',exact:true}).click();
+  await expect(page.getByTestId('graph-counts')).toContainText('1 groups · 2 wallets');
+  await expect(page.locator('.research-canvas canvas').first()).toBeVisible();
+  await page.getByRole('button',{name:'Group 1 · 2 wallets · 1 internal pairs',exact:true}).click();
+  await expect(page.getByTestId('graph-counts')).toContainText('all 1 internal pairs');
+  await page.getByRole('button',{name:'All wallets in group'}).click();
+  const wallet=await page.locator('.research-list button').first().textContent();
+  await page.locator('.research-list button').first().click();
+  await expect(page.getByTestId('graph-counts')).toContainText('All 1 incident pairs');
+  await page.getByLabel('Show links between neighbours').check();
+  await expect(page.getByTestId('graph-counts')).toContainText('shown');
+  await page.getByRole('button',{name:'Expand graph'}).click();
+  await expect(page.locator('.research-explorer')).toHaveClass(/expanded/);
+  await page.getByRole('button',{name:'Fit graph'}).click();
+  await page.getByRole('button',{name:'Reset layout'}).click();
+  await page.locator('.research-list button').first().click();
+  await page.getByRole('button',{name:'Open original purchases',exact:true}).click();
+  await expect(page.getByRole('table',{name:'Original pair purchases'})).toContainText(wallet!);
+  await expect(page.getByTestId('graph-counts')).toContainText('All 1 incident pairs');
+  await page.getByRole('button',{name:'1 / All groups',exact:true}).click();
+  await expect(page.getByTestId('graph-counts')).toContainText('1 groups · 2 wallets');
+  await page.getByLabel('Language').selectOption('ru');
+  await expect(page.getByRole('heading',{name:'Ончейн-исследования'})).toBeVisible();
+  await page.getByLabel('Оформление').selectOption('dark');
+  await page.screenshot({path:'test-results/research-dark.png',fullPage:true});
+  await page.setViewportSize({width:390,height:844});
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await expect(page.locator('html')).not.toHaveAttribute('data-csp-error');expect(errors).toEqual([]);
+});
+
+test('real all-signer analysis queues, completes and opens verified output; prepare rejection is visible',async({page})=>{
+  const {snapshot}=fixture();await page.goto(`/research?artifact=${snapshot}`);
+  await expect(page.getByLabel('Research snapshot ID')).toHaveValue(snapshot);
+  await page.getByLabel('Window, seconds').fill('180');
+  await expect(page.getByLabel('Signers, optional')).toHaveValue('');
+  await page.getByRole('button',{name:'Run analysis',exact:true}).click();
+  await expect(page.locator('form[aria-label="Analyze wallets"] .research-receipt')).toContainText('SUCCEEDED',{timeout:30000});
+  await page.locator('form[aria-label="Analyze wallets"]').getByRole('link',{name:'Open research output'}).click();
+  await expect(page.getByRole('heading',{name:'Relationships in this sample'})).toBeVisible();
+  await expect(page.getByText(/Committed analysis: window ≤ 180/)).toBeVisible();
+  await page.getByRole('button',{name:'Prepare snapshot',exact:true}).click();
+  await expect(page.locator('form[aria-label="Prepare research snapshot"] [role="alert"]')).toContainText('RESEARCH_SOURCE_NOT_CONFIGURED');
+});
+
+test('whole-result cancellation/retry, stale response and projection disposal follow React ownership',async({page})=>{
+  const {result}=fixture();await page.goto(`/research?artifact=${result}`);await expect(page.getByTestId('graph-counts')).toBeVisible();
+  let release:(()=>void)|undefined;let fullReads=0;
+  await page.route(`**/api/v1/research/${result}/rows/pairs?limit=200`,async route=>{fullReads++;await new Promise<void>(resolve=>{release=resolve;});await route.continue().catch(()=>{});});
+  await page.getByRole('button',{name:'Whole result',exact:true}).click();
+  await expect.poll(()=>fullReads).toBe(1);await page.getByRole('button',{name:'Cancel graph loading'}).click();
+  await expect(page.getByRole('alert')).toContainText('cancelled');
+  release?.();await page.unroute(`**/api/v1/research/${result}/rows/pairs?limit=200`);
+  await page.getByRole('button',{name:'Whole result',exact:true}).click();await expect(page.getByTestId('graph-counts')).toContainText('1 groups');
+  await page.getByRole('button',{name:'Current page',exact:true}).click();await expect(page.getByTestId('graph-counts')).toContainText('Current page: all 1 pairs');
+  await page.getByRole('link',{name:'Strategy results',exact:true}).click();await expect(page.locator('.research-canvas')).toHaveCount(0);
+});

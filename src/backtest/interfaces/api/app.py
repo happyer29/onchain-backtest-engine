@@ -55,10 +55,13 @@ from backtest.application.ports.run_results import RoundTripCursor
 
 # Import system at the visible module dependency boundary.
 from backtest.application.ports.system import SystemResourceProbe
+from backtest.application.research import ResearchError
 from backtest.application.run_contracts import QueryRunContracts
 from backtest.application.run_results import RunPhysicalSettings
 from backtest.application.strategy_results import StrategyResultsError
 from backtest.application.use_cases.cancel_job import CancelJob, CancelJobRequest
+
+# Acquisition resolves deployment-local source metadata through application use cases.
 from backtest.application.use_cases.inspect_source import InspectSourceRequest
 
 # Import plan dataset at the visible module dependency boundary.
@@ -72,9 +75,12 @@ from backtest.application.use_cases.query_run_results import QueryRunResults, Ru
 # Import query runs at the visible module dependency boundary.
 from backtest.application.use_cases.query_runs import QueryRuns, RunIndexQueryError
 from backtest.application.use_cases.query_strategy_results import QueryStrategyResults
+from backtest.application.use_cases.research import ResearchUseCases
 from backtest.application.use_cases.resolve_run_spec import ResolveRunSpec
 from backtest.application.use_cases.resolve_sweep_spec import ResolveSweepSpec
 from backtest.application.use_cases.retry_job import RetryJob, RetryJobRequest
+
+# Stored inspection and submission retain the existing operational authority boundary.
 from backtest.application.use_cases.store_source_inspection import StoreSourceInspection
 
 # Import submit job at the visible module dependency boundary.
@@ -206,6 +212,8 @@ class ControlUseCases:
     query_copy_market_chart: QueryCopyMarketChart | None = None
     # Common read-only results are separately wired from every execution use case.
     query_strategy_results: QueryStrategyResults | None = None
+    # Optional only for reduced test/legacy compositions; missing research fails closed.
+    research: ResearchUseCases | None = None
 
 
 # Define create app as one focused operation with an explicit boundary.
@@ -248,6 +256,18 @@ def create_app(
     )
     static_root = Path(__file__).parent.parent / "web" / "static"
     app.mount("/static", StaticFiles(directory=static_root, check_dir=True), name="static")
+    # Research inherits this app's loopback, session, origin and request-limit boundaries.
+    from backtest.interfaces.api.research import research_router
+
+    app.include_router(
+        research_router(
+            use_cases.research,
+            use_cases.submit_job,
+            # Research reads share the same bounded request and response envelope.
+            max_request_bytes,
+            _bounded_json_body,
+        )
+    )
 
     # Apply middleware semantics to the following security headers contract.
     @app.middleware("http")
@@ -364,6 +384,12 @@ def create_app(
             ).model_dump(),
         )
 
+    @app.exception_handler(ResearchError)
+    async def research_error_handler(_: Request, error: ResearchError) -> JSONResponse:
+        """Only application-owned finite codes cross the research error boundary."""
+
+        return JSONResponse(status_code=422, content={"code": error.code, "message": error.code})
+
     @app.exception_handler(RunIndexQueryError)
     async def run_index_query_error_handler(_: Request, error: RunIndexQueryError) -> JSONResponse:
         """Expose rebuildable-index failure separately from an absent artifact."""
@@ -476,6 +502,7 @@ def create_app(
 
     # Explicit SPA routes preserve refresh/bookmarks without masking unknown API paths.
     for page_path in (
+        "/research",
         "/runs",
         "/runs/{run_id}",
         "/launch",

@@ -24,6 +24,7 @@ or runtime dependency was added.
 | TanStack Table | Semantic table rendering with explicitly page-local search/sort |
 | Recharts | Distributions, fees/funding and causal Pump history with exact accessible values |
 | React Flow + dagre | Bounded verified lineage with a keyboard-accessible text alternative |
+| Cytoscape.js 3.34.3 | Existing research canvas, now bundled as an ESM dependency with React-owned controls |
 | lossless-json | Round-trip wide JSON integers when forwarding server-resolved specifications |
 
 Native `<dialog>` provides the large detail overlay, inert background and
@@ -83,3 +84,37 @@ Keep generated OpenAPI/types and static build output synchronized. Node modules,
 TypeScript build caches, browser traces and test screenshots are excluded from the
 deliverable. CI runs the frontend checks, browser tests, full Python gate and
 installed-wheel CLI/API/static smoke.
+
+## On-chain research
+
+`/research?artifact=<exact ID>` opens ResearchSnapshot/ResearchResult v1 or v2
+inside the same shell. Preparation and analysis submit typed forms through the
+existing application resolver and supervisor; an empty signer field means all
+observed signers. Completed research jobs link to verified output both on this
+page and in the shared queue. Token-mode selection, missing-creation warnings,
+all paged tables, exact-pair purchases and lineage preserve deep-dive §24.6.
+
+React owns the entire UI and renderer lifecycle. The old standalone HTML,
+CSS/global DOM controllers and vendor script are removed. The already admitted
+Cytoscape version remains unchanged: npm packaging replaces vendoring, not the
+analytical engine or grouping algorithm. The complete result stays in one
+bounded display model; only the current overview/group/wallet projection enters
+the canvas. Recharts and React Flow retain their existing strategy/lineage roles.
+The representative comparison is in [research capacity](../docs/research-capacity.md#react-workspace-integration-2026-09-11).
+
+The required Cytoscape container rule is an actual external
+`public/graph-canvas.css` link with the library's recognized stylesheet ID.
+This prevents runtime inline-style injection without relaxing CSP. Vite's
+message that `/static/graph-canvas.css` resolves at runtime is expected: the
+public asset is copied into the wheel, and API/browser/installed-wheel tests
+verify its contents and effect. The graph has a local React error boundary, so
+a missing optional chunk cannot hide verified purchase evidence or forms.
+
+`npm test` also runs the original bounded loader/grouping oracles. Their pure
+JavaScript modules are unchanged apart from ESM exports and have explicit
+TypeScript display contracts. The retired DOM harness is replaced by real-core
+projection tests, React submission tests and browser lifecycle tests. Browser
+research tests publish real hermetic snapshots (including a data issue), run
+all-signer analysis through an isolated child, and check output, modes,
+three-level navigation, cancellation/retry, evidence, themes, mobile layout and
+CSP. They never contact ClickHouse.

@@ -190,6 +190,23 @@ uses a later successful buy with the same signature + mint in the
 same transaction; it does not trust `bundled_buys_count`. Any
 unknown/conflict/gap produces a typed rejection before planner/engine mutation.
 
+## Wallet research
+
+Research is a separate observational consumer. Its commands use typed arguments
+and the shared application resolver, without a SQL/JSON-code editor.
+
+| Command | Input | Result |
+|---|---|---|
+| `research prepare FROM_BLOCK TO_BLOCK` | Half-open block range, local config and capability mapping | Immutable ResearchSnapshot |
+| `research analyze SNAPSHOT_ID` | Exact snapshot, inclusive time window, shared-token threshold, optional signer selection | Immutable activity/pairs/evidence ResearchResult |
+| `research show ARTIFACT_ID` | Exact research artifact ID | Bounded verified summary |
+| `research rows ARTIFACT_ID TABLE` | Fixed table, scoped cursor, page limit and evidence pair | Bounded rows with exact integer strings |
+
+Acquisition and analysis use the existing exclusive direct controller and
+isolated-child path. If an API controller is already active, use its `/research`
+forms to queue jobs. Analysis reads committed local observations only. See the
+[wallet research guide](wallet-research.md) for examples, limits and interpretation.
+
 ## Replay and run resolution
 
 | Command | Input | Result |

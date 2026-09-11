@@ -1,5 +1,12 @@
 # Краткая архитектура On-Chain Backtest Engine
 
+Ончейн-исследования встроены в общий React-дашборд по адресу `/research`.
+Старые ссылки `?artifact=`, подготовка и анализ, предупреждения, страницы
+доказательств и три уровня полного графа сохраняют контракт §24.6.
+Прежний отдельный HTML и глобальные DOM-контроллеры удалены. React управляет
+формами, таблицами и жизненным циклом графа; Cytoscape.js 3.34.3 поставляется
+в локальной сборке. Семантика анализа и правила артефактов не изменяются.
+
 Статус: принято как синхронизированный обзор
 
 > Полное нормативное описание находится в
@@ -7,6 +14,28 @@
 > является его сокращённой картой и не вводит самостоятельных решений. При
 > неоднозначности применяется deep dive, а найденное расхождение исправляется
 > в обоих документах.
+
+## Согласованное расширение для исследования кошельков
+
+[Deep dive §24.6](architecture-deep-dive.md#246-on-chain-wallet-research)
+определяет отдельного потребителя наблюдаемых данных: ограниченный
+`research prepare` создаёт проверенный неизменяемый снимок участников сделок,
+а локальный `research analyze` рассчитывает в DuckDB активность, пары по общим
+токенам и ссылки на подтверждающие наблюдения. Используются существующие
+очередь, публикация артефактов и ограниченный same-origin интерфейс. Страница
+объясняет первые покупки и их ограничения; локальная Cytoscape.js добавляет
+масштабирование, перемещение, перетаскивание и доступный переход к покупкам
+точной пары в пределах 25 пар / 50 узлов страницы либо всего результата
+(до 200 000 пар / 5 000 участвующих кошельков), без изменения research ID.
+Полная загрузка порционная, с прогрессом, отменой и проверкой полноты; поиск
+охватывает все связи, а страницы таблицы не заменяют полный граф. Подписант
+и плательщик комиссии остаются разными ролями; кратность строк сохраняется,
+полнота и финальность остаются UNKNOWN. Исследовательские артефакты не входят
+непосредственно в replay или Strategy. Допуск Sniping и существующие ID
+сохраняются. Первый сценарий реализован и проверен на hermetic source,
+CLI/API/child и browser workflows. Live-source fidelity/capacity, переводы,
+полный wallet PnL, owner clustering и автоматический перенос в стратегию
+остаются вне этой реализации. См. [инструкцию](wallet-research.ru.md).
 
 ## 1. Решение в одном абзаце
 
@@ -125,8 +154,8 @@ cross-network run не реализованы. Точный current-vs-productio
 - один trusted codebase и один Python environment;
 - 16 GB RAM — минимальный supported profile, 32 GB — рекомендуемый;
 - один local NVMe; CPU-first, optional local GPU;
-- source доступен только `inspect-source`, `prepare-dataset` и optional estimate
-  в `plan-dataset`;
+- source доступен только `inspect-source`, `prepare-dataset`, bounded
+  `research prepare` и optional estimate в `plan-dataset`;
 - compile, feature/ML и backtest jobs читают только committed local artifacts;
 - `CANONICAL_EXACT` run с одинаковой logical identity даёт byte-identical
   normalized audit/result независимо от Parquet/ReplayPack, batch и порядка
@@ -548,6 +577,7 @@ snapshot/ReplayPack с three-way exact equivalence.
 ## 6. Порты и extension contracts
 
 Primary use cases: `inspect-source`, `plan-dataset`, `prepare-dataset`,
+`research prepare`, `research analyze`,
 `compile-replay`, `compile-delivery-schedule`, `run-backtest`, `run-sweep`,
 `build-features`, `train`, `predict`, submit/cancel/query jobs/runs, verify и GC.
 `RunSpecDraft` с aliases/defaults не исполняется: resolver создаёт immutable

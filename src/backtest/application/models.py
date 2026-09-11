@@ -2222,6 +2222,10 @@ class ExtractionRequest:
 
 # Keep the artifact kind contract and validation rules together.
 class ArtifactKind(StrEnum):
+    # Observational research artifacts are never executable snapshot/run substitutes.
+    RESEARCH_SNAPSHOT = "RESEARCH_SNAPSHOT"
+    RESEARCH_RESULT = "RESEARCH_RESULT"
+    # Existing source and execution artifact generations retain their original values.
     SOURCE_INSPECTION = "SOURCE_INSPECTION"
     CANONICAL_DISTRIBUTION = "CANONICAL_DISTRIBUTION"
     SNAPSHOT = "SNAPSHOT"
@@ -2263,6 +2267,10 @@ class CommittedArtifact:
 
 # Keep the job type contract and validation rules together.
 class JobType(StrEnum):
+    # Research has separate strict acquisition and local-analysis payload decoders.
+    PREPARE_RESEARCH = "PREPARE_RESEARCH"
+    ANALYZE_WALLETS = "ANALYZE_WALLETS"
+    # Existing jobs continue through their unchanged schema contracts.
     PREPARE_DATASET = "PREPARE_DATASET"
     COMPILE_REPLAY = "COMPILE_REPLAY"
     COMPILE_DELIVERY_SCHEDULE = "COMPILE_DELIVERY_SCHEDULE"
@@ -2399,6 +2407,10 @@ class ProgressStage(StrEnum):
     """Finite, safe lifecycle stages emitted outside execution hot loops."""
 
     VALIDATING_INPUTS = "VALIDATING_INPUTS"
+    # Research phases identify bounded offline work without pretending to execute replay.
+    PREPARING_RESEARCH = "PREPARING_RESEARCH"
+    ANALYZING_WALLETS = "ANALYZING_WALLETS"
+    # Existing canonical preparation/compilation phases keep their original interpretation.
     PREPARING_DATASET = "PREPARING_DATASET"
     COMPILING_REPLAY = "COMPILING_REPLAY"
     COMPILING_DELIVERY_SCHEDULE = "COMPILING_DELIVERY_SCHEDULE"

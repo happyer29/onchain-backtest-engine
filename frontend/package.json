@@ -7,7 +7,7 @@
     "build": "tsc -b && vite build && node scripts/licenses.cjs",
     "dev": "vite build --watch",
     "typecheck": "tsc -b",
-    "test": "vitest run",
+    "test": "vitest run && node --test ../tests/web/research-graph-*.test.cjs",
     "test:browser": "playwright test",
     "generate": "../.venv/bin/python scripts/export-openapi.py && openapi-typescript src/generated/openapi.json -o src/generated/api.d.ts"
   },
@@ -24,6 +24,7 @@
     "@tanstack/react-table": "9.2.4",
     "@xyflow/react": "12.11.6",
     "clsx": "2.1.1",
+    "cytoscape": "3.34.3",
     "lossless-json": "4.3.1",
     "lucide-react": "1.44.0",
     "react": "19.3.0",

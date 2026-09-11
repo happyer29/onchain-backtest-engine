@@ -849,7 +849,7 @@ def test_health_and_packaged_web_ui(tmp_path: Path) -> None:
     # Deep-link refreshes set the same session; no second result UI remains packaged.
     paths = ("/runs", "/runs/" + "a" * 64, "/launch", "/jobs", "/data", "/ml")
     paths += ("/resources", "/artifacts", "/artifacts/" + "a" * 64)
-    paths += ("/sniping-results", "/copy-results")
+    paths += ("/sniping-results", "/copy-results", "/research", "/research?artifact=" + "a" * 64)
     for path in paths:
         response = client.get(path)
         # Route aliases serve identical bytes instead of a retained legacy renderer.
