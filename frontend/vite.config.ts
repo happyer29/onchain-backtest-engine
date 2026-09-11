@@ -8,5 +8,5 @@ export default defineConfig({
   base: '/static/',
   build: { outDir: '../src/backtest/interfaces/web/static', emptyOutDir: true, manifest: true },
   // Component tests use a local DOM and never connect to operational source data.
-  test: { environment: 'jsdom', setupFiles: ['./src/test-setup.ts'], exclude: ['e2e/**', 'node_modules/**'] },
+  test: { environment: 'jsdom', setupFiles: ['./src/test-setup.ts'], exclude: ['e2e/**', 'demo-e2e/**', 'node_modules/**'] },
 });

@@ -29,11 +29,11 @@ export default function Research() {
     <ResearchForms summary={data} /><ResearchMethod />
     <Card><h2>{t('Open saved research')}</h2><form className="research-open" onSubmit={event => {event.preventDefault(); setParams({artifact:input});}}><label>{t('Snapshot or result ID')}<input required pattern="[0-9a-f]{64}" maxLength={64} value={input} onChange={event => setInput(event.target.value)} /></label><Button tone="primary">{t('Open')}</Button></form></Card>
     {invalid && <Failure message={t('Invalid research artifact ID.')} />}{query.isError && <Failure message={researchError(query.error)} retry={() => void query.refetch()} />}{(id || jobId) && !invalid && query.isPending && <Loading />}
-    {data && <Result key={data.artifact_id} data={data} />}
+    {data && <ResearchResult key={data.artifact_id} data={data} />}
     <div className="section-intro"><h2>{t('Research jobs')}</h2><Link to="/jobs">{t('Manage queue →')}</Link></div><JobsPanel researchOnly />
   </>;
 }
-function Result({data}: {data: Summary}) {
+export function ResearchResult({data,wholeGraph=false}: {data: Summary;wholeGraph?:boolean}) {
   const snapshot = data.kind === 'RESEARCH_SNAPSHOT';
   const [selection, setSelection] = useState<{table: Table; pair: string | null}>({table:snapshot ? 'observations' : 'pairs',pair:null});
   const [rows, setRows] = useState<Pair[] | null>(null);
@@ -50,7 +50,7 @@ function Result({data}: {data: Summary}) {
     <div className="research-metrics">{Object.entries(labels).filter(([key]) => key in data.counts).map(([key,label]) => <div key={key}><strong>{data.counts[key]}</strong><span>{t(label)}</span></div>)}</div><ModeScope data={data} />
     {BigInt(data.data_issue_counts.mints ?? '0') > 0n && <div className="research-warning" role="status"><strong>{t('Token data is incomplete')}</strong><p>{t('{0} tokens have no creation transaction signature. {1} observations are skipped during analysis in both modes; source swaps remain in the snapshot.',[data.data_issue_counts.mints,String(BigInt(data.data_issue_counts.non_mayhem_rows ?? '0')+BigInt(data.data_issue_counts.mayhem_rows ?? '0'))])}</p><Button onClick={() => {select('data_issues');tableRef.current?.scrollIntoView({block:'start'});}}>{t('Show affected tokens')}</Button></div>}
     <p className="subtle">{t('Market completeness, finality and historical availability: UNKNOWN. A relationship is an observation, not proof of a shared owner or a strategy signal.')}</p>
-    {!snapshot && <GraphBoundary key={data.artifact_id}><Suspense fallback={<Loading />}><Graph artifact={data.artifact_id} total={data.counts.pairs} rows={selection.table === 'pairs' ? rows : null} onEvidence={evidence} /></Suspense></GraphBoundary>}
+    {!snapshot && <GraphBoundary key={data.artifact_id}><Suspense fallback={<Loading />}><Graph initialScope={wholeGraph?'whole':'page'} artifact={data.artifact_id} total={data.counts.pairs} rows={selection.table === 'pairs' ? rows : null} onEvidence={evidence} /></Suspense></GraphBoundary>}
     <div ref={tableRef}><Tabs value={selection.table} onChange={table => select(table as Table)} tabs={tables.map(table => [table,tableNames[table]])}><TabPanel value={selection.table}><ResearchTable key={`${selection.table}:${selection.pair}`} artifact={data.artifact_id} table={selection.table} pair={selection.pair} onRows={selection.table === 'pairs' ? onRows : undefined} onEvidence={evidence} /></TabPanel></Tabs></div>
     <details><summary>{t('Observation quality and exact recipe')}</summary><FactTree value={{quality:data.quality,analysis:data.analysis}} /></details>
   </Card>;

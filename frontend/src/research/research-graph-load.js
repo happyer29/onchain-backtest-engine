@@ -15,9 +15,9 @@ const ResearchGraphLoad = (() => {
   }
 
   // Enforce byte bounds while streaming, before retaining or parsing an oversized response.
-  async function readPage(url, signal, budget) {
+  async function readPage(url, signal, budget, request) {
     const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(15000)]);
-    const response = await fetch(url, {credentials: "same-origin", signal: requestSignal});
+    const response = await request(url, {credentials: "same-origin", signal: requestSignal});
     if (!response.ok || !response.body) fail("Не удалось прочитать проверенные пары. Повтори загрузку.");
     const reader = response.body.getReader();
     // A decoder carries split UTF-8 sequences without inflating the accounting into character counts.
@@ -63,7 +63,7 @@ const ResearchGraphLoad = (() => {
   }
 
   // Fetches stay sequential and follow opaque server cursors; no fabricated offset or SQL is accepted.
-  async function load(artifact, total, signal, progress, read = readPage) {
+  async function load(artifact, total, signal, progress, read = readPage, request = fetch) {
     if (!/^[0-9a-f]{64}$/.test(artifact)) fail("Некорректный ID результата.");
     const expected = count(total);
     if (expected > limits.pairs) fail("В результате больше 200 000 связей. Полный граф не построен.");
@@ -75,7 +75,7 @@ const ResearchGraphLoad = (() => {
       const query = new URLSearchParams({limit: String(limits.page)});
       if (cursor !== null) query.set("cursor", cursor);
       // Only a content-addressed pair page from the selected same-origin result may populate the graph.
-      const page = await read(`/api/v1/research/${artifact}/rows/pairs?${query}`, signal, budget);
+      const page = await read(`/api/v1/research/${artifact}/rows/pairs?${query}`, signal, budget, request);
       signal.throwIfAborted();
       if (page.artifact_id !== artifact || page.table !== "pairs" || !Array.isArray(page.rows)) fail("Ответ относится к другому результату.");
       if (page.rows.length > limits.page || rows.length + page.rows.length > expected) fail("Число пар не совпадает с итогом анализа.");

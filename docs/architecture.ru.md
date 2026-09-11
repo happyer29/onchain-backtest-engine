@@ -1545,6 +1545,16 @@ rows/bytes/sec, compression/spill/QA, compile/run wall time, events/sec, RSS/pag
 faults/swap/NVMe, output/model throughput, queue/state/reconciliation, SSE/API
 overhead и сравнение Direct CLI с API-queued run.
 
+### 14.6 Статическое демо
+
+Согласованный профиль статического демо (§34.3) использует React-представления
+и ограниченную выгрузку ответов API из рассчитанных заранее тестовых примеров.
+Демо не исполняет команды и не обращается к источнику; отдельная сборка и ручная
+публикация Pages не меняют рабочий single-host runtime.
+
+[Подготовка и ручная публикация](demo.ru.md). Локальный срез реализован;
+это не означает, что сайт уже размещён в интернете.
+
 ## 15. Критические инварианты и тесты
 
 Нарушение инварианта останавливает run или отправляет artifact в quarantine; warning

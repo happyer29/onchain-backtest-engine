@@ -88,6 +88,12 @@ jobs:
       - name: Verify React in browser
         run: npm --prefix frontend run test:browser
 
+      - name: Verify independent static demo
+        run: |
+          npm --prefix frontend run demo:prepare
+          npm --prefix frontend run demo:build
+          npm --prefix frontend run demo:test
+
       # Keep the hosted gate byte-for-byte aligned with the documented local gate.
       - name: Check formatting
         run: uv run ruff format --check src tests

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CameraState } from 'sigma/types';
 import { t, useLocale } from '../i18n';
+import { request } from '../http';
 import { Button, Failure, Loading, Pager } from '../ui';
 import { errorText } from '../api';
 import loader from './research-graph-load';
@@ -13,9 +14,9 @@ import { ViewMemory, type ViewBounds } from './navigation';
 import type { GroupLink, Model, Pair, View } from './types';
 
 // Table pages and whole-result loading have separate lifetimes; artifacts always replace both.
-export default function ResearchGraph({artifact, total, rows, onEvidence}: {artifact: string; total: string; rows: Pair[] | null; onEvidence: (pair: string) => void}) {
+export default function ResearchGraph({artifact, total, rows, onEvidence, initialScope='page'}: {initialScope?:'page'|'whole';artifact: string; total: string; rows: Pair[] | null; onEvidence: (pair: string) => void}) {
   useLocale();
-  const [scope, setScope] = useState<'page' | 'whole'>('page');
+  const [scope, setScope] = useState<'page' | 'whole'>(initialScope);
   const [attempt, setAttempt] = useState(0);
   return <section className="research-graph-panel" aria-label={t('Wallet relationship graph')}>
     <div className="card-heading"><h2>{t('Wallet relationship graph')}</h2><div className="actions"><Button aria-pressed={scope === 'page'} onClick={() => {setScope('page'); setAttempt(old => old + 1);}}>{t('Current page')}</Button><Button aria-pressed={scope === 'whole'} onClick={() => {setScope('whole'); setAttempt(old => old + 1);}}>{t('Whole result')}</Button></div></div>
@@ -38,7 +39,7 @@ function GraphLoad({artifact, total, rows, onEvidence}: {artifact?: string; tota
     void (async () => {
       try {
         if (rows && rows.length > 25) throw new Error('The current page graph exceeds 25 pairs.');
-        const data = rows ? {rows, wallets: [...new Set(rows.flatMap(row => [row.signer_a, row.signer_b]))].sort()} : await loader.load(artifact!, total!, signal, (done, count, wallets) => {if (live) setProgress(t('Loading pairs: {0} / {1} · wallets: {2}', [done, count, wallets]));});
+        const data = rows ? {rows, wallets: [...new Set(rows.flatMap(row => [row.signer_a, row.signer_b]))].sort()} : await loader.load(artifact!, total!, signal, (done, count, wallets) => {if (live) setProgress(t('Loading pairs: {0} / {1} · wallets: {2}', [done, count, wallets]));}, undefined, request);
         const model = await algorithms.build(data, signal, (done) => {if (live) setProgress(t('Grouping: {0}%', [Math.round(done)]));}, () => live);
         signal.throwIfAborted();
         if (live) setState({model, signal});

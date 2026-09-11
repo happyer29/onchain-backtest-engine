@@ -9,7 +9,11 @@
     "typecheck": "tsc -b",
     "test": "vitest run && node --test ../tests/web/research-graph-*.test.cjs",
     "test:browser": "playwright test",
-    "generate": "../.venv/bin/python scripts/export-openapi.py && openapi-typescript src/generated/openapi.json -o src/generated/api.d.ts"
+    "generate": "../.venv/bin/python scripts/export-openapi.py && openapi-typescript src/generated/openapi.json -o src/generated/api.d.ts",
+    "demo:prepare": "../.venv/bin/python scripts/export-demo.py",
+    "demo:build": "npm run typecheck && vite build --config vite.demo.config.ts && node scripts/licenses.cjs demo-dist/third-party-licenses.txt && node scripts/package-demo.mjs",
+    "demo:serve": "../.venv/bin/python scripts/serve-demo.py",
+    "demo:test": "playwright test --config playwright.demo.config.ts"
   },
   "engines": {
     "node": ">=22.12"

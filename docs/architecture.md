@@ -1604,6 +1604,16 @@ rows/bytes/sec, compression/spill/QA, compile/run wall time, events/sec,
 RSS/page faults/swap/NVMe, output/model throughput, queue/state/reconciliation,
 SSE/API overhead, and comparison of Direct CLI with an API-queued run.
 
+### 14.6 Static demo
+
+The approved static demo profile (§34.3) reuses React views over bounded, hashed
+API exports from synthetic fixtures calculated offline. It cannot execute commands,
+access a live source or replace operational API failures with samples. Its separate
+build and manual Pages publication do not change the single-host runtime.
+
+[Preparation and manual publication](demo.md). The local slice is implemented;
+this is not a claim that the site is already hosted.
+
 ## 15. Critical invariants and tests
 
 An invariant violation stops the run or sends the artifact to quarantine; a

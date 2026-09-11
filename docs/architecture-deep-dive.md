@@ -260,6 +260,15 @@ flowchart LR
 
 ## 3.4 Current project state
 
+The separate §34.3 static demo is implemented with 60 synthetic wallets,
+423/426 research pairs and two reference Copy Buy outcomes. Development tooling
+uses existing use cases with network access disabled and exports 933 read-only
+API response variants (about 4.3 MB). The independent React build checks response
+lengths/hashes, rejects commands and uses project-relative assets/hash routes.
+Whole-graph, evidence, trade-history, lineage and failure paths pass local browser
+checks. A manual Pages workflow is prepared; this status does not assert hosting
+or publication and does not extend live-source admission.
+
 The implementation provides a production-oriented reference vertical slice of
 the architecture and network-aware Pump.fun Sniping on verified local
 artifacts. Live data requires exact, cut-scoped admission:
@@ -4761,6 +4770,53 @@ max_request_mb = 2
 
 After benchmarking, values are separated into `local-16gb` and `local-32gb`
 profiles.
+
+### 34.3 Static demonstration distribution
+
+The user-approved GitHub Pages demonstration is a separate build-time frontend
+profile, not an operational deployment or a second Control API. It reuses the
+React research, graph, results and chart components. A persistent banner and
+result labels identify all inputs as synthetic test fixtures and all calculations
+as prepared offline. It makes no claim about real wallet behaviour or profitability.
+
+Development-only tooling constructs bounded synthetic observations and runs the
+existing preparation, research and reference execution use cases in a fresh
+temporary data root. Only allowlisted read-only API presentation responses are
+exported after committed-input/result verification. Production source configuration,
+credentials, environment values, operational data roots, SQLite, Parquet, raw
+tracebacks, absolute paths and executable manifests are never copied. Export
+failure cannot produce a completed demo bundle. The export manifest declares
+its fixture recipe, exact example IDs, response paths, lengths and SHA-256 hashes;
+these hashes verify transport integrity, not real-source fidelity. No demo bytes
+may be imported as a production snapshot, run or evidence receipt.
+
+The closed corpus admits at most 100 wallets, 5,000 observations, 1,000 pairs per
+research result, two strategy results, 2,048 response records, 2 MiB per response
+and 16 MiB of response bytes. These limits are independent of operational quotas.
+All requested pages and pair evidence must be exported completely within them.
+The browser uses an explicit demo-only GET transport, validates manifest paths,
+response length/digest and bounded decoding, and rejects unsupported IDs, query
+combinations or methods without a network/API fallback. It retains a bounded
+manifest and one bounded response per request, not an unbounded response cache.
+Graph completeness, cancellation, layout budgets and exact integer handling stay
+unchanged. Display filters and navigation work on the prepared result; no browser
+strategy execution, recipe resolution, source acquisition or synthetic job-success
+responses are introduced. Execution routes are unavailable in the demo.
+
+The ordinary packaged UI remains bound to the same-origin Control API and never
+falls back to fixtures when it fails. The demo has a distinct entry/build output,
+relative local assets and hash routing so project-subdirectory deep links reload
+on a static host. It bundles its worker, fonts/styles and libraries locally, uses
+a restrictive static-page CSP, and contains no service worker, analytics beacon,
+external data fetch or credential. Tests must cover the ordinary UI as well as
+static-only loading under a repository path, direct reload, exact evidence,
+filters, language/theme, missing/corrupt data and rejected mutations.
+
+Publication is separate from preparation. A checked-in manual deployment recipe
+may publish only the verified demo output directory, with least-privilege Pages
+permissions; preparing or testing the demo must not push code, trigger deployment
+or alter repository hosting settings. The existing operational host and security
+contracts remain unchanged.
 
 ## 35. Phased implementation
 

@@ -1,4 +1,5 @@
 import { t } from './i18n';
+import { request } from './http';
 import { QueryClient } from '@tanstack/react-query';
 import { parse, stringify } from 'lossless-json';
 import type { components } from './generated/api';
@@ -46,7 +47,7 @@ export async function api<T>(path: string, options: { signal?: AbortSignal; body
   const body = options.body === undefined ? undefined : encode(options.body);
   if (body && new TextEncoder().encode(body).length > 2 * 1024 ** 2) throw new ApiError('REQUEST_TOO_LARGE', t("The command exceeds the interface limit."));
   // Browser-managed cookies remain same-origin and never become serializable application state.
-  const response = await fetch(path, { method: options.method ?? 'GET', headers, signal,
+  const response = await request(path, { method: options.method ?? 'GET', headers, signal,
     body, credentials: 'same-origin' });
   // Bound transport before parsing so metadata cannot become an arbitrary history download.
   const text = await readBounded(response);

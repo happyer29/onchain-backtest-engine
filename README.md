@@ -148,6 +148,13 @@ The research overview shows a saved sample of 150,233 wallet pairs across 2,752
 wallets. Open a group, inspect a wallet's neighbours, or filter weaker links by
 shared-token count. These are observed co-purchases, not proof of common ownership.
 
+## Local static demo
+
+Explore the shared React graph and strategy results with 60 synthetic wallets,
+423/426 pairs and two offline Copy Buy examples. No source connection or runtime
+Python server is required to view the built site. See [demo setup and manual
+GitHub Pages publication](docs/demo.md). Preparation does not publish anything.
+
 ## How it works
 
 ```mermaid

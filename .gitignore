@@ -72,3 +72,9 @@ TODO.md
 /docs/rust-migration-plan*.md
 /docs/architecture-audit-and-rust-plan*.md
 /docs/copytrading-trial-*.md
+
+# Static demonstration exports and local preview output contain generated fixture bytes.
+/frontend/demo-data/
+/frontend/demo-dist/
+/frontend/.demo-export-*/
+/frontend/demo-test-results/

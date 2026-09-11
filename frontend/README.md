@@ -6,6 +6,14 @@ the implemented execution boundary is [§3.4](../docs/architecture-deep-dive.md#
 The build is checked in under `src/backtest/interfaces/web/static` and packaged
 in the Python wheel. There is no production Node process or second API.
 
+## Static demonstration build
+
+The separate `demo:prepare`, `demo:build`, `demo:serve` and `demo:test` commands
+reuse the research, Sigma, strategy-result and lineage components through a
+closed GET transport. They do not change the packaged API transport.
+`demo-dist` uses relative assets, hash routing and synthetic presentation DTOs;
+see [the demo guide](../docs/demo.md) and normative deep-dive §34.3.
+
 ## Components and rationale
 
 The previous surface contained three HTML roots and 5,026 lines across four

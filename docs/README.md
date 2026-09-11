@@ -1,5 +1,7 @@
 # Project documentation
 
+[Static demo and GitHub Pages](demo.md)
+
 ## Using the engine
 
 1. [Getting Started](getting-started.md) — installation on Linux, macOS, or
