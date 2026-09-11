@@ -85,6 +85,7 @@ from backtest.application.use_cases.query_job_events import ListJobEvents
 from backtest.application.use_cases.query_jobs import GetJob, ListJobs
 from backtest.application.use_cases.query_run_results import QueryRunResults
 from backtest.application.use_cases.query_runs import QueryRuns
+from backtest.application.use_cases.query_strategy_results import QueryStrategyResults
 
 # Import resolve benchmark at the visible module dependency boundary.
 from backtest.application.use_cases.resolve_benchmark import ResolveBenchmark
@@ -121,7 +122,7 @@ from backtest.bootstrap.pumpfun_live_source import build_pumpfun_live_source_com
 from backtest.bootstrap.reference_run_resolver import ReferenceRunSpecResolver
 from backtest.bootstrap.source import ConfiguredClickHouseSource, select_clickhouse_query_profile
 from backtest.interfaces.api import ControlUseCases
-from backtest.plugins.protocols.pumpfun.market_charts import pump_market_cap_state
+from backtest.plugins.protocols.pumpfun.market_charts import pump_strategy_market_cap_state
 from backtest.runtime.host_resources import (
     HostMemoryReserves,
     derive_host_memory_budget,
@@ -427,7 +428,9 @@ def build_runtime_container(
         )
     # Results and chart selection share one bounded semantic-verification cache.
     result_readers = LocalParquetRunResultReaderFactory(artifacts)
-    chart_reader = LocalCopyMarketChartReader(artifacts, pump_market_cap_state, build_tools)
+    chart_reader = LocalCopyMarketChartReader(
+        artifacts, pump_strategy_market_cap_state, build_tools
+    )
     # Inject the protocol projector only at bootstrap; the query remains infrastructure-neutral.
     control = ControlUseCases(
         inspect_source=inspect_source,
@@ -444,6 +447,7 @@ def build_runtime_container(
         # The same SQLite adapter supplies a manifest-bound, rebuildable Run index.
         query_runs=QueryRuns(artifact_queries, catalog),
         query_run_results=QueryRunResults(result_readers),
+        query_strategy_results=QueryStrategyResults(result_readers, chart_reader),
         query_copy_market_chart=QueryCopyMarketChart(result_readers, chart_reader),
         # Read-only chart admission does not alter queued job resource or resolution policy.
         system_resources=resource_probe,

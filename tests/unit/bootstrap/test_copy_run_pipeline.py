@@ -32,6 +32,7 @@ from backtest.application.use_cases.query_copy_market_chart import QueryCopyMark
 
 # Summary queries reconstruct verified result artifacts after publication.
 from backtest.application.use_cases.query_run_results import CopyRunSummaryView, QueryRunResults
+from backtest.application.use_cases.query_strategy_results import QueryStrategyResults
 
 # Execution and result projection use the same public application use cases as CLI and API.
 from backtest.application.use_cases.run_backtest import (
@@ -59,6 +60,10 @@ from backtest.engine import ReferenceBacktestEngine
 from backtest.engine.copytrading_results import CopyPositionRecord
 from backtest.interfaces.api.market_charts import CopyMarketChartResponse
 from backtest.interfaces.api.schemas import CopyRunSummaryResponse, RoundTripPageResponse
+from backtest.interfaces.api.strategy_results import (
+    StrategyAnalyticsResponse,
+    StrategyDashboardResponse,
+)
 from backtest.plugins.protocols.pumpfun.market_charts import pump_market_cap_state
 
 
@@ -226,6 +231,8 @@ def test_copy_verified_parquet_and_replay_publish_equivalent_results(
             page = reader.roundtrips(after=None, limit=1)
             assert len(page.items) == 1 and isinstance(page.items[0], CopyPositionRecord)
             rows.append(page.items[0].document())
+        # Common results must preserve actual position economics across all physical formats.
+        _assert_common_strategy_results(readers, result.artifact.artifact_id, page.items[0])
         # The shared query/API/delegated-client path preserves exact integer result meaning.
         # API and delegated-client codecs must preserve the exact domain summary.
         view = QueryRunResults(readers).summary(result.artifact.artifact_id)
@@ -318,3 +325,31 @@ def _assert_chart_attempts(chart, position) -> None:
         assert marker.point.market_cap_atomic == prior[-1].market_cap_atomic
         if marker.status == "FILLED":
             assert marker.point.lifecycle is MarketLifecycle.ACTIVE
+
+
+def _assert_common_strategy_results(readers, artifact_id, position):
+    """Shared UI data is equivalent to the canonical copy row, including rejected retries."""
+    queries = QueryStrategyResults(readers)
+    dashboard = queries.dashboard(artifact_id, limit=1)
+    response = StrategyDashboardResponse.from_view(dashboard)
+    entry = dashboard.entries.items[0]
+    # A common layout cannot rewrite actor role, attempts or partial valuation.
+    assert response.summary.family == "PUMPFUN_COPY_BUY"
+    assert entry.actor_role == "signing_wallet"
+    assert entry.actor_id == position.intent.signal.signing_wallet.value
+    assert len(entry.attempts) == len(position.attempts)
+    assert response.entries.items[0].details["position_id"] == position.roundtrip_id.hex
+    # Exact entry lookup is scoped by both canonical identity and boundary.
+    from backtest.application.ports.run_results import RoundTripCursor
+
+    key = RoundTripCursor(position.target_position.boundary_ordinal, position.roundtrip_id)
+    assert queries.entry(artifact_id, key) == entry
+    assert queries.entries(artifact_id, after=key, limit=1).items == ()
+    analytics = StrategyAnalyticsResponse.from_view(queries.analytics(artifact_id))
+    # Optional whole-run analytics counts all attempts, never just successful fills.
+    groups = {item.key: item for item in analytics.distributions}
+    assert analytics.entry_count == "1"
+    assert int(groups["attempt_outcomes"].total) == len(position.attempts)
+    assert int(groups["failure_reasons"].total) == sum(
+        attempt.failure_code is not None for attempt in position.attempts
+    )

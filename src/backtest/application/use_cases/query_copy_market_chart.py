@@ -9,6 +9,7 @@ from backtest.application.market_charts import (
     MAX_MARKET_CHART_EVENTS,
     CopyMarketChart,
     MarketChartQueryError,
+    StrategyMarketChart,
 )
 
 # Result and historical storage remain independently replaceable adapters.
@@ -76,7 +77,7 @@ class QueryCopyMarketChart:
             raise MarketChartQueryError("MARKET_CHART_UNAVAILABLE") from error
 
 
-def _verify_chart_position(chart: CopyMarketChart, position: CopyPositionRecord) -> None:
+def _verify_chart_position(chart: StrategyMarketChart, position: CopyPositionRecord) -> None:
     """Every chart marker must preserve the exact recorded side, outcome and boundary."""
     if (chart.asset_id, chart.quote_asset_id) != (
         position.intent.asset_id,

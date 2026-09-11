@@ -20,6 +20,7 @@ from backtest.plugins.protocols.pumpfun.model import PumpMode
 from backtest.plugins.protocols.pumpfun.sniping import (
     PUMPFUN_LAUNCH_PAYLOAD_SCHEMA_ID,
     PUMPFUN_LIFECYCLE_PAYLOAD_SCHEMA_ID,
+    PUMPFUN_TRADE_PAYLOAD_SCHEMA_ID,
     _decode_state,
 )
 
@@ -58,4 +59,21 @@ def pump_market_cap_state(event: CanonicalEvent) -> MarketCapState:
         numerator // state.virtual_token_reserves_atomic,
         MarketLifecycle(state.lifecycle.value),
         signer,
+    )
+
+
+def pump_strategy_market_cap_state(event: CanonicalEvent) -> MarketCapState:
+    """Add the existing Sniping state codec only to the shared read-only chart projection."""
+    if (
+        not isinstance(event, VenueTradeEvent)
+        or event.protocol_payload_schema != PUMPFUN_TRADE_PAYLOAD_SCHEMA_ID
+    ):
+        return pump_market_cap_state(event)
+    state = _decode_state(event.protocol_payload)
+    if state.mode in {PumpMode.MAYHEM, PumpMode.UNKNOWN}:
+        raise ValueError("unsupported market-chart mode")
+    # The same full-supply integer formula applies without manufacturing a transaction signer.
+    numerator = state.virtual_sol_reserves_lamports * state.token_total_supply_atomic
+    return MarketCapState(
+        numerator // state.virtual_token_reserves_atomic, MarketLifecycle(state.lifecycle.value)
     )

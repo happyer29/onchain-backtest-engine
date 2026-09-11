@@ -8,6 +8,16 @@ only by the hermetic golden tests under `tests/golden/pumpfun/program-v1/`.
 The projections retain event names, discriminators, ordered fields and the
 defined types required to decode the checked-in RPC evidence.
 
+## Browser interface dependencies
+
+The packaged React interface includes JavaScript libraries under their
+respective licenses. Full notices and locked versions are bundled in
+[`third-party-licenses.txt`](src/backtest/interfaces/web/static/third-party-licenses.txt)
+and served at `/static/third-party-licenses.txt`. The build generates this file
+from installed production packages and shipped Tailwind/Vite helpers, including
+the D3 notices vendored by
+`victory-vendor`; it contains no operational configuration or data.
+
 ## Pump package sources
 
 ### `pump-rust-client 0.1.10`

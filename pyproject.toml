@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "on-chain-backtest-engine"
-version = "0.1.0"
+version = "0.2.0"
 description = "Deterministic self-hosted on-chain backtesting engine"
 readme = "README.md"
 license = "MIT"
@@ -60,6 +60,8 @@ packages = ["src/backtest"]
 [tool.hatch.build.targets.sdist]
 exclude = [
   "/.agents",
+  "/.codex",
+  "/docs/copytrading-trial-*.md",
   "/.github",
   "/AGENTS.md",
   "/AGENTS.ru.md",

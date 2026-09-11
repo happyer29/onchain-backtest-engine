@@ -13,6 +13,7 @@ from backtest.application.market_charts import (
     # These types preserve canonical chain coordinates and lifecycle on the wire.
     MarketCapPoint,
     MarketLifecycle,
+    StrategyMarketChart,
 )
 from backtest.interfaces.api.schemas import ApiModel, ChainPositionResponse
 
@@ -99,6 +100,40 @@ class CopyMarketChartResponse(ApiModel):
             snapshot_id=value.snapshot_id.hex,
             asset_id=value.asset_id.value,
             # Exact integer strings preserve amounts larger than the JS safe-integer range.
+            points=tuple(MarketCapPointResponse.from_domain(point) for point in value.points),
+            markers=tuple(CopyChartMarkerResponse.from_domain(marker) for marker in value.markers),
+        )
+
+
+class StrategyMarketChartResponse(ApiModel):
+    """Shared historical chart format, including a suppressed creation with no own order."""
+
+    contract_schema: Literal["strategy-market-cap/v1"] = "strategy-market-cap/v1"
+    run_artifact_id: _Digest
+    entry_id: _Digest
+    snapshot_id: _Digest
+    asset_id: str = Field(min_length=1, max_length=128)
+    # An explicit policy keeps marginal full-supply capitalization distinct from fill price.
+    quote_asset_id: Literal["SOL"] = "SOL"
+    market_cap_policy: Literal["post-transaction-total-supply-market-cap-lamports-floor/v1"] = (
+        "post-transaction-total-supply-market-cap-lamports-floor/v1"
+    )
+    points: tuple[MarketCapPointResponse, ...] = Field(
+        min_length=1, max_length=MAX_MARKET_CHART_POINTS
+    )
+    markers: tuple[CopyChartMarkerResponse, ...] = Field(
+        min_length=1, max_length=MAX_MARKET_CHART_MARKERS
+    )
+
+    @classmethod
+    def from_view(cls, value: StrategyMarketChart) -> Self:
+        """Only bounded application projections are serialized; no raw history leaves the host."""
+        return cls(
+            run_artifact_id=value.run_artifact_id.hex,
+            entry_id=value.position_id.hex,
+            snapshot_id=value.snapshot_id.hex,
+            asset_id=value.asset_id.value,
+            # Decimal strings preserve original clock labels and market-cap atomic values.
             points=tuple(MarketCapPointResponse.from_domain(point) for point in value.points),
             markers=tuple(CopyChartMarkerResponse.from_domain(marker) for marker in value.markers),
         )

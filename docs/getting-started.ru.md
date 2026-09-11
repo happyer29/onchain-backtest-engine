@@ -133,6 +133,13 @@ allow_insecure_remote_http = false
 
 ## 4. Запуск Web UI без индексера
 
+React UI открывается на английском; **Language → Русский** переключает язык,
+**Appearance** — оформление. **Launch strategy** содержит выбор Sniping, Copy Buy
+и FirstSwap, с раскрывающимися разделами комиссий, аккаунтов и ресурсов.
+
+![Форма Copy Buy на английском языке, изолированные тестовые данные](assets/launch-strategy.png)
+
+
 UI можно открыть до настройки live source:
 
 ```bash
@@ -781,20 +788,23 @@ shortfall — без ledger posting. Failure code каждой leg остаёт�
 Committed summary v2/round-trip v3 остаются читаемыми по исходным schemas и
 не перезаписываются.
 
-Те же данные доступны в Web UI. В таблице committed runs нажмите
-`Sniping result`: в новой вкладке откроется отдельный dashboard, привязанный к
-exact `run_artifact_id`. Его cards и графики показывают агрегаты всего run из
-verified summary v3; initial request также содержит ровно одну bounded-страницу.
-Таблица загружает 25 round trips по умолчанию (настраивается до 200) и хранит
-только текущую keyset-страницу. `Назад`/`Вперёд` переключают страницы вручную,
-а поиск, фильтр статуса и alternate sorts действуют только внутри открытой
-страницы. При partial valuation полная
-economic PnL остаётся «Недоступно», рядом отдельно показывается subtotal только
-по оценённым позициям. Sniping form показывает fixed semantics read-only и
-даёт required selector из двух execution modes; UI не читает напрямую SQLite,
-Parquet или filesystem paths. Для virtual settlement UI постоянно показывает
-предупреждение: shortfall-funded proceeds являются synthetic, повторно
-используются только внутри simulation и не доказывают on-chain execution.
+Те же данные доступны в общем React-интерфейсе: **Strategy results → Results**.
+Точный `run_artifact_id` открывается по `/runs/{id}` с общими вкладками
+**Overview**, **Entries**, **Exits**, **Trades**, **Verification**.
+По умолчанию используются английские подписи; **Language → Русский** включает
+перевод. Карточки читают verified summary, диаграммы — отдельную ограниченную
+аналитику всего run. UI хранит одну страницу из 25 записей (API допускает 200);
+поиск и сортировки page-local, стрелки запрашивают следующую страницу.
+Полный PnL при partial valuation остаётся недоступным, subtotal показан отдельно.
+
+В **Trades** токен и кнопка деталей открывают overlay с Pump-историей в SOL,
+сигналом и фактическими исходами попыток. **Around trade** / **Full history**
+меняет локальный масштаб. История заканчивается при completion/migration;
+missing evidence и превышенный лимит дают явные ошибки. У FirstSwap нет
+определённого round-trip PnL или Pump-истории. **Verification → Open manifest
+and lineage → Lineage** показывает проверенный граф зависимостей.
+UI читает API, а не SQLite/Parquet/пути. Предупреждение о synthetic settlement
+остаётся видимым и не подтверждает возможность исполнения on-chain.
 
 Основной UI аналогично показывает по 20 jobs и 10 runs. Jobs глобально
 выбираются newest-first; runs также выбираются глобально по completion time до

@@ -1,0 +1,17 @@
+[
+  "accepted_order_count",
+  "audit_hash",
+  "canonical_result_hash",
+  "delivered_event_count",
+  "failed_order_count",
+  "fill_count",
+  "fill_hash",
+  "filled_order_count",
+  "final_balances_count",
+  "final_balances_digest",
+  "historical_event_count",
+  "historical_group_count",
+  "ledger_hash",
+  "ledger_transaction_count",
+  "rejected_order_count"
+]

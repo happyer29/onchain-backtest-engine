@@ -83,6 +83,7 @@ from backtest.application.use_cases.query_run_results import (
     # Close the query run results import after its required symbols are visible.
 )
 from backtest.application.use_cases.query_runs import QueryRuns, RunIndexQueryError
+from backtest.application.use_cases.query_strategy_results import QueryStrategyResults
 from backtest.application.use_cases.resolve_run_spec import ResolveRunSpec
 from backtest.application.use_cases.resolve_sweep_spec import ResolveSweepSpec
 from backtest.application.use_cases.retry_job import RetryJob
@@ -669,6 +670,7 @@ def _client(
     default_run_settings: RunPhysicalSettings | None = None,
     max_request_bytes: int = 2 * 1024 * 1024,
     query_run_results: QueryRunResults | None = None,
+    query_strategy_results: QueryStrategyResults | None = None,
     query_runs: QueryRuns | None = None,
     inspect_source: StoreSourceInspection | None = None,
 ) -> TestClient:
@@ -768,6 +770,7 @@ def _client(
         # Keep the selected jobs ListJobEvents step visible while building use cases.
         list_job_events=ListJobEvents(selected_jobs, selected_jobs),
         query_run_results=query_run_results,
+        query_strategy_results=query_strategy_results,
         query_runs=query_runs,
         ml_reference_contract=ReferenceMlContract(
             runtime_lock_id=RuntimeLockId("1" * 64),
@@ -830,52 +833,31 @@ def test_health_and_packaged_web_ui(tmp_path: Path) -> None:
 
     health = client.get("/api/v1/health")
     ui = client.get("/")
-    script = client.get("/static/app.js")
-    dashboard = client.get("/sniping-results?run_artifact_id=" + "a" * 64)
-    dashboard_script = client.get("/static/sniping-results.js")
-
+    # The shipped React shell is shared by every deep link and historical bookmark.
     assert health.status_code == 200
-    # Verify health.json()['profile'] == 'test' before this scenario is accepted.
     assert health.json()["profile"] == "test"
     assert health.json()["control_plane_id"] == "f" * 64
     assert health.headers["cache-control"] == "no-store"
-    assert ui.status_code == 200
-    assert "On-Chain Backtest Engine" in ui.text
-    # Verify 'job-form' not in ui.text before this scenario is accepted.
-    assert "job-form" not in ui.text
-    assert "Canonical JSON payload" not in ui.text
-    assert 'id="backtest-form"' in ui.text
-    assert 'id="dataset-plan-form"' in ui.text
-    assert 'id="ml-features-form"' in ui.text
-    # Verify 'id="artifact-form"' in ui.text before this scenario is accepted.
-    assert 'id="artifact-form"' in ui.text
-    assert "Aliases и arbitrary JSON не принимаются" in ui.text
-    assert script.status_code == 200
-    assert 'api("/api/v1/health")' in script.text
-    assert "crypto.randomUUID" not in script.text
-    # Verify the text and script relationship before this scenario is accepted.
-    assert 'api("/api/v1/run-specs/resolve"' in script.text
-    assert 'api("/api/v1/run-physical-settings")' in script.text
-    assert 'api("/api/v1/backtests"' in script.text
-    assert 'name="reader_readahead"' in ui.text
-    assert 'submitResolvedJob("RUN_SWEEP"' in script.text
-    # Verify the text and script relationship before this scenario is accepted.
-    assert 'api("/api/v1/ml/reference-contract")' in script.text
-    assert "const ACTIVE_JOB_POLL_MS = 2000" in script.text
-    assert "const IDLE_JOB_POLL_MS = 12000" in script.text
-    assert "const RESOURCE_POLL_MS = 20000" in script.text
-    assert "scheduleJobPolling()" in script.text
-    assert "scheduleResourcePolling()" in script.text
-    assert '"/api/v1/lineage/"' in script.text
-    assert ui.headers["content-security-policy"].startswith("default-src")
-    assert dashboard.status_code == 200
-    assert "Sniping result" in dashboard.text
-    assert 'id="dashboard-roundtrips-body"' in dashboard.text
-    assert dashboard.headers["content-security-policy"].startswith("default-src")
-    assert dashboard.headers["cache-control"] == "no-cache"
-    assert dashboard_script.status_code == 200
-    assert "ROUNDTRIP_PAGE_LIMIT = 200" in dashboard_script.text
-    assert "innerHTML" not in dashboard_script.text
+    assert ui.status_code == 200 and 'id="root"' in ui.text
+    # Every executable asset must be external and same-origin under the unchanged CSP.
+    import re
+
+    scripts = re.findall(r'<script[^>]+src="([^"]+)"', ui.text)
+    assert scripts and all(path.startswith("/static/") for path in scripts)
+    assert all(client.get(path).status_code == 200 for path in scripts)
+    assert "unsafe-inline" not in ui.headers["content-security-policy"]
+    # Deep-link refreshes set the same session; no second result UI remains packaged.
+    paths = ("/runs", "/runs/" + "a" * 64, "/launch", "/jobs", "/data", "/ml")
+    paths += ("/resources", "/artifacts", "/artifacts/" + "a" * 64)
+    paths += ("/sniping-results", "/copy-results")
+    for path in paths:
+        response = client.get(path)
+        # Route aliases serve identical bytes instead of a retained legacy renderer.
+        assert response.status_code == 200 and response.content == ui.content
+        assert response.headers["cache-control"] == "no-cache"
+        assert response.headers["content-security-policy"] == ui.headers["content-security-policy"]
+    assert client.get("/static/app.js").status_code == 404
+    assert client.get("/api/v1/unknown-react-route").status_code == 404
 
     ml_contract = client.get("/api/v1/ml/reference-contract")
     # Verify ml_contract.status_code == 200 before this scenario is accepted.

@@ -45,9 +45,10 @@ class Stream:
     def __init__(self, events):
         self.values, self.closed = events, False
 
-    def events(self):
+    def events_for_venue(self, venue_id, *, check_budget):
         """Generator finalization models the canonical reader's held artifact leases."""
         try:
+            check_budget()
             yield from self.values
         finally:
             self.closed = True
@@ -136,7 +137,7 @@ def test_missing_or_conflicting_history_is_not_a_chart(position_and_clock, fault
 
 @pytest.mark.parametrize(
     "quota",
-    ["MAX_MARKET_CHART_EVENTS", "MAX_MARKET_CHART_POINTS", "deadline"],
+    ["MAX_MARKET_CHART_SELECTED_EVENTS", "MAX_MARKET_CHART_POINTS", "deadline"],
     # Rows, output points and elapsed time impose independent hard ceilings.
 )
 def test_stream_limits_close_inputs_and_never_return_a_truncated_series(
@@ -150,7 +151,8 @@ def test_stream_limits_close_inputs_and_never_return_a_truncated_series(
         collect(position_and_clock, (base._launch(), replay._trade(1)), deadline=deadline)
 
 
-def test_metadata_limits_reject_before_constructing_replay_reader(monkeypatch):
+@pytest.mark.parametrize("kind, count", [("VENUE_TRADE", 10_000_001), ("BLOCK", 500_001)])
+def test_metadata_limits_reject_before_constructing_replay_reader(monkeypatch, kind, count):
     """Input metadata admission rejects before allocating a canonical replay reader."""
     import json
 
@@ -159,7 +161,9 @@ def test_metadata_limits_reject_before_constructing_replay_reader(monkeypatch):
 
     # A minimal committed-handle double proves pre-admission order, independent of replay math.
     closed = []
-    manifest = {"distributions": [{"row_count": 50_001, "artifact_id": "1" * 64}]}
+    manifest = {
+        "distributions": [{"row_count": count, "artifact_id": "1" * 64, "event_kind": kind}]
+    }
     handle = SimpleNamespace(
         descriptor=SimpleNamespace(kind=adapter.ArtifactKind.SNAPSHOT),
         # The byte stream emulates only manifest admission, not canonical artifact proof.
@@ -270,10 +274,11 @@ def query_fixture(monkeypatch, position_and_clock, *, chart=None, events=2, fail
 
 
 # Exact-key seeking must never broaden into a scan of arbitrary tokens.
+@pytest.mark.parametrize("events", [2, 3_016_533])
 def test_query_seeks_one_exact_position_under_the_verified_run_lease(
-    monkeypatch, position_and_clock
+    monkeypatch, position_and_clock, events
 ):
-    query, calls, _ = query_fixture(monkeypatch, position_and_clock)
+    query, calls, _ = query_fixture(monkeypatch, position_and_clock, events=events)
     position, _ = position_and_clock
     # Both operands of the selector are independently checked against the result.
     result = query.execute(
@@ -336,7 +341,7 @@ def test_query_limits_and_redaction_prevent_unbounded_or_unsafe_reads(
         position.target_position.boundary_ordinal,
     )
     # The unbounded input count must block all lower-level calls.
-    query, calls, _ = query_fixture(monkeypatch, position_and_clock, events=50_001)
+    query, calls, _ = query_fixture(monkeypatch, position_and_clock, events=10_000_001)
     with pytest.raises(MarketChartQueryError, match="LIMIT"):
         query.execute(*operands)
     assert not calls
@@ -402,9 +407,9 @@ def test_chart_http_preserves_exact_units_and_rejects_untyped_selectors(
     key = str(chart.markers[0].point.position.boundary_ordinal)
     # Packaged navigation establishes the same-origin session and serves the new assets.
     response = client.get("/copy-results")
-    assert response.status_code == 200 and "copy-market-chart.js" in response.text
+    assert response.status_code == 200 and 'id="root"' in response.text
     assert "unsafe-inline" not in response.headers["content-security-policy"]
-    assert client.get("/static/copy-market-chart.js").status_code == 200
+    assert client.get("/static/copy-market-chart.js").status_code == 404
     response = client.get(path, params={"signal_boundary_ordinal": key})
     # Nanoseconds, market cap and boundary ordinal remain strings across the HTTP boundary.
     assert response.status_code == 200

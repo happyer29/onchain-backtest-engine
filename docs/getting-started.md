@@ -145,6 +145,16 @@ Open `http://127.0.0.1:<control.port>`. For the configuration above:
 http://127.0.0.1:8081
 ```
 
+The React interface opens in English. Use **Language → Русский** in the sidebar
+for Russian, or **Appearance** to switch between Warm sunset and Dark.
+Choose **Launch strategy** for Sniping, Copy Buy or FirstSwap. Expand the
+sections for wallet/account profiles, fees, reproducibility and resources.
+
+![Copy Buy launch form in English with expandable parameter sections](assets/launch-strategy.png)
+
+This screenshot uses an isolated browser fixture. Its defaults illustrate the
+form and do not supply source evidence or recommend trading parameters.
+
 No username or password is required. The localhost UI uses an automatically
 created HttpOnly session cookie. Stop the server with `Ctrl+C`; completed
 committed artifacts and the durable queue remain in `data_root`.
@@ -778,19 +788,29 @@ remains separate, and every financial row reconciles with correlated
 `run-ledger/v2`. Committed summary v2/round-trip v3 results remain readable
 under their original schemas and are not rewritten.
 
-The same data is available in the Web UI. In the committed-runs table, select
-`Sniping result` to open a dashboard bound to the exact `run_artifact_id` in a
-new tab. Its cards and charts use whole-run aggregates from verified summary
-v3; the initial request also carries exactly one bounded row page. The table
-fetches 25 round trips by default (selectable up to 200) and retains only the
-current keyset page. `Previous`/`Next` changes pages manually, while search,
-status filtering, and alternate sorts apply only to the open page. With partial valuation, full economic PnL remains
-`Unavailable`, and a subtotal for valued positions appears separately. The
-Sniping form shows fixed semantics as read-only and provides the required
-two-value mode selector; the UI does not read SQLite, Parquet, or filesystem
-paths directly. Choosing virtual settlement keeps a visible warning that
-shortfall-funded proceeds are synthetic, reusable only inside the simulation,
-and not proof of on-chain executability.
+The same data is available in the React UI. Open **Strategy results** in the
+sidebar and select **Results** on a committed run. The exact `run_artifact_id`
+opens at `/runs/{id}`, with **Overview**, **Entries**, **Exits**, **Trades** and
+**Verification** tabs shared by all implemented strategies. Cards read verified
+summary metadata; supplemental distributions use a separately bounded scan.
+Tables keep one page of 25 entries. The API permits up to 200, while the UI
+uses 25. Arrows request another page; search and alternate sorts apply only
+to the loaded page. Partial economic PnL stays unavailable, with the valued
+subtotal shown separately.
+
+Select a token or its details button under **Trades** to open a large overlay.
+For Pump results, it displays the original signal, actual filled entry/exit,
+failed/rejected attempts and SOL market-cap history from retained verified
+inputs. **Around trade** and **Full history** adjust the local view. The line
+ends at completion/migration; it is neither USD history nor an execution-price
+chart. A missing history or exceeded scan limit returns an explicit error.
+FirstSwap has no defined round-trip/PnL policy or Pump history.
+
+**Verification → Open manifest and lineage → Lineage** opens the bounded
+dependency graph. Each node links to verified artifact metadata. The UI reads
+through the API and never opens SQLite, Parquet or filesystem paths directly.
+Virtual settlement retains a visible synthetic-funding warning on results and
+trade details; those proceeds do not establish on-chain executability.
 
 The main UI similarly shows 20 jobs and 10 runs at a time. Jobs are globally
 newest-first; runs are also selected globally newest-by-completion-time before

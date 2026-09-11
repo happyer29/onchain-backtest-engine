@@ -275,6 +275,20 @@ loopback он не нужен и отклоняется. Он действует
 loopback-only. Это operational host setting: он не входит в run/artifact
 identity и не повышает fidelity, finality, completeness или consistency.
 
+### Выбор источника Copy Buy
+
+`[source.copy_selection]` в локальном ignored TOML задаёт 1–128 отсортированных
+уникальных Solana `signing_wallets`, typed `decision_range` и `history_range`.
+History начинается не позже decision и заканчивается на той же исключающей
+верхней границе, с теми же NetworkId/PositionSchemaId. Для старых токенов нужна
+полная ограниченная история создания/начального состояния, а evidence должен
+доказать отдельный правый settlement tail всех четырёх попыток продажи.
+
+Команды остаются `inspect-source`, `plan-dataset`, `prepare-dataset`. Copy-only
+receipt v3, inspection v6, plan v5 и DatasetSpec v6 фиксируют точную выборку;
+Sniping snapshot не переинтерпретируется. См. полный шаблон и ограничения в
+[английском руководстве](configuration.md#copy-buy-source-selection).
+
 ### Capability mapping
 
 Capability file описывает transport/source schema, а не protocol math:

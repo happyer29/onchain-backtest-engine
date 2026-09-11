@@ -57,6 +57,7 @@ from backtest.application.ports.run_results import RoundTripCursor
 from backtest.application.ports.system import SystemResourceProbe
 from backtest.application.run_contracts import QueryRunContracts
 from backtest.application.run_results import RunPhysicalSettings
+from backtest.application.strategy_results import StrategyResultsError
 from backtest.application.use_cases.cancel_job import CancelJob, CancelJobRequest
 from backtest.application.use_cases.inspect_source import InspectSourceRequest
 
@@ -70,6 +71,7 @@ from backtest.application.use_cases.query_run_results import QueryRunResults, Ru
 
 # Import query runs at the visible module dependency boundary.
 from backtest.application.use_cases.query_runs import QueryRuns, RunIndexQueryError
+from backtest.application.use_cases.query_strategy_results import QueryStrategyResults
 from backtest.application.use_cases.resolve_run_spec import ResolveRunSpec
 from backtest.application.use_cases.resolve_sweep_spec import ResolveSweepSpec
 from backtest.application.use_cases.retry_job import RetryJob, RetryJobRequest
@@ -78,7 +80,10 @@ from backtest.application.use_cases.store_source_inspection import StoreSourceIn
 # Import submit job at the visible module dependency boundary.
 from backtest.application.use_cases.submit_job import SubmitJob, SubmitJobRequest
 from backtest.domain.identifiers import ArtifactId, ContentDigest, JobId, LogicalRunId, SourceId
-from backtest.interfaces.api.market_charts import CopyMarketChartResponse
+from backtest.interfaces.api.market_charts import (
+    CopyMarketChartResponse,
+    StrategyMarketChartResponse,
+)
 from backtest.interfaces.api.ml_schemas import (
     BuildFeaturesJobForm,
     BuildLabelsJobForm,
@@ -140,6 +145,13 @@ from backtest.interfaces.api.schemas import (
     # Shared response dispatch preserves each result family contract.
     run_result_summary_response,
 )
+from backtest.interfaces.api.strategy_results import (
+    StrategyAnalyticsResponse,
+    StrategyDashboardResponse,
+    StrategyEntryPageResponse,
+    StrategyEntryResponse,
+    StrategySummaryResponse,
+)
 
 # Bind terminal to status once as an explicit module-level contract.
 _TERMINAL_TO_STATUS: Final = {
@@ -192,6 +204,8 @@ class ControlUseCases:
     query_run_results: QueryRunResults | None = None
     # Optional composition keeps unsupported deployments explicitly unavailable.
     query_copy_market_chart: QueryCopyMarketChart | None = None
+    # Common read-only results are separately wired from every execution use case.
+    query_strategy_results: QueryStrategyResults | None = None
 
 
 # Define create app as one focused operation with an explicit boundary.
@@ -389,15 +403,34 @@ def create_app(
             content=ErrorResponse(code=error.code, message=response[1]).model_dump(),
         )
 
+    @app.exception_handler(StrategyResultsError)
+    async def strategy_result_error_handler(
+        _: Request, error: StrategyResultsError
+    ) -> JSONResponse:
+        """Optional analytics errors never masquerade as an empty successful result."""
+        responses = {
+            "RESULT_ANALYTICS_LIMIT_EXCEEDED": (
+                422,
+                "The result exceeds the interactive analytics limit.",
+            ),
+            "RESULT_ANALYTICS_BUSY": (503, "Analytics is busy. Please try again."),
+            "STRATEGY_RESULT_UNAVAILABLE": (404, "The verified result is unavailable."),
+            "STRATEGY_ENTRY_NOT_FOUND": (404, "The entry was not found in this run."),
+        }
+        code, message = responses[error.code]
+        return JSONResponse(
+            status_code=code, content=ErrorResponse(code=error.code, message=message).model_dump()
+        )
+
     @app.exception_handler(MarketChartQueryError)
     async def market_chart_error_handler(_: Request, error: MarketChartQueryError) -> JSONResponse:
         """Project only stable safe failures; raw reader exceptions stay server-side."""
         responses = {
-            "COPY_POSITION_NOT_FOUND": (404, "Сигнал не найден в этом прогоне."),
-            "MARKET_CHART_UNAVAILABLE": (404, "Проверенная история токена недоступна."),
+            "COPY_POSITION_NOT_FOUND": (404, "The signal was not found in this run."),
+            "MARKET_CHART_UNAVAILABLE": (404, "Verified token history is unavailable."),
             # Quota and contention errors do not return partial or empty charts.
-            "MARKET_CHART_LIMIT_EXCEEDED": (422, "История превышает лимит интерактивного графика."),
-            "MARKET_CHART_BUSY": (503, "Другой график загружается. Повторите запрос."),
+            "MARKET_CHART_LIMIT_EXCEEDED": (422, "History exceeds the interactive chart limit."),
+            "MARKET_CHART_BUSY": (503, "Another chart is loading. Please try again."),
         }
         code, message = responses[error.code]
         return JSONResponse(
@@ -441,12 +474,26 @@ def create_app(
             secure_cookie=secure_cookie,
         )
 
+    # Explicit SPA routes preserve refresh/bookmarks without masking unknown API paths.
+    for page_path in (
+        "/runs",
+        "/runs/{run_id}",
+        "/launch",
+        "/jobs",
+        "/data",
+        "/ml",
+        "/resources",
+        "/artifacts",
+        "/artifacts/{artifact_id}",
+    ):
+        app.add_api_route(page_path, web_ui, methods=["GET"], include_in_schema=False)
+
     @app.get("/sniping-results", include_in_schema=False)
     async def sniping_results_dashboard() -> FileResponse:
-        """Serve the bounded Pump.fun Sniping result dashboard."""
+        """Keep historical bookmarks on the single React result application."""
 
         return _web_page_response(
-            static_root / "sniping-results.html",
+            static_root / "index.html",
             enforce_session=enforce_session,
             session_token=selected_session_token,
             secure_cookie=secure_cookie,
@@ -454,9 +501,9 @@ def create_app(
 
     @app.get("/copy-results", include_in_schema=False)
     async def copy_results_dashboard() -> FileResponse:
-        """Serve the packaged signal dashboard under the existing same-origin session."""
+        """Let React redirect a Copy bookmark to the shared strategy result route."""
         return _web_page_response(
-            static_root / "copy-results.html",
+            static_root / "index.html",
             enforce_session=enforce_session,
             session_token=selected_session_token,
             # Reuse the same session-cookie protection as the other packaged dashboard.
@@ -1041,6 +1088,91 @@ def create_app(
             _artifact_id(artifact_id), key.roundtrip_id, key.target_boundary_ordinal
         )
         return _bounded_api_response(CopyMarketChartResponse.from_domain(chart), max_request_bytes)
+
+    @app.get("/api/v1/run-artifacts/{artifact_id}/strategy-summary")
+    def strategy_summary(request: Request, artifact_id: str) -> StrategySummaryResponse:
+        """Basic metadata remains readable even when optional analytics exceeds its budget."""
+        _require_exact_query_parameters(request, allowed=frozenset())
+        query = _required_service(use_cases.query_strategy_results)
+        response = StrategySummaryResponse.from_view(query.summary(_artifact_id(artifact_id)))
+        return _bounded_api_response(response, max_request_bytes)
+
+    @app.get("/api/v1/run-artifacts/{artifact_id}/strategy-dashboard")
+    def strategy_dashboard(
+        request: Request,
+        artifact_id: str,
+        limit: Annotated[int, Query(ge=1, le=200)] = 25,
+    ) -> StrategyDashboardResponse:
+        """Initial common result page comes from one exact verified reader."""
+        _require_exact_query_parameters(request, allowed=frozenset({"limit"}))
+        query = _required_service(use_cases.query_strategy_results)
+        view = query.dashboard(_artifact_id(artifact_id), limit=limit)
+        return _bounded_api_response(StrategyDashboardResponse.from_view(view), max_request_bytes)
+
+    @app.get("/api/v1/run-artifacts/{artifact_id}/entries")
+    def strategy_entries(
+        request: Request,
+        artifact_id: str,
+        after_target_boundary_ordinal: Annotated[
+            str | None, Query(pattern=r"^(?:0|[1-9][0-9]*)$", max_length=20)
+        ] = None,
+        # Both cursor parts are required together and keep the existing exact key semantics.
+        after_roundtrip_id: Annotated[str | None, Query(pattern=r"^[0-9a-f]{64}$")] = None,
+        limit: Annotated[int, Query(ge=1, le=200)] = 25,
+    ) -> StrategyEntryPageResponse:
+        """No summary repetition or eager history download on continuation."""
+        _require_exact_query_parameters(
+            request,
+            allowed=frozenset(
+                {
+                    "after_target_boundary_ordinal",
+                    "after_roundtrip_id",
+                    "limit",
+                }
+            ),
+        )
+        query = _required_service(use_cases.query_strategy_results)
+        cursor = _roundtrip_cursor(after_target_boundary_ordinal, after_roundtrip_id)
+        view = query.entries(_artifact_id(artifact_id), after=cursor, limit=limit)
+        return _bounded_api_response(StrategyEntryPageResponse.from_view(view), max_request_bytes)
+
+    @app.get("/api/v1/run-artifacts/{artifact_id}/entries/{entry_id}")
+    def strategy_entry(
+        request: Request,
+        artifact_id: str,
+        entry_id: str,
+        boundary_ordinal: Annotated[str, Query(pattern=r"^(?:0|[1-9][0-9]*)$", max_length=20)],
+    ) -> StrategyEntryResponse:
+        """Detail selection binds an exact stored identity to its canonical boundary."""
+        _require_exact_query_parameters(request, allowed=frozenset({"boundary_ordinal"}))
+        query = _required_service(use_cases.query_strategy_results)
+        key = _roundtrip_cursor(boundary_ordinal, entry_id)
+        assert key is not None
+        view = query.entry(_artifact_id(artifact_id), key)
+        return _bounded_api_response(StrategyEntryResponse.from_view(view), max_request_bytes)
+
+    @app.get("/api/v1/run-artifacts/{artifact_id}/entries/{entry_id}/chart")
+    def strategy_entry_chart(
+        request: Request,
+        artifact_id: str,
+        entry_id: str,
+        boundary_ordinal: Annotated[str, Query(pattern=r"^(?:0|[1-9][0-9]*)$", max_length=20)],
+    ) -> StrategyMarketChartResponse:
+        """A chart remains tied to the selected row when the user changes pages or tokens."""
+        _require_exact_query_parameters(request, allowed=frozenset({"boundary_ordinal"}))
+        query = _required_service(use_cases.query_strategy_results)
+        key = _roundtrip_cursor(boundary_ordinal, entry_id)
+        assert key is not None
+        view = query.chart(_artifact_id(artifact_id), key)
+        return _bounded_api_response(StrategyMarketChartResponse.from_view(view), max_request_bytes)
+
+    @app.get("/api/v1/run-artifacts/{artifact_id}/analytics")
+    def strategy_analytics(request: Request, artifact_id: str) -> StrategyAnalyticsResponse:
+        """Whole-run aggregates require a complete bounded reduction on the server."""
+        _require_exact_query_parameters(request, allowed=frozenset())
+        query = _required_service(use_cases.query_strategy_results)
+        view = query.analytics(_artifact_id(artifact_id))
+        return _bounded_api_response(StrategyAnalyticsResponse.from_view(view), max_request_bytes)
 
     # Apply get semantics to the following system resources contract.
     @app.get("/api/v1/system/resources", response_model=SystemResourcesResponse)

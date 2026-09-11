@@ -335,8 +335,8 @@ re-extraction or ReplayPack recompilation.
 - a loopback Control API and packaged same-origin Web UI with typed prepare,
   backtest/sweep, ML, and Pump.fun Sniping forms, cursor-based progress polling,
   run comparison, artifact/lineage queries, and resource status;
-- shared warm-sunset (default) and original dark appearance choices on the
-  Control and Sniping result pages. A closed browser-local preference applies
+- shared warm-sunset (default) and original dark appearance choices on all
+  React screens. A closed browser-local preference applies
   before first paint and synchronizes across tabs; unavailable browser storage
   leaves an explicitly tab-only choice. Appearance does not enter API commands,
   execution identity, result values, or pagination;
@@ -369,9 +369,9 @@ re-extraction or ReplayPack recompilation.
 - Pump.fun run-contract discovery and an exact result-query surface: bounded
   summary, keyset pages of at most 200 round trips, a combined bounded
   summary-plus-one-page dashboard projection, matching CLI commands, and a
-  separate packaged dashboard opened from `Sniping result`. Global dashboard
-  charts use only the verified summary, while the table manually loads bounded
-  keyset pages, retains one row page, and never reads the entire result. Atomic amounts, boundary/time
+  shared packaged React Strategy results screen. Summary cards use verified
+  metadata; supplemental whole-run distributions use the separately bounded
+  §34.2 result scan. Tables manually load keyset pages and retain one row page. Atomic amounts, boundary/time
   values, and PnL travel over the transport as decimal strings; the browser
   receives no raw paths, Parquet, or SQL. Newly produced runs use
   `pumpfun-sniping-run-summary/v3` and `pumpfun-roundtrips/v4`: execution mode,
@@ -432,8 +432,10 @@ is not implemented; the UI uses bounded polling. Backup is unavailable without
 a configured different physical device/host but does not block backtest execution.
 Resume/checkpoint and automatic acquisition-requirement assembly from arbitrary
 plugin registries are likewise not presented as working features. The packaged
-static UI implements `resolve -> submit -> progress -> result -> lineage`
-through the shared loopback API, including the separate Sniping dashboard.
+React UI implements `resolve -> submit -> progress -> result -> lineage`
+through the shared loopback API. Sniping, Copy Buy, and FirstSwap use one
+Strategy results structure; the legacy scripts and separate HTML dashboards
+have been removed. Old result bookmarks resolve to the same React shell.
 Its lifecycle checks are hermetic and do not extend live-source admission or
 establish deployment-wide production readiness.
 
@@ -514,18 +516,50 @@ and accounting gates. Canonical Parquet and ReplayPack reference outputs
 match, including actual Parquet batch/readahead variation and independent
 repeat runs in the integration fixtures.
 
-The read-only Copy Buy dashboard at `/copy-results` shows whole-run summary
-charts and a manually paged signal table. Each position opens a market-cap
-chart from the run's exact retained canonical snapshot through an application
-query port. The Pump projection uses full supply times the virtual-reserve
+The shared React Strategy results screen shows whole-run summary charts,
+entry/exit/attempt distributions and a manually paged signal table for Copy Buy
+and Sniping. `/copy-results` and `/sniping-results` are compatibility aliases.
+Each Pump position opens a market-cap chart from the run's exact retained
+canonical snapshot through an application query port. The Pump projection uses full supply times the virtual-reserve
 marginal price, floored in SOL lamports, after complete transaction groups.
-Leader signals, actual filled entries/exits and failed/rejected attempts keep
-separate markers and exact chain coordinates. The curve line ends at completion
+Creator or leader signals, actual filled entries/exits and failed/rejected
+attempts keep separate markers and exact chain coordinates. The curve line ends at completion
 or migration; there is no PumpSwap or USD history. Interactive reads admit at
-most 50,000 input rows, 64 partitions, 64 MiB of Parquet, 4,000 output points
-and six markers, with one active history scan and a five-second scan deadline.
+most 10,000,000 input rows (at most 500,000 clock rows), 128 partitions, 1 GiB of Parquet, 50,000 selected
+venue events, 4,000 output points and six markers, with one active history scan
+and a ten-second cooperative scan deadline. Selection happens in bounded
+columnar batches before Python event decoding; unrelated venues are not replayed.
+Every input still passes committed-byte authentication, exact snapshot and
+distribution-manifest/schema/count checks under leases. Selected rows retain
+semantic digest and transaction-clock validation and canonical ordering. This
+post-run projection trusts the authenticated successful run's exact input closure;
+it does not replace the full logical-stream verification required for execution.
 Oversized or unavailable history fails explicitly; no truncated chart, new
 persisted artifact, external-source request or replay-semantic change is made.
+
+The complete UI is now React/TypeScript: overview, run history/comparison,
+launch, jobs/events, data preparation, all six typed ML forms, resources,
+manifest and React Flow lineage. Warm sunset is the default; dark theme and
+mobile navigation share the same components. Radix controls, React Hook Form
+with Zod, TanStack Query/Table and Recharts replace the old manual DOM/SVG
+implementations. Node is build/test tooling only; the Python wheel contains
+all same-origin static assets and lazy chunks.
+English is the default presentation language, including API messages, labels,
+number/date formatting and accessibility text. A closed English/Russian
+browser-local choice synchronizes across tabs and preserves mounted forms and
+result selections; unavailable storage leaves a tab-only choice. Language and
+appearance do not enter commands, query identity or stored financial values.
+The sidebar brand is `onchain backtest engine`.
+
+The common `strategy-results/v1` query views preserve stored family facts and
+use existing position IDs or FirstSwap ORDER IDs. FirstSwap correlates actual
+columnar fills with audit outcomes; PnL/round-trip/chart concepts without a
+defined policy remain explicitly inapplicable. Optional `strategy-analytics/v1`
+reductions are bounded by §34.2 and return typed busy/quota errors without
+partial statistics. No engine, source, artifact identity or financial policy
+changed. Component tests, real Chrome lifecycle/CSP/mobile checks, the full
+section 33 gate and installed-wheel CLI/API/static checks cover this cutover;
+these are hermetic UI evidence, not new live-source admission.
 
 Live copy admission requires exact evidence for the selected wallets and
 source cut. The CLI and browser/API/queue paths passed a small local technical
@@ -4199,6 +4233,78 @@ Response surfaces are bounded and do not return executable envelopes:
 
 ### 34.2 Web UI
 
+#### Unified strategy results
+
+The UI uses React and TypeScript, with one shared **Strategy results**
+screen for Sniping, Copy Buy, FirstSwap, and each subsequently implemented
+strategy. Overview, entries, exits, trades, costs/valuation, and verification
+retain the same structure and components. Strategy-specific facts are typed
+data and capability states, not separate dashboards. An inapplicable metric
+is labelled `NOT_APPLICABLE`; missing historical evidence is `UNAVAILABLE`,
+never a fabricated zero. FirstSwap has no defined round-trip/PnL policy and
+must not inherit Pump accounting or an invented exit.
+
+The post-run query subsystem in sections 8 and 27 owns a versioned common
+presentation contract. Thin HTTP routes call application query use cases;
+replaceable result-reader ports expose verified stored facts; adapters read
+the exact committed Run and its retained inputs under repository leases.
+Bootstrap alone wires implementations. Existing family-specific result APIs
+remain compatible. Presentation versions do not change RunSpec, result
+schemas, artifact IDs, canonical hashes, engine, or strategy behavior.
+
+Summary cards use verified bounded metadata. Supplemental whole-run analytics
+may reduce existing verified result rows, audit, fills, and correlated ledger
+postings through a bounded read-only query. They must not rerun strategies,
+infer missing signals, use remote sources, or publish a new successful Run.
+Entry identity is the stored round-trip/position ID, or an existing ORDER ID
+for FirstSwap; actor roles preserve creator versus signing wallet. Counts
+distinguish signals, attempted orders, pre-submit rejection, landed failure,
+and successful fills. Reasons/exit distributions count actual stored rows or
+attempts and declare that denominator. Page-local calculations are never
+presented as whole-run analytics. Financial values retain their original
+ledger/summary policy, including partial valuation and synthetic settlement.
+
+Supplemental scans have hard limits: at most 100,000 result rows and 64 MiB of
+selected result files, batches no larger than 256 rows, one admitted scan at
+a time, and a five-second cooperative scan deadline. Admission checks the
+verified file lengths and Parquet metadata before semantic scanning; decoded
+record JSON also has a 64 MiB cumulative ceiling and each category distribution
+has at most 256 labels. An exceeded budget or busy
+reader returns a typed query error, not partial global statistics. There is
+no background service or new database. Basic bounded summary/page reads
+remain independently available when optional analytics exceeds its budget.
+Any optional cache is bounded, keyed by exact artifact/presentation version,
+and invalidated by the existing physical verification fingerprint; failures
+are not cached. Corruption never becomes an unavailable/empty success.
+
+Trade detail retains one selected record and a bounded chart. Market charts
+continue to require verified causal historical data and the section 3.4
+scan/point/time limits. They do not extrapolate past completion or migration,
+invent timestamps, or call a rejection a fill. A family lacking the evidence
+required for a chart reports the missing capability explicitly.
+
+React owns every screen and typed form; legacy scripts/HTML have been removed.
+Old result URLs resolve to the same React application. The
+landing screen is the work overview, launch forms use expandable sections,
+and trade detail opens in an accessible large overlay without losing the
+current page. Warm/dark themes, charts, diagrams, and tables share local
+components. Static build-time UI libraries add no Python analytical engine
+or production Node process. Same-origin/CSP/session controls remain intact;
+no CDN, inline executable styles/scripts, permissive CORS, or unsafe-eval.
+Only one result page is retained, amounts use exact decimal strings/BigInt,
+and bounded adaptive polling pauses when hidden. Section 3.4 records the
+implemented cutover and its API, browser, packaging and section 33 verification
+scope. Unimplemented strategy capabilities remain fail closed.
+
+The common read-only routes under `/api/v1/run-artifacts/{artifact_id}` are
+`strategy-summary`, `strategy-dashboard?limit=1..200`,
+`entries?after_target_boundary_ordinal=DECIMAL&after_roundtrip_id=SHA256&limit=1..200`,
+`entries/{entry_id}?boundary_ordinal=DECIMAL`,
+`entries/{entry_id}/chart?boundary_ordinal=DECIMAL`, and `analytics`.
+They expose `strategy-results/v1`, `strategy-market-cap/v1`, and
+`strategy-analytics/v1` presentation schemas. Existing summary/dashboard/
+roundtrip and copy-market-cap routes retain their original semantics.
+
 The Web UI is a thin, same-origin shell over the API and contains only the
 required screens:
 
@@ -4231,11 +4337,12 @@ sell-all semantics are shown read-only and are not duplicated by local
 spec-building logic. Discovery supplies the two execution-mode choices;
 selecting virtual settlement displays a persistent warning that output beyond
 observed real SOL is synthetic, can be reused by the simulated wallet, and is
-not evidence that the sale could execute on-chain. The `Sniping result` button on a
-committed run opens a dedicated same-origin dashboard for the exact Run
-artifact ID. Its cards and global SVG charts use only the bounded verified
-summary v3. Initial paint uses one typed combined summary-plus-page response;
-later arrows fetch round trips v4 in manual keyset pages of at most 200 rows.
+not evidence that the sale could execute on-chain. The `Results` button on a
+committed run opens the shared Strategy results screen for the exact Run
+artifact ID. Its summary cards use bounded verified summary v3; supplementary
+entry/exit/attempt distributions use the separate bounded analytical query.
+Initial paint uses one typed combined summary-plus-page response; later arrows
+fetch common entry views of round trips v4 in manual keyset pages of at most 200 rows.
 The default is 25, only the current row page is retained, and the dashboard does
 not automatically load every page. Search and alternate allowlisted sorts are
 explicitly page-local and do not change the canonical keyset order. The
@@ -4270,7 +4377,7 @@ unvalued-open count larger than open positions rejects the dashboard response.
 
 All listed screens and typed forms, including FeatureSet, Universe, LabelSet,
 train, ModelSchedule, and PredictionSet, are implemented in the packaged
-static UI. Jobs use adaptive bounded polling; runs refresh initially, manually,
+React UI. Jobs use adaptive bounded polling; runs refresh initially, manually,
 or after a run-producing job succeeds; resources use a slower independent timer. Events
 use a bounded cursor, while manifests and lineage use separate metadata
 endpoints. A generic JSON editor is not used.
@@ -4483,7 +4590,7 @@ exits require separate evidence.
   restore drill. If a durable Git remote does not preserve code inputs, a
   separate durable code/config/schema/lockfile archive is required.
 - Packaged UI/static assets and the shared loopback API implement submission,
-  progress, result/lineage queries, and the Sniping result dashboard. Browser
+  progress, result/lineage queries, and the shared Strategy results dashboard. Browser
   and subprocess lifecycle checks do not increase source fidelity.
 - Phase 7 contains a bounded FirstSwap optimized backend, restricted to its
   exact allowlist. It is not a general engine replacement or a source SLA.
@@ -4620,8 +4727,9 @@ satisfied:
   execution artifacts;
 - job pages use deterministic submitted-time order, while Run pages require a
   complete manifest-bound index and reverify the selected bounded artifacts;
-- the dashboard retains one bounded round-trip page, keeps alternate sort/search
-  page-local, and derives whole-run analytics only from the verified summary;
+- the dashboard retains one bounded result page, keeps alternate sort/search
+  page-local, and derives whole-run analytics from verified summaries or the
+  bounded read-only result reductions in section 34.2;
 - process-local verification evidence is bounded, invalidated by physical
   fingerprint changes, and never replaces filesystem authority;
 - adaptive polling does not repeatedly scan immutable result artifacts;

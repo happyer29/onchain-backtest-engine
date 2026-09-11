@@ -1,0 +1,81 @@
+{
+  "_value-SIcts_1p.js": {
+    "file": "assets/value-SIcts_1p.js",
+    "name": "value"
+  },
+  "index.html": {
+    "file": "assets/index-eYKSOCQW.js",
+    "name": "index",
+    "src": "index.html",
+    "isEntry": true,
+    "dynamicImports": [
+      "src/workspace.tsx",
+      "src/results.tsx",
+      "src/forms.tsx"
+    ],
+    "css": [
+      "assets/index-DMwyorpm.css"
+    ]
+  },
+  "src/charts.tsx": {
+    "file": "assets/charts-C9bv0L3y.js",
+    "name": "charts",
+    "src": "src/charts.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "index.html",
+      "_value-SIcts_1p.js",
+      "src/results.tsx"
+    ]
+  },
+  "src/forms.tsx": {
+    "file": "assets/forms-Bfa8P-FW.js",
+    "name": "forms",
+    "src": "src/forms.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "index.html",
+      "src/results.tsx",
+      "src/workspace.tsx"
+    ]
+  },
+  "src/lineage.tsx": {
+    "file": "assets/lineage-BMhf15Gs.js",
+    "name": "lineage",
+    "src": "src/lineage.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "index.html",
+      "_value-SIcts_1p.js",
+      "src/results.tsx"
+    ],
+    "css": [
+      "assets/lineage-DLioOiRN.css"
+    ]
+  },
+  "src/results.tsx": {
+    "file": "assets/results-DqO7DTzU.js",
+    "name": "results",
+    "src": "src/results.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "index.html"
+    ],
+    "dynamicImports": [
+      "src/charts.tsx"
+    ]
+  },
+  "src/workspace.tsx": {
+    "file": "assets/workspace-Ddn7fCKQ.js",
+    "name": "workspace",
+    "src": "src/workspace.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "index.html",
+      "src/results.tsx"
+    ],
+    "dynamicImports": [
+      "src/lineage.tsx"
+    ]
+  }
+}

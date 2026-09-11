@@ -322,7 +322,7 @@ Dataset/Snapshot/ReplayPack без source extraction и compile-replay.
   backtest/sweep, ML и Pump.fun Sniping forms, cursor-based progress polling,
   run comparison, artifact/lineage queries и resource status;
 - общий выбор темы «Тёплый закат» (по умолчанию) или исходной тёмной темы на
-  страницах Control и Sniping result. Закрытая browser-local настройка применяется
+  всех React-экранах. Закрытая browser-local настройка применяется
   до первой отрисовки и синхронизируется между вкладками; если browser storage
   недоступен, UI явно сообщает о выборе только для вкладки. Тема не входит в
   API commands, execution identity, result values или pagination;
@@ -354,9 +354,9 @@ Dataset/Snapshot/ReplayPack без source extraction и compile-replay.
   полной проверки и остаются fail closed;
 - Pump.fun run-contract discovery и exact result-query surface: bounded summary,
   keyset pages до 200 round trips, combined summary-plus-one-page projection,
-  соответствующие CLI-команды и отдельный packaged dashboard, открываемый из
-  `Sniping result`. Глобальные графики dashboard строятся только из verified
-  summary, а таблица вручную загружает bounded keyset-страницы, хранит только
+  соответствующие CLI-команды и общий React dashboard по кнопке `Results`.
+  Карточки используют verified summary, дополнительная аналитика — bounded
+  read-only scan по §34.2, а таблица вручную загружает bounded keyset-страницы, хранит только
   текущую страницу и не вычитывает весь result.
   Atomic amounts, boundary/time values и PnL проходят transport как decimal
   strings; browser не получает raw paths, Parquet или SQL. Новые runs
@@ -497,18 +497,50 @@ Copy-only receipt v3, inspection v6, DatasetSpec v6 и plan v5 использу�
 accounting gates. Reference-результаты Parquet и ReplayPack совпадают; fixtures
 проверяют реальные изменения batch/readahead Parquet и независимые повторы.
 
-Read-only дашборд Copy Buy на `/copy-results` показывает диаграммы сводки всего
-прогона и таблицу сигналов с ручной пагинацией. У каждой позиции открывается
-график маркеткапа из точного сохранённого canonical snapshot через application
-query port. Pump-проекция использует полную эмиссию и маржинальную цену virtual
-reserves после целых транзакционных групп, с округлением вниз до лампорта SOL.
-Сигнал лидера, исполненные вход/выход и неудачные/отклонённые попытки отмечены
-отдельно с точными chain coordinates. Линия заканчивается при completion или
-migration; история PumpSwap и USD отсутствует. Интерактивное чтение ограничено
-50 000 входных строк, 64 partitions, 64 MiB Parquet, 4 000 точек и шестью
-маркерами; одновременно допускается один scan с deadline пять секунд.
-Недоступная или слишком большая история возвращает явную ошибку, без усечения
-графика, новых сохранённых артефактов, запросов к индексеру и изменения replay.
+Интерфейс целиком построен на React/TypeScript. Sniping, Copy Buy и FirstSwap
+используют общий экран **Strategy results** с вкладками **Overview**, **Entries**,
+**Exits**, **Trades**, **Verification**. Язык по умолчанию — English независимо
+от языка браузера; **Language → Русский** включает перевод. В боковом меню
+отображается **onchain backtest engine**. Язык и оформление сохраняются локально,
+синхронизируются между вкладками и не сбрасывают введённые параметры, выбранную
+вкладку результата или открытую сделку. При запрете хранилища выбор действует
+только в текущей вкладке. Эти настройки не входят в команды и идентичность.
+
+Карточки используют проверенную сводку, дополнительные диаграммы — отдельный
+ограниченный запрос сохранённых результатов. Аналитика допускает до 100 000
+строк, 64 MiB файлов и декодированных записей, batch до 256 строк и 256 категорий;
+один scan имеет лимит пять секунд. Ошибки лимита, занятости и целостности не
+превращаются в частичную статистику. Сводка остаётся доступной независимо от
+дополнительного scan. FirstSwap не получает выдуманную политику PnL/round-trip;
+неприменимые показатели и недоступная история обозначаются явно.
+
+Таблица хранит одну страницу из 25 записей; API допускает до 200. Стрелки
+запрашивают следующую keyset-страницу, поиск и сортировка действуют внутри
+текущей страницы. Детали токена открываются в большом доступном overlay.
+Pump-график показывает маркеткап полной эмиссии по маржинальной цене virtual
+reserves, округлённый вниз до лампорта SOL, после целых транзакционных групп.
+Сигнал создателя/лидера, фактические вход/выход и неудачные/отклонённые попытки
+имеют отдельные маркеры и точные координаты. Линия заканчивается при completion
+или migration; нет USD-истории, PumpSwap или подмены котировки исполнения.
+**Around trade** / **Full history** меняет только локальный масштаб.
+
+История читается из точного сохранённого snapshot: до 10 миллионов входных строк
+(до 500 000 строк часов), 128 partitions, 1 GiB Parquet, 50 000 выбранных событий,
+4 000 выходных точек и шести маркеров. Один scan имеет deadline десять секунд.
+Выбор venue выполняется в ограниченных columnar batches до Python-декодирования.
+Сохраняются проверка committed bytes, manifest/schema/count под leases,
+selected-row digest, точные часы и канонический порядок. Это post-run проекция
+проверенного successful run; она не заменяет полную проверку replay при запуске.
+Недоступная или слишком большая история возвращает явную ошибку без усечения,
+нового артефакта или запроса к индексеру.
+
+Все экраны, typed prepare/backtest/sweep и шесть ML-форм принадлежат React.
+Radix, TanStack Query/Table, React Hook Form/Zod, Recharts и React Flow/dagre
+поставляются как статические browser assets; production Node process не нужен.
+Старые HTML/JS удалены; `/copy-results` и `/sniping-results` открывают тот же
+React shell. Existing result APIs совместимы. Application-owned запросы не
+меняют engine, стратегии, source fidelity, финансовую политику или artifact IDs.
+Same-origin/CSP, точные decimal strings/BigInt и bounded polling сохраняются.
 
 Live-допуск copy требует exact evidence для выбранных кошельков и среза
 источника. CLI и browser/API/queue прошли небольшой локальный технический
@@ -4002,6 +4034,52 @@ Response surfaces bounded и не возвращают executable envelopes:
 
 ### 34.2 Web UI
 
+Интерфейс целиком построен на React/TypeScript. Sniping, Copy Buy и FirstSwap
+используют общий экран **Strategy results** с вкладками **Overview**, **Entries**,
+**Exits**, **Trades**, **Verification**. Язык по умолчанию — English независимо
+от языка браузера; **Language → Русский** включает перевод. В боковом меню
+отображается **onchain backtest engine**. Язык и оформление сохраняются локально,
+синхронизируются между вкладками и не сбрасывают введённые параметры, выбранную
+вкладку результата или открытую сделку. При запрете хранилища выбор действует
+только в текущей вкладке. Эти настройки не входят в команды и идентичность.
+
+Карточки используют проверенную сводку, дополнительные диаграммы — отдельный
+ограниченный запрос сохранённых результатов. Аналитика допускает до 100 000
+строк, 64 MiB файлов и декодированных записей, batch до 256 строк и 256 категорий;
+один scan имеет лимит пять секунд. Ошибки лимита, занятости и целостности не
+превращаются в частичную статистику. Сводка остаётся доступной независимо от
+дополнительного scan. FirstSwap не получает выдуманную политику PnL/round-trip;
+неприменимые показатели и недоступная история обозначаются явно.
+
+Таблица хранит одну страницу из 25 записей; API допускает до 200. Стрелки
+запрашивают следующую keyset-страницу, поиск и сортировка действуют внутри
+текущей страницы. Детали токена открываются в большом доступном overlay.
+Pump-график показывает маркеткап полной эмиссии по маржинальной цене virtual
+reserves, округлённый вниз до лампорта SOL, после целых транзакционных групп.
+Сигнал создателя/лидера, фактические вход/выход и неудачные/отклонённые попытки
+имеют отдельные маркеры и точные координаты. Линия заканчивается при completion
+или migration; нет USD-истории, PumpSwap или подмены котировки исполнения.
+**Around trade** / **Full history** меняет только локальный масштаб.
+
+История читается из точного сохранённого snapshot: до 10 миллионов входных строк
+(до 500 000 строк часов), 128 partitions, 1 GiB Parquet, 50 000 выбранных событий,
+4 000 выходных точек и шести маркеров. Один scan имеет deadline десять секунд.
+Выбор venue выполняется в ограниченных columnar batches до Python-декодирования.
+Сохраняются проверка committed bytes, manifest/schema/count под leases,
+selected-row digest, точные часы и канонический порядок. Это post-run проекция
+проверенного successful run; она не заменяет полную проверку replay при запуске.
+Недоступная или слишком большая история возвращает явную ошибку без усечения,
+нового артефакта или запроса к индексеру.
+
+Все экраны, typed prepare/backtest/sweep и шесть ML-форм принадлежат React.
+Radix, TanStack Query/Table, React Hook Form/Zod, Recharts и React Flow/dagre
+поставляются как статические browser assets; production Node process не нужен.
+Старые HTML/JS удалены; `/copy-results` и `/sniping-results` открывают тот же
+React shell. Existing result APIs совместимы. Application-owned запросы не
+меняют engine, стратегии, source fidelity, финансовую политику или artifact IDs.
+Same-origin/CSP, точные decimal strings/BigInt и bounded polling сохраняются.
+
+
 Web UI является тонкой same-origin оболочкой над API и содержит только нужные экраны:
 
 - создать `prepare`, `backtest` или `sweep` job из typed form;
@@ -4031,9 +4109,9 @@ API `RunBacktestCommand`, canonicalized в durable `backtest.run-job/v2`, поэ
 Discovery предоставляет два execution-mode choices; virtual settlement
 показывает постоянное предупреждение, что output сверх observed real SOL
 является synthetic, может повторно использоваться simulated wallet и не
-доказывает on-chain исполнение продажи. Кнопка `Sniping result` у committed run
-открывает отдельный same-origin dashboard по exact Run artifact ID. Его cards и
-глобальные SVG-графики используют только bounded verified summary v3. Первый
+доказывает on-chain исполнение продажи. Кнопка `Results` у committed run открывает общий React dashboard по exact Run
+artifact ID. Карточки используют bounded verified summary v3, а дополнительные
+диаграммы — отдельный ограниченный read-only scan по §34.2. Первый
 paint получает один typed combined summary-plus-page response; следующие
 стрелки загружают round trips v4 ручными keyset-страницами максимум по 200 строк
 (25 по умолчанию). Dashboard хранит только текущую страницу и не загружает все
@@ -4274,7 +4352,7 @@ Sniping связаны end to end. Deployment-dependent phase exits требую
   drill. Если durable Git remote не сохраняет code inputs, нужен отдельный
   durable code/config/schema/lockfile archive.
 - Packaged UI/static assets и общий loopback API реализуют submission,
-  progress, result/lineage queries и Sniping result dashboard. Browser и
+  progress, result/lineage queries и общий React Strategy results dashboard. Browser и
   subprocess lifecycle checks не повышают source fidelity.
 - Phase 7 содержит bounded FirstSwap optimized backend, ограниченный exact
   allowlist. Это не general engine replacement и не source SLA.

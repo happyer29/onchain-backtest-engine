@@ -57,6 +57,37 @@ jobs:
       - name: Verify native architecture
         run: uv run python -c 'import platform; assert platform.machine() == "${{ matrix.machine }}"'
 
+      # Node is build/test tooling only; production serves the packaged same-origin assets.
+      - name: Install Node.js
+        uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+        with:
+          node-version: "24"
+          package-manager-cache: false
+
+      # The lockfile supplies exact browser dependencies on both native platforms.
+      - name: Install frozen React dependencies
+        run: npm ci --prefix frontend
+
+      - name: Check generated API contracts
+        run: |
+          npm --prefix frontend run generate
+          git diff --exit-code -- frontend/src/generated
+
+      # Component regressions replace the retired vanilla-DOM script assertions.
+      - name: Test and build React
+        run: |
+          npm --prefix frontend test
+          npm --prefix frontend run build
+          git diff --exit-code -- src/backtest/interfaces/web/static
+
+      - name: Install browser test runtime
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      # Every browser run owns fresh hermetic inputs and a single loopback controller.
+      - name: Verify React in browser
+        run: npm --prefix frontend run test:browser
+
       # Keep the hosted gate byte-for-byte aligned with the documented local gate.
       - name: Check formatting
         run: uv run ruff format --check src tests
@@ -76,8 +107,8 @@ jobs:
       # The standalone helper is release tooling outside the application/test source roots.
       - name: Check release helper
         run: |
-          uv run ruff format --check scripts/smoke-installed-wheel.py
-          uv run ruff check scripts/smoke-installed-wheel.py
+          uv run ruff format --check scripts/smoke-installed-wheel.py frontend/scripts
+          uv run ruff check scripts/smoke-installed-wheel.py frontend/scripts
 
       # Exercise package metadata, wheel contents and the installed CLI entry point.
       - name: Build distributions

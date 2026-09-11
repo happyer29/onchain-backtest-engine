@@ -6,16 +6,41 @@ Notable user-facing changes are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] — release candidate
+
+### Added
+
+- Pump.fun Copy Buy reference execution through CLI/API/Web UI: exact
+  `signing_wallet` purchases, one entry per token, fee-free price TP/SL and
+  maximum holding time, four sale attempts with two-second retry waits, and
+  separately verified source coverage and immutable position results.
+- A complete React/TypeScript workspace and shared Strategy results for Sniping,
+  Copy Buy and FirstSwap, with charts, entry/exit analytics and verified lineage.
+- English by default, optional Russian, local language/theme preferences and
+  the **onchain backtest engine** sidebar brand.
+- Pump trade overlays with retained SOL market-cap history, original signals,
+  actual filled entry/exit markers and distinct failed/rejected attempts.
+- Browser dependency license notices and documented interface screenshots
+  using isolated test fixtures.
+
+### Changed
+
+- Replaced the legacy HTML/JavaScript dashboards; existing bookmarks open React.
+- Chart selection now filters the selected venue in bounded columnar batches,
+  admitting up to 10 million snapshot rows and 1 GiB, with 4,000 output points.
+  Missing evidence and quota failures remain explicit; no source fallback occurs.
+- Updated public guides, package version and frontend CI; excluded private
+  operational notes, source inventories and local experiment reports.
+
+## [0.1.0]
+
+
 ### Added
 
 - Deterministic local replay from verified immutable Parquet snapshots, with
   optional ReplayPack acceleration.
 - Pump.fun Sniping with strict source-evidence admission and separate
   `EXOGENOUS_REPLAY` and `EXOGENOUS_VIRTUAL_SETTLEMENT` execution modes.
-- Pump.fun Copy Buy reference execution through CLI/API/Web UI: exact
-  `signing_wallet` purchases, one entry per token, fee-free price TP/SL and
-  maximum holding time, four sale attempts with two-second retry waits, and
-  separately verified source coverage and immutable position results.
 - Typed CLI and same-origin Web UI over a durable job queue with isolated child
   processes, cancellation, retry, and restart recovery.
 - Linux x86_64, macOS arm64, and Windows 11 through WSL2/Ubuntu profiles.
