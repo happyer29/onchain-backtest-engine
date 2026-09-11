@@ -41,8 +41,8 @@ def test_graph_assets_are_local_pinned_and_serve_under_unchanged_csp(tmp_path: P
     assert "unsafe-" not in csp
     # Historical research URLs use the exact same React shell and secure session boundary.
     assert response.text == client.get("/").text
-    assert 'id="__________cytoscape_stylesheet"' in response.text
-    assert "position: relative" in client.get("/static/graph-canvas.css").text
+    assert "__________cytoscape_stylesheet" not in response.text
+    assert client.get("/static/graph-canvas.css").status_code == 404
     page = _Scripts()
     page.feed(response.text)
     paths = [script["src"] for script in page.scripts]
@@ -60,6 +60,8 @@ def test_graph_assets_are_local_pinned_and_serve_under_unchanged_csp(tmp_path: P
     static_root = Path(web.__file__).parent / "static"
     scripts = list((static_root / "assets").glob("*.js"))
     assert any("local-modularity-20-v1" in script.read_text() for script in scripts)
+    assert any(script.name.startswith("layout.worker-") for script in scripts)
+    assert any("research-forceatlas2-120-v1" in script.read_text() for script in scripts)
     for script in scripts:
         assert client.get(f"/static/assets/{script.name}").content == script.read_bytes()
     for removed in (
@@ -73,9 +75,11 @@ def test_graph_assets_are_local_pinned_and_serve_under_unchanged_csp(tmp_path: P
         "vendor/cytoscape-3.34.3.min.js",
     ):
         assert client.get(f"/static/{removed}").status_code == 404
-    # The existing pinned renderer now participates in the locked frontend closure and notices.
+    # The approved renderer and worker dependencies have exact locked local notices.
     notices = client.get("/static/third-party-licenses.txt")
     assert notices.status_code == 200
-    assert "cytoscape @ 3.34.3" in notices.text
-    assert "The Cytoscape Consortium" in notices.text
+    assert "sigma @ 3.0.3" in notices.text
+    assert "@react-sigma/core @ 5.0.6" in notices.text
+    assert "graphology-layout-forceatlas2 @ 0.10.1" in notices.text
+    assert "cytoscape @" not in notices.text
     assert "Permission is hereby granted, free of charge" in notices.text

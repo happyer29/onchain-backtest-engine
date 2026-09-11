@@ -3,7 +3,10 @@
 On-chain research is integrated into the shared React workspace at `/research`.
 Existing artifact links, preparation/analysis, warnings, paged evidence and the
 three-level whole-result graph retain the §24.6 contract. The replaced research
-HTML and global DOM scripts are removed; Cytoscape.js is bundled locally.
+HTML and global DOM scripts are removed. The implemented §24.6 renderer replacement
+uses locally bundled Sigma.js/React Sigma, bounded worker layout, explicit
+display-only edge filtering and bounded saved navigation. Implementation status
+is recorded in deep-dive §3.4.
 
 Status: accepted as a synchronized overview
 
@@ -21,7 +24,7 @@ creates a verified immutable participant snapshot; local `research analyze`
 builds activity, shared-mint pairs and exact observation evidence in DuckDB.
 The same durable job/publication lifecycle and same-origin bounded dashboard
 apply. The page explains first purchases and their limitations; locally bundled
-Cytoscape.js adds zoom/pan/drag and accessible exact-pair evidence navigation
+Sigma.js/React Sigma adds zoom/pan/drag and accessible exact-pair evidence navigation
 within 25 page pairs / 50 nodes, without changing research identity.
 The §24.6 whole-result mode adds up to 200,000 pairs / 5,000 participating
 wallets: bounded sequential loading, progress/cancellation, exact completeness

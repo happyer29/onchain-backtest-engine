@@ -113,7 +113,8 @@ def _verify_http(port: int, package_root: Path) -> None:
     assert "third-party-licenses.txt" in assets
     assert 'lang="en"' in (static / "index.html").read_text(encoding="utf-8")
     assert not (static / "app.js").exists() and not (static / "copy-results.html").exists()
-    assert "graph-canvas.css" in assets
+    assert "graph-canvas.css" not in assets
+    assert any("layout.worker-" in asset for asset in assets)
     for obsolete in (
         "research.html",
         "research.js",
@@ -123,8 +124,8 @@ def _verify_http(port: int, package_root: Path) -> None:
         "vendor",
     ):
         assert not (static / obsolete).exists(), obsolete
-    assert 'id="__________cytoscape_stylesheet"' in (static / "index.html").read_text()
-    assert "cytoscape @ 3.34.3" in (static / "third-party-licenses.txt").read_text()
+    assert "__________cytoscape_stylesheet" not in (static / "index.html").read_text()
+    assert "sigma @ 3.0.3" in (static / "third-party-licenses.txt").read_text()
     routes.update({f"/static/{name}": name for name in assets})
     # Byte equality catches a missing, stale or incorrectly routed packaged asset.
     for route, name in routes.items():

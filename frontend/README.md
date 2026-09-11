@@ -24,7 +24,8 @@ or runtime dependency was added.
 | TanStack Table | Semantic table rendering with explicitly page-local search/sort |
 | Recharts | Distributions, fees/funding and causal Pump history with exact accessible values |
 | React Flow + dagre | Bounded verified lineage with a keyboard-accessible text alternative |
-| Cytoscape.js 3.34.3 | Existing research canvas, now bundled as an ESM dependency with React-owned controls |
+| Sigma.js 3.0.3 / React Sigma 5.0.6 | WebGL research projection with React-owned lifetime |
+| Graphology 0.26.0 / ForceAtlas2 0.10.1 | Display structure and fixed bounded worker coordinates |
 | lossless-json | Round-trip wide JSON integers when forwarding server-resolved specifications |
 
 Native `<dialog>` provides the large detail overlay, inert background and
@@ -94,21 +95,27 @@ observed signers. Completed research jobs link to verified output both on this
 page and in the shared queue. Token-mode selection, missing-creation warnings,
 all paged tables, exact-pair purchases and lineage preserve deep-dive §24.6.
 
-React owns the entire UI and renderer lifecycle. The old standalone HTML,
-CSS/global DOM controllers and vendor script are removed. The already admitted
-Cytoscape version remains unchanged: npm packaging replaces vendoring, not the
-analytical engine or grouping algorithm. The complete result stays in one
-bounded display model; only the current overview/group/wallet projection enters
-the canvas. Recharts and React Flow retain their existing strategy/lineage roles.
-The representative comparison is in [research capacity](../docs/research-capacity.md#react-workspace-integration-2026-09-11).
+React owns the entire UI and renderer lifecycle. Sigma/React Sigma replaces
+Cytoscape; old vendor/container CSS assets are removed. Graphology represents
+only the active projection; the authoritative bounded pair/group model and exact
+ordinals remain unchanged. Recharts and React Flow keep strategy/lineage roles.
 
-The required Cytoscape container rule is an actual external
-`public/graph-canvas.css` link with the library's recognized stylesheet ID.
-This prevents runtime inline-style injection without relaxing CSP. Vite's
-message that `/static/graph-canvas.css` resolves at runtime is expected: the
-public asset is copied into the wheel, and API/browser/installed-wheel tests
-verify its contents and effect. The graph has a local React error boundary, so
-a missing optional chunk cannot hide verified purchase evidence or forms.
+`layout.worker.ts` is emitted as a same-origin static module. It receives only
+bounded numeric ForceAtlas2 matrices, runs the fixed120-iteration policy and
+returns finite coordinates; no Blob/eval worker, remote network or production
+Node process is used. The unchanged CSP permits this worker through its
+`script-src 'self'` fallback. Cancellation/timeouts/replacement terminate it.
+The equivalent public ForceAtlas2 oracle and malformed/aborted worker tests
+protect the pinned matrix adapter. Only a fully constructed and mounted current
+generation is labelled ready; worker/WebGL errors leave exact tables available.
+
+The display filter preserves group membership and table/recipe semantics;
+matching crossing and internal counters/inspectors reconcile. Camera/coordinate
+LRU holds eight snapshots (5000 float pairs each), without graph/edge copies;
+view history holds sixteen entries. Scope replacement releases all display state.
+Renderer styles are external; its small theme-aware hover painter keeps labels
+readable in warm/dark themes. No inline style sheet or CSP exception is injected.
+See [capacity evidence](../docs/research-capacity.md#sigma-renderer-2026-09-11).
 
 `npm test` also runs the original bounded loader/grouping oracles. Their pure
 JavaScript modules are unchanged apart from ESM exports and have explicit

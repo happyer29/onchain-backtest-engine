@@ -83,7 +83,8 @@ evidence is explicitly unavailable. Neither is invented.
 On-chain research is integrated into the shared React workspace at `/research`.
 Existing artifact links, preparation/analysis, warnings, paged evidence and the
 three-level whole-result graph retain the §24.6 contract. The replaced research
-HTML and global DOM scripts are removed; Cytoscape.js is bundled locally.
+HTML and global DOM scripts are removed. Sigma.js/React Sigma is bundled locally
+with bounded worker layout, a display-only strength filter and saved navigation.
 
 | Capability | Current contract |
 |---|---|
@@ -126,7 +127,7 @@ changing or rebuilding the UI: `npm --prefix frontend ci`,
 
 ## Interface preview
 
-The screenshots below use the browser test fixtures, not a live portfolio or
+The strategy screenshots below use the browser test fixtures, not a live portfolio or
 profitability claim. They show the shared interface in English with **Appearance → Dark** selected.
 
 ![Shared strategy results in the dark theme, including valuation and entry distributions](docs/assets/strategy-results.png)
@@ -135,6 +136,14 @@ profitability claim. They show the shared interface in English with **Appearance
 
 The same tabs serve Sniping, Copy Buy and FirstSwap. Available metrics reflect
 each strategy's verified result contract; unsupported metrics stay explicit.
+
+### Wallet relationship graph
+
+![Sigma graph of 78 wallet groups, with relationship filtering and navigation into individual groups](docs/assets/research-graph.png)
+
+The research overview shows a saved sample of 150,233 wallet pairs across 2,752
+wallets. Open a group, inspect a wallet's neighbours, or filter weaker links by
+shared-token count. These are observed co-purchases, not proof of common ownership.
 
 ## How it works
 
@@ -240,7 +249,7 @@ detailed examples are collected in the [CLI reference](docs/cli-reference.md).
 The `/research` dashboard and `backtest research` CLI implement bounded
 Pump.fun signing-wallet activity, shared-token purchase pairs and original
 trade evidence over immutable local snapshots. The page explains first buys
-per wallet/token and missed later coincidences. Its locally bundled Cytoscape.js
+per wallet/token and missed later coincidences. Its locally bundled Sigma.js/React Sigma
 graph supports zoom, pan, node dragging, selection and purchase drilldown for
 the current page (at most 25 pairs / 50 nodes) or an explicitly selected whole
 result (up to 200,000 pairs / 5,000 participating wallets). The full graph has
@@ -248,7 +257,11 @@ progress/cancellation, exact completeness checks, wallet search and paginated
 neighbours; it persists when the table changes page. Three levels show visual
 groups → wallets within a group → every neighbour of a wallet, including
 cross-group pairs. Counts reconcile to the entire result; grouped lines expose
-all original pairs. Visual groups do not establish ownership or coordination.
+all original pairs. A bounded ForceAtlas2 worker arranges nodes by connections.
+A display-only shared-token threshold reports shown/hidden pairs without changing
+the result or groups. Back restores retained coordinates and camera; zoom reveals
+labels and focus highlights a wallet. Visual groups do not establish ownership
+or coordination.
 Research v2 snapshots also store bounded same-source creation classifications.
 Tokens with an empty creation signature are excluded from both analysis modes;
 visible warnings list every affected mint and its source-row count through

@@ -151,7 +151,7 @@ controller.
 | Purchase evidence | Mint and both original purchases, including full signatures, signers and fee payers |
 | Lineage | The exact retained input snapshot |
 
-The bundled Cytoscape.js graph supports wheel/pinch zoom, canvas panning and
+The bundled Sigma.js/React Sigma graph supports wheel/pinch zoom, canvas panning and
 node dragging. Use Fit to restore the viewport, Reset layout to undo manual
 positions, and Expand for more space. The default **Текущая страница** mode
 uses the table cursor and replaces its graph when the table changes page.
@@ -202,14 +202,31 @@ the full multilevel Louvain algorithm or a claim of optimality. The page reports
 whether moves stopped or the sweep cap was reached. Group numbers are local
 to this result and implementation; they are not persistent owner IDs.
 
-Colours indicate visual groups. Large group views use rings, placing wallets
-with more internal links nearer the centre; small views use the existing
-bounded CoSE layout. Wallet views keep the selected wallet at the centre and
-place neighbours by group. Distances are not similarity measurements. No group,
-position or label establishes common ownership, coordinated trading,
-statistical significance or a profitable strategy. This is the complete selected
-result, not every connection in the market. The table remains available when
-the graph library is unavailable or full-view admission fails.
+Colours indicate visual groups. A fixed, bounded ForceAtlas2 layout runs in
+one same-origin worker (120 iterations, 30 seconds including projection/mount).
+The selected wallet stays fixed while its neighbours are arranged by links.
+Labels become visible on zoom; hover/focus highlights related nodes and pairs.
+Distances are not similarity measurements. No group, position or label establishes
+common ownership, coordination, statistical significance or a profitable strategy.
+This is the complete selected result, not every connection in the market.
+
+**Показывать пары: минимум общих токенов** is a display-only threshold. For
+example, 5 hides pairs with fewer than five shared tokens. It does not create
+a new analysis, regroup wallets or change the tables. The page explicitly reports
+shown + hidden = total, both for the loaded scope and current view; overview
+counts and pair lists use the same display filter. Every wallet remains searchable,
+including wallets isolated by the filter. **Показать все связи** restores all
+pairs without fetching the result again. Mayhem mode remains an analysis
+parameter, independently of this visual filter.
+
+**Назад к предыдущему виду** restores retained coordinates, manual node positions
+and camera/zoom. The scope keeps at most eight coordinate/camera snapshots and
+sixteen history entries, without retaining inactive renderers or edge copies.
+Older evicted views receive a fresh layout. Scope/result replacement clears this
+memory. **На весь экран** opens the graph workspace in browser fullscreen;
+**Развернуть граф** remains available where fullscreen is unsupported.
+Worker errors, cancellation, timeout, and missing/lost WebGL report a graph
+error with retry; the verified tables and purchase evidence remain usable.
 
 The evidence total sums pair/mint contributions; it is not a market-wide
 distinct-token count. Activity deliberately retains duplicate source rows.

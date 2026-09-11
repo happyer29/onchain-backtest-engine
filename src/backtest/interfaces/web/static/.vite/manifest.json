@@ -1,6 +1,6 @@
 {
-  "_forms-DnyM6BtN.js": {
-    "file": "assets/forms-DnyM6BtN.js",
+  "_forms-C4Q2bufV.js": {
+    "file": "assets/forms-C4Q2bufV.js",
     "name": "forms",
     "imports": [
       "index.html",
@@ -13,7 +13,7 @@
     "name": "value"
   },
   "index.html": {
-    "file": "assets/index-B-rtlwqg.js",
+    "file": "assets/index-DaAanU3U.js",
     "name": "index",
     "src": "index.html",
     "isEntry": true,
@@ -21,14 +21,14 @@
       "src/research/page.tsx",
       "src/workspace.tsx",
       "src/results.tsx",
-      "_forms-DnyM6BtN.js"
+      "_forms-C4Q2bufV.js"
     ],
     "css": [
-      "assets/index-MHU8jE1h.css"
+      "assets/index-BZBCwnVR.css"
     ]
   },
   "src/charts.tsx": {
-    "file": "assets/charts-Y9Rps1gw.js",
+    "file": "assets/charts-BuOCTe0f.js",
     "name": "charts",
     "src": "src/charts.tsx",
     "isDynamicEntry": true,
@@ -39,7 +39,7 @@
     ]
   },
   "src/lineage.tsx": {
-    "file": "assets/lineage-D708l1Au.js",
+    "file": "assets/lineage-CrkCssyC.js",
     "name": "lineage",
     "src": "src/lineage.tsx",
     "isDynamicEntry": true,
@@ -53,21 +53,24 @@
     ]
   },
   "src/research/graph.tsx": {
-    "file": "assets/graph-h_dVIWW4.js",
+    "file": "assets/graph-cLO7UT2j.js",
     "name": "graph",
     "src": "src/research/graph.tsx",
     "isDynamicEntry": true,
     "imports": [
       "index.html"
+    ],
+    "assets": [
+      "assets/layout.worker-CFsaXSMB.js"
     ]
   },
   "src/research/page.tsx": {
-    "file": "assets/page-BKs83tIA.js",
+    "file": "assets/page-DPgHZb4Z.js",
     "name": "page",
     "src": "src/research/page.tsx",
     "isDynamicEntry": true,
     "imports": [
-      "_forms-DnyM6BtN.js",
+      "_forms-C4Q2bufV.js",
       "index.html",
       "src/results.tsx",
       "src/workspace.tsx"
@@ -77,7 +80,7 @@
     ]
   },
   "src/results.tsx": {
-    "file": "assets/results-DzCuNmYI.js",
+    "file": "assets/results-DIhZWsTe.js",
     "name": "results",
     "src": "src/results.tsx",
     "isDynamicEntry": true,
@@ -89,7 +92,7 @@
     ]
   },
   "src/workspace.tsx": {
-    "file": "assets/workspace-CzgCvO3-.js",
+    "file": "assets/workspace-BZcLhVgA.js",
     "name": "workspace",
     "src": "src/workspace.tsx",
     "isDynamicEntry": true,

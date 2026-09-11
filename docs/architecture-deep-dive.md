@@ -286,7 +286,7 @@ re-extraction or ReplayPack recompilation.
   requires a fresh preparation. The source-row layout and Sniping are unchanged.
   The slice also provides a CLI and same-origin `/research` dashboard. The page explains first BUY per
   signer/mint within the snapshot, including missed later co-buys, and ships
-  pinned local Cytoscape.js with zoom/pan/drag, accessible selection and exact
+  pinned local Sigma.js/React Sigma with zoom/pan/drag, accessible selection and exact
   pair-evidence navigation. Graph scope is either 25 page pairs / 50 nodes or
   an opt-in whole result up to 200,000 pairs / 5,000 participating wallets.
   The latter loads verified pages with progress, cancellation and exact
@@ -296,7 +296,10 @@ re-extraction or ReplayPack recompilation.
   groups, a group’s complete internal graph with external-pair drilldown, and
   a wallet’s global neighbours, with optional neighbour-to-neighbour pairs.
   Internal/cross-group totals reconcile, grouping is bounded and deterministic,
-  and only the active projection enters Cytoscape. Signer/payer roles and duplicate
+  and only the active projection enters Sigma. A bounded ForceAtlas2 worker
+  arranges nodes by relationships; display-only strength filtering reports shown
+  and hidden exact pairs, and bounded navigation restores positions/camera.
+  Worker/WebGL failures preserve tables and evidence. Signer/payer roles and duplicate
   multiplicity are preserved; completeness, finality, source consistency and
   causal availability remain `UNKNOWN`. Hermetic source contracts and isolated
   CLI/API execution are verified; the real-browser workflow and installed-wheel
@@ -3229,12 +3232,44 @@ ownership checks. The existing 180-second initial deadline includes grouping;
 each later projection has a cancellable 30-second deadline. No partial
 projection is labelled complete, and a rejected projection releases its canvas
 while retaining the verified model for another navigation attempt. Scope/result
-replacement discards both. Only the active projection enters Cytoscape. Large
-projections use deterministic geometric rings ordered by local degree (or
-visual group for wallet neighbours), with the selected wallet at the centre;
-small projections may use the existing finite CoSE layout, bounded to 150 nodes,
-1,000 edges and 400 iterations. Layout is not a measured distance or importance
-score. No new analytical engine, source query or server process is introduced.
+replacement discards both. Only the active projection enters the pinned
+Sigma.js/React Sigma WebGL renderer. The user-approved replacement uses
+Graphology only as a browser display structure and ForceAtlas2 only for node
+coordinates; it adds no Python analytical engine, source query or server process.
+The `research-forceatlas2-120-v1` presentation layout uses canonical node/edge
+order, deterministic non-coincident initial coordinates, positive stored
+weights, fixed settings and at most 120 iterations. Barnes-Hut approximation
+is explicit for large views. It runs in one same-origin static module worker
+under the existing script CSP, with no blob/eval worker, network calls or
+runtime source text. A fresh projection retains only its compact numeric
+worker buffers until completion. The projection's 30-second deadline also
+bounds layout and mounting; abort/replacement terminates the worker and releases
+WebGL resources. Nonfinite output, worker failure, missing/lost WebGL or a
+budget failure produces a visible graph error while exact tables/evidence
+remain available. No partial projection is presented as complete. Coordinates
+are visual aids, not measured similarity, importance or an analytical artifact.
+
+A closed positive shared-token threshold is a **display filter** over the
+already complete result. It does not regroup wallets, recalculate the research
+recipe or change committed tables. All nodes remain represented, including
+those isolated by the filter. Every wallet-pair edge is shown exactly when its
+stored shared-mint count meets the threshold. An overview edge represents only
+the matching crossing pairs; zero-count edges are hidden. The page reports
+shown/hidden exact-pair counts separately from total result counts; group
+internal/crossing counts and paginated pair inspectors reconcile to the chosen
+display filter. Clearing the filter restores every pair without another fetch.
+The pair identity and purchase-evidence mapping remain exact. Search can still
+find every loaded wallet, even when its incident edges are hidden.
+
+Reversible graph navigation may retain at most eight coordinate/camera snapshots
+and sixteen view-history entries for the current loaded scope. Coordinate
+snapshots include the four normalization-bound scalars needed to restore dragging
+and use at most 5000 x/y float pairs each, without copied edge tables or
+inactive renderer instances. Only retained views restore their exact previous
+camera and dragged positions; an evicted view is rebuilt explicitly. Scope or
+artifact replacement releases the complete cache and history. Semantic zoom,
+hover/focus highlighting, node dragging, and same-page fullscreen controls are
+presentation only.
 
 Search and selection operate on all participating wallets and their complete
 incident connections in the loaded scope. Inspector controls are separately
@@ -4597,9 +4632,9 @@ React owns every screen and typed form; legacy scripts/HTML have been removed.
 The §24.6 research workflow belongs to this same React shell at `/research`;
 historical `?artifact=` links select the same exact immutable snapshot/result.
 React owns research forms, durable-job feedback, tables, warnings, evidence,
-search, graph controls and component lifecycle. The existing pinned Cytoscape.js
-3.34.3 canvas renderer and bounded display algorithms are bundled as local
-frontend modules; no standalone research HTML, global DOM controller, CDN,
+search, graph controls and component lifecycle. The approved Sigma.js 3.0.3 / React Sigma 5.0.6 renderer, Graphology 0.26.0
+display structure and ForceAtlas2 0.10.1 layout are bundled as local frontend
+modules, with a bounded same-origin layout worker; no standalone research HTML, global DOM controller, CDN,
 second application shell or additional analytical dependency remains. Research
 keeps its own §24.6 table/whole-graph bounds and observation semantics; it does
 not pass through strategy result decoding or alter source/engine admission.

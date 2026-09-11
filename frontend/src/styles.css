@@ -71,3 +71,12 @@ input, select, textarea { color: var(--text); background: var(--background); bor
 .research-graph-panel details { margin-block: 16px; }
 @media (max-width: 1100px) { .research-graph-workspace { grid-template-columns: minmax(0,1fr); } .research-inspector { max-height: 460px; } }
 @media (max-width: 800px) { .research-forms { grid-template-columns: minmax(0,1fr); } .research-open { flex-direction: column; align-items: stretch; } .research-canvas { height: 440px; } .research-explorer.expanded .research-canvas { min-height: 500px; } }
+/* Sigma receives only an active projection; all presentation styles are external and theme-aware. */
+.research-sigma, .research-sigma .sigma-container { position: relative; width: 100%; height: 100%; }
+.research-sigma canvas { position: absolute; inset: 0; }
+.research-filter { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; margin-block: 20px 10px; }
+.research-filter label { display: grid; gap: 8px; max-width: 340px; }
+.research-explorer:fullscreen { padding: 24px; background: var(--background); overflow: auto; }
+.research-explorer:fullscreen .research-canvas { height: 68vh; }
+.research-explorer:fullscreen .research-inspector { max-height: 68vh; }
+.research-explorer button[aria-current='step'], .research-graph-panel button[aria-pressed='true'] { border-color: var(--accent); background: var(--accent-soft); }

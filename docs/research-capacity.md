@@ -423,3 +423,79 @@ tests deselected), TypeScript/build, React/core and loader/model tests, browser
 flows, and a wheel installed in an isolated environment. The external container
 stylesheet avoids Cytoscape's inline-style injection under the original CSP.
 All previous snapshot/analysis versions retain their meaning and failure rules.
+
+## Sigma renderer — 2026-09-11
+
+The user-approved §24.6/§34.2 replacement uses Sigma.js 3.0.3,
+React Sigma 5.0.6, Graphology 0.26.0 and ForceAtlas2 0.10.1. These are static
+browser display dependencies; DuckDB, the research recipe, exact artifacts,
+local-modularity-20-v1 grouping, and source/execution admission are unchanged.
+The measured gap was interaction with a complete dense projection: Cytoscape's
+canvas handled a series of thirty pan movements much more slowly than Sigma's
+WebGL renderer on this retained workload. This is evidence for this UI replacement,
+not a claim that every layout or initial load is faster.
+
+The exact retained v2 NON_MAYHEM result is
+`59d707f189ed6f4b23d0fe88a25752e0ba257ef446f51dcf570938dc80e98d93`:
+150,233 pairs, 2,752 participating wallets, 78 groups, 72,839 internal plus 77,394
+crossing pairs and 217 group links. Group 1 has 644 wallets and 26,850 internal pairs.
+The selected wallet `1226SFXHBzN68gdPQ12axA8Qa5ynHqQhrbSN8JJuygkJ`
+has 37 incident pairs. Both interfaces reported identical counts at all three
+levels and read the same 753 bounded pair pages (one initial 25-row page, then
+752 whole-result pages). No ClickHouse request or new analysis was performed.
+
+Three fresh headless Chrome 152.0.7977.84 processes per version ran sequentially
+at 1440×1000 on macOS arm64, controlled by Node 24.15.0/Playwright. Baseline assets
+come from local commit 4996789, fulfilled through the browser test router while
+using the same live loopback API/session/CSP. The new assets come from the final
+Sigma build. No project test suite ran during these six trials. Measurements
+wait for the exact ready group counters and two animation frames; an earlier
+selector that could see an outgoing inspector was rejected and the trials rerun.
+
+| Median measurement | Cytoscape at 4996789 | Sigma |
+| --- | ---: | ---: |
+| Full load, grouping and overview, seconds | 8.458 | 8.885 |
+| Open complete group 1, seconds | 2.158 | 0.810 |
+| Thirty sequential pointer moves while panning, seconds | 4.611 | 0.524 |
+| Zoom-in and Fit controls, milliseconds | 89.0 | 76.1 |
+| Open 37-neighbour wallet, milliseconds | 229.8 | 313.3 |
+| Group 1 summed process-tree RSS, bytes | 1,297,186,816 | 971,751,424 |
+| Group 1 summed physical footprint, bytes | 1,064,068,432 | 834,086,176 |
+| Wallet-view summed physical footprint, bytes | 1,372,530,192 | 862,299,424 |
+
+Opening group 1 is approximately 2.66× faster and the thirty-event
+interaction completes approximately 8.79× faster in this setup. The initial full load
+and the small wallet transition are slightly slower. Median RAF spacing during
+panning remains around 16.6ms in both; the pointer-sequence measurement is **not**
+an 8.8× FPS claim. The complete group keeps every pair, without top-k omission.
+
+At the final phase, summed process-tree kernel page-ins range 33–366 before and
+34–307 after; disk bytes read range 991,232–9,789,440 before and 860,160–9,113,600
+after; writes range 2,605,056–2,613,248 before and 2,592,768–2,605,056 after.
+These are cumulative Chrome-tree counters, not server I/O or portable
+minor/major page-fault counts. RSS can double-count shared pages across processes;
+footprint is a sampled OS measure, not a continuous peak. Host `vm_stat` showed
+zero swap-outs but 0–52 swap-ins per baseline trial and 20–198 per Sigma trial.
+Those are host-wide counts with other applications present, so this is not a
+no-swap/cold-cache/production capacity guarantee. OS/disk caches were not reset.
+
+The display threshold is independent of the analysis recipe: at 5 shared tokens,
+6,560 of 150,233 pairs remain shown; at 10, 539 remain. Clearing the filter restores
+all 150,233 without another pair fetch. Existing groups and every searchable
+wallet remain; exact shown/hidden, internal/crossing and current-view counts
+reconcile. ForceAtlas2 runs 120 fixed iterations in a single statically bundled
+worker within the 30-second projection deadline. Error/cancel/replacement
+terminates the worker; missing/lost WebGL leaves tables/evidence available.
+Eight coordinate/camera/bounds snapshots and sixteen navigation entries bound
+view restoration; inactive renderers and edge copies are not retained.
+
+Validation: 59 Vitest tests plus 20 unchanged loader/grouping tests; 14 full Chrome
+scenarios covering existing strategy screens and research, with the final 8
+research scenarios rerun after navigation-state completion. The browser tests
+exercise worker/CSP failures and retry, actual edge picking, display filters,
+exact purchase evidence, and pixel-identical restoration after dragging.
+The repository gate passes 1603 Python tests at 81.40% coverage; one explicit live
+ClickHouse test is skipped and three opt-in performance tests are deselected.
+Frozen npm/uv installation, local wheel build, and installed CLI/API/static-worker
+verification complete the packaging gate. Original and v2 research artifacts
+retain their meanings and identities.
