@@ -103,12 +103,16 @@ test('React resolves and submits a typed FirstSwap run to a real isolated child'
   await page.getByRole('button', { name: 'Run strategy', exact: true }).click();
   expect((await resolution).status()).toBe(200);
   const response = await submission; expect(response.ok()).toBe(true);
-  const job = await response.json();
-  // Supervisor progress and final publication must complete independently of the launch page.
-  await expect(page.getByText('Job queued')).toBeVisible();
-  await expect.poll(async () => (await (await page.request.get(`/api/v1/jobs/${job.job_id}`)).json()).state, { timeout: 20_000 }).toBe('SUCCEEDED');
-  const events = await (await page.request.get(`/api/v1/jobs/${job.job_id}/events?limit=50`)).json();
+  // Read the receipt consumed by React; Chromium may discard the DevTools response body.
+  const receipt = page.getByRole('status').filter({ hasText: 'Job queued' });
+  await expect(receipt).toBeVisible();
+  const jobId = await receipt.locator('code').innerText();
+  expect(jobId).not.toBe('');
+  // Verify the exact displayed job reaches publication and has real supervisor progress.
+  await expect.poll(async () => (await page.request.get(`/api/v1/jobs/${jobId}`)).json(), { timeout: 20_000 }).toMatchObject({ job_id: jobId, state: 'SUCCEEDED' });
+  const events = await (await page.request.get(`/api/v1/jobs/${jobId}/events?limit=50`)).json();
   expect(events.items.some((event: { event_type: string }) => event.event_type === 'ATTEMPT_PROGRESS')).toBe(true);
+  // Queue navigation follows the visible receipt only after the submitted job is verified.
   await page.getByRole('link', { name: 'Open queue' }).click();
   await expect(page.getByRole('heading', { name: 'Job queue' })).toBeVisible();
 });
