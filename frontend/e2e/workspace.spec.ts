@@ -43,13 +43,24 @@ test('single-page launch controls, dark persistence and mobile navigation', asyn
   await expect(page.getByText(/Synthetic mode:/)).toBeVisible();
   await page.getByRole('button', { name: /Execution resources/ }).click();
   await expect(page.getByLabel('Run backend', { exact: true })).toHaveValue('reference-pumpfun-copy-buy-v1');
-  await page.getByLabel('Appearance').selectOption('dark'); await page.reload();
+  // Preferences are collapsed initially while attribution remains directly visible.
+  await expect(page.getByLabel('Appearance')).toBeHidden();
+  await expect(page.getByRole('link', { name: 'happyer29', exact: true })).toBeInViewport();
+  await page.getByRole('button', { name: 'Settings', exact: true }).press('Enter');
+  await page.getByLabel('Appearance').selectOption('dark');
+  // Keyboard dismissal returns focus without resetting the selected theme.
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: 'Settings', exact: true })).toBeFocused();
+  await expect(page.getByLabel('Appearance')).toBeHidden();
+  await page.reload();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-  // Small screens expose the same navigation without horizontal page overflow.
-  await page.setViewportSize({ width: 390, height: 844 });
+  // A short mobile menu keeps the author visible while its navigation can scroll.
+  await page.setViewportSize({ width: 390, height: 667 });
   await page.getByRole('button', { name: 'Open menu' }).click();
+  await expect(page.getByRole('link', { name: 'happyer29', exact: true })).toBeInViewport();
   await page.getByRole('link', { name: 'Strategy results', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Strategy runs' })).toBeVisible();
+  // Closing the mobile menu restores the normal page geometry.
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: 'test-results/mobile-dark.png', fullPage: true });
 });
@@ -126,13 +137,17 @@ test('English default, persistent Russian choice and cross-tab synchronization',
   // Changing presentation must preserve exact field values without submitting a command.
   await expect(page.getByText('Contract ready', { exact: true })).toBeVisible();
   await page.locator('[name="gross_buy_budget_lamports"]').fill('123456789');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByLabel('Language', { exact: true }).selectOption('ru');
   await expect(page.getByRole('heading', { name: 'Запуск стратегии' })).toBeVisible();
+  // Translating the settings panel leaves the active form and its values mounted.
   await expect(page.locator('[name="gross_buy_budget_lamports"]')).toHaveValue('123456789');
   // A new tab uses the stored choice; switching either tab updates the other in place.
   const second = await context.newPage();
   await second.goto('/');
   await expect(second.locator('html')).toHaveAttribute('lang', 'ru');
+  await second.getByRole('button', { name: 'Настройки', exact: true }).click();
+  // Changing the second tab also updates the open settings panel in the first tab.
   await second.getByLabel('Язык', { exact: true }).selectOption('en');
   await expect(page.getByRole('heading', { name: 'Launch strategy' })).toBeVisible();
   await expect(page.locator('[name="gross_buy_budget_lamports"]')).toHaveValue('123456789');
