@@ -44,6 +44,11 @@ function LanguageControl() {
   return <div className="theme-control"><label htmlFor="language-select">{t('Language')}</label><select id="language-select" value={locale} onChange={event => setPersistent(setLocale(event.target.value === 'ru' ? 'ru' : 'en'))}><option value="en">English</option><option value="ru">Русский</option></select>{!persistent && <small role="status">{t('The language applies to this tab; storage is unavailable.')}</small>}</div>;
 }
 
+// Attribution is shared by every route and keeps the current dashboard open when followed.
+function AuthorCredit() {
+  return <p className="author-credit">{t('Made by')} <a href="https://github.com/happyer29" target="_blank" rel="noopener noreferrer">happyer29</a></p>;
+}
+
 // The shell keeps local navigation and preferences separate from durable execution.
 function Shell() {
   useLocale();
@@ -53,7 +58,7 @@ function Shell() {
   // Navigation never clears the durable queue or triggers new execution implicitly.
   return <div className="app-shell"><a className="skip-link" href="#main">{t("Skip to content")}</a><aside className={`sidebar ${menu ? 'is-open' : ''}`}><Link className="brand" to="/"><span><Activity size={24} /></span><div>onchain backtest engine<small>STRATEGY WORKSPACE</small></div></Link>
     <div className="sidebar-label">{t("Workspace")}</div><nav aria-label={t("Main navigation")}>{navigation.map(item => <NavLink key={item.to} to={item.to} end={item.to === '/'}><item.icon size={18} /><span>{t(item.label)}</span></NavLink>)}</nav>
-    <div className="sidebar-bottom"><div className="local-badge"><span /> {t("Local execution")}</div><ThemeControl /><LanguageControl /><p>{t("Verified data.")}<br />{t("Reproducible results.")}</p></div></aside>
+    <div className="sidebar-bottom"><div className="local-badge"><span /> {t("Local execution")}</div><ThemeControl /><LanguageControl /><p>{t("Verified data.")}<br />{t("Reproducible results.")}</p><AuthorCredit /></div></aside>
     <div className="main-shell"><header className="topbar"><Button className="menu-button" aria-label={menu ? t("Close menu") : t("Open menu")} aria-expanded={menu} onClick={() => setMenu(!menu)}>{menu ? <X size={19} /> : <Menu size={19} />}</Button><div className="breadcrumb">Workspace <span>/</span> <strong>{t(navigation.find(item => item.to === location.pathname)?.label ?? 'Results and details')}</strong></div><Link to="/launch" className="topbar-action">{t("New run")} <ArrowUpRight size={15} /></Link></header>
       <main id="main" tabIndex={-1}><Boundary key={location.pathname}><Suspense fallback={<Loading />}><Outlet /></Suspense></Boundary></main><footer className="app-footer"><span>BACKTEST / RESEARCH WORKSPACE</span><span>Exact inputs · Deterministic replay</span></footer></div></div>;
 }
