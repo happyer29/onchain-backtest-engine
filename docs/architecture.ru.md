@@ -85,10 +85,10 @@ transitions дают `CURVE_TRANSITION_MISMATCH`; partial checks, checked-in
 admission также требует mode-specific three-way exact equivalence и
 representative performance evidence. Cold-cache, 7/30-day, extraction/ML/API
 overhead и deployment checks остаются отдельными gates. Реализованный Web UI
-покрывает `resolve -> submit -> progress -> result -> lineage` и Sniping
-result dashboard без расширения live-source admission.
+покрывает `resolve -> submit -> progress -> result -> lineage` и общий React
+Strategy results dashboard без расширения live-source admission.
 
-Обе страницы предлагают тему «Тёплый закат» по умолчанию и исходную тёмную
+Все React-экраны предлагают Warm sunset по умолчанию и Dark
 тему через общую browser-local настройку. При недоступном хранилище UI сообщает
 о выборе только для вкладки. Оформление не меняет команды, identities или results.
 
@@ -666,7 +666,7 @@ bounded signer/initial-state/market/clock evidence, доказанный tail в
 v6 и plan v5 из §23.5 связывают покрытие и полный settlement четырёх попыток,
 не переинтерпретируя артефакты Sniping.
 
-Read-only `/copy-results` показывает диаграммы сводки, ограниченные страницы
+Общий React-экран результатов (alias `/copy-results`) показывает диаграммы сводки, ограниченные страницы
 сигналов и маркеткап токена в SOL с сигналом лидера и фактическими исполнениями.
 Лимиты чтения сохранённой истории и отказы определены в deep dive §3.4;
 графики не меняют ID прогонов и не добавляют историю PumpSwap.
@@ -1444,26 +1444,50 @@ items; oversized document fail closed. Strict CLI client дополнитель�
 Только для совместимости CLI job и run queries сохраняют legacy `offset`,
 ограниченный 10 000. Его нельзя сочетать с cursor; Web UI его не использует.
 
-Web UI предоставляет typed prepare/backtest/sweep forms, queue/progress,
-cancel/retry, bounded typed event history, manifests/results/lineage и resource budget. Для
-committed Pump.fun Sniping run кнопка `Sniping result` открывает отдельный
-same-origin dashboard: глобальные cards/SVG-графики используют verified summary,
-а первый typed response объединяет summary с одной bounded-страницей. Стрелки
-загружают keyset-страницы максимум по 200 round trips (25 по умолчанию), UI
-хранит только текущую страницу, а alternate sorts/search действуют page-local. В
-нём нет SQL/Python editor или arbitrary file browser. Реализованы также typed
-FeatureSet/Universe/LabelSet/train/ModelSchedule/PredictionSet forms, polling
-job events, run comparison, artifact/lineage views и resources. Disconnect или
-reload не влияет на child job. Run comparison использует закрытый набор уже
-рассчитанных scalar metrics; final balances сравниваются по count/content
-digest. Packaged static UI и HTTP contracts имеют automated checks, но реальный
-socket E2E идёт дальше: subprocess uvicorn/loopback переживает restart между
-submit и execution, запускает isolated child, сохраняет progress/result/
-lineage/receipt и доказывает exact direct/queued equivalence, CLI delegation и
-security/static surface. UI реализует полный
-`resolve -> submit -> progress -> result -> lineage` workflow и отдельный
-Sniping result dashboard. Hermetic lifecycle checks не доказывают
-live-source fidelity.
+Интерфейс целиком построен на React/TypeScript. Sniping, Copy Buy и FirstSwap
+используют общий экран **Strategy results** с вкладками **Overview**, **Entries**,
+**Exits**, **Trades**, **Verification**. Язык по умолчанию — English независимо
+от языка браузера; **Language → Русский** включает перевод. В боковом меню
+отображается **onchain backtest engine**. Язык и оформление сохраняются локально,
+синхронизируются между вкладками и не сбрасывают введённые параметры, выбранную
+вкладку результата или открытую сделку. При запрете хранилища выбор действует
+только в текущей вкладке. Эти настройки не входят в команды и идентичность.
+
+Карточки используют проверенную сводку, дополнительные диаграммы — отдельный
+ограниченный запрос сохранённых результатов. Аналитика допускает до 100 000
+строк, 64 MiB файлов и декодированных записей, batch до 256 строк и 256 категорий;
+один scan имеет лимит пять секунд. Ошибки лимита, занятости и целостности не
+превращаются в частичную статистику. Сводка остаётся доступной независимо от
+дополнительного scan. FirstSwap не получает выдуманную политику PnL/round-trip;
+неприменимые показатели и недоступная история обозначаются явно.
+
+Таблица хранит одну страницу из 25 записей; API допускает до 200. Стрелки
+запрашивают следующую keyset-страницу, поиск и сортировка действуют внутри
+текущей страницы. Детали токена открываются в большом доступном overlay.
+Pump-график показывает маркеткап полной эмиссии по маржинальной цене virtual
+reserves, округлённый вниз до лампорта SOL, после целых транзакционных групп.
+Сигнал создателя/лидера, фактические вход/выход и неудачные/отклонённые попытки
+имеют отдельные маркеры и точные координаты. Линия заканчивается при completion
+или migration; нет USD-истории, PumpSwap или подмены котировки исполнения.
+**Around trade** / **Full history** меняет только локальный масштаб.
+
+История читается из точного сохранённого snapshot: до 10 миллионов входных строк
+(до 500 000 строк часов), 128 partitions, 1 GiB Parquet, 50 000 выбранных событий,
+4 000 выходных точек и шести маркеров. Один scan имеет deadline десять секунд.
+Выбор venue выполняется в ограниченных columnar batches до Python-декодирования.
+Сохраняются проверка committed bytes, manifest/schema/count под leases,
+selected-row digest, точные часы и канонический порядок. Это post-run проекция
+проверенного successful run; она не заменяет полную проверку replay при запуске.
+Недоступная или слишком большая история возвращает явную ошибку без усечения,
+нового артефакта или запроса к индексеру.
+
+Все экраны, typed prepare/backtest/sweep и шесть ML-форм принадлежат React.
+Radix, TanStack Query/Table, React Hook Form/Zod, Recharts и React Flow/dagre
+поставляются как статические browser assets; production Node process не нужен.
+Старые HTML/JS удалены; `/copy-results` и `/sniping-results` открывают тот же
+React shell. Existing result APIs совместимы. Application-owned запросы не
+меняют engine, стратегии, source fidelity, финансовую политику или artifact IDs.
+Same-origin/CSP, точные decimal strings/BigInt и bounded polling сохраняются.
 
 Sniping UI имеет отдельную discovery-backed typed форму. Editable:
 exact data IDs, initial SOL/gross budget, оба slippage limits, sell transaction

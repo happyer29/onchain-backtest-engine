@@ -275,6 +275,45 @@ remains loopback-only. This operational host setting does not enter
 run/artifact identity and does not raise fidelity, finality, completeness, or
 consistency.
 
+### Copy Buy source selection
+
+Copy Buy preparation uses the same source transport and commands, with an
+explicit `[source.copy_selection]` in your ignored local configuration. It
+selects signer-bearing evidence independently of Sniping. Replace every
+placeholder below with the exact intended selection before loading it:
+
+```toml
+[source.copy_selection]
+signing_wallets = ["<base58-signing-wallet>"]
+
+[source.copy_selection.decision_range]
+network_id = "solana:<complete-genesis-hash>"
+position_schema_id = "block32-transaction32-v1"
+from_block_ordinal = 100
+to_block_ordinal = 200
+
+[source.copy_selection.history_range]
+network_id = "solana:<complete-genesis-hash>"
+position_schema_id = "block32-transaction32-v1"
+from_block_ordinal = 50
+to_block_ordinal = 200
+```
+
+The small block numbers above describe the range relationship only; they are
+not an admitted source cut. Supply 1–128 sorted, unique canonical Solana
+wallets. History starts no later than the decision range and ends at the same
+exclusive block, under the identical network/position schema. It provides the
+bounded creation/initial-state lookback. The evidence range must also prove the
+right settlement tail for all four permitted sell attempts.
+
+`inspect-source`, `plan-dataset` and `prepare-dataset` remain the command names.
+Copy-only receipt v3, inspection v6, plan v5 and DatasetSpec v6 pin the selection
+and coverage. Missing old creation, incomplete market history, a different
+wallet selection or insufficient settlement evidence fails closed. An existing
+Sniping snapshot is not silently reinterpreted as a Copy dataset. The selected
+wallets and source cut are semantic inputs; source endpoints and credentials
+remain operational configuration.
+
 ### Capability mapping
 
 The capability file describes transport/source schema, not protocol math:

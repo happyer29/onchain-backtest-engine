@@ -9,7 +9,7 @@ from collections import OrderedDict
 from collections.abc import Callable, Iterator
 
 # Import contextlib at the visible module dependency boundary.
-from contextlib import contextmanager
+from contextlib import AbstractContextManager, contextmanager
 from pathlib import Path
 from threading import Lock
 from typing import IO, Any, cast
@@ -19,6 +19,7 @@ import pyarrow as pa
 # Parquet serialization remains outside core execution and uses bounded output buffers.
 import pyarrow.parquet as pq
 
+from backtest.adapters.results.analytics import bounded_entry_records
 from backtest.adapters.results.copy_reconciliation import CopyLedgerReconciler
 from backtest.application.copy_result_codec import copy_position_from_document
 
@@ -551,6 +552,12 @@ class LocalParquetRunResultReaderFactory:
 
 # Keep the local parquet run result reader contract and validation rules together.
 class _LocalParquetRunResultReader:
+    def entry_records(
+        self,
+    ) -> AbstractContextManager[Iterator[RoundTripRecord | CopyPositionRecord | dict[str, object]]]:
+        """Supplemental analytics uses the same exact leased result authority."""
+        return bounded_entry_records(self._handle, self._manifest, self.verify)
+
     def __init__(
         self,
         handle: ArtifactHandle,

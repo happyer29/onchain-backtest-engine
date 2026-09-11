@@ -457,6 +457,28 @@ harness may mean a repeated independent base stream and is not a claim about
 representative stateful market history. `EXTERNALLY_COLD` requires an external
 verified cache-eviction controller.
 
+## Pump.fun Copy Buy
+
+Use the ordinary `inspect-source`, `plan-dataset`, `prepare-dataset`,
+`compile-replay`, `resolve-run` and `run` commands with the separate Copy
+contracts. Configure the exact [Copy source selection](configuration.md#copy-buy-source-selection)
+first. Preparation requires signer-bearing coverage and a complete four-attempt
+settlement tail; a creation-only Sniping dataset cannot supply that evidence.
+
+`describe-run-contract --help` lists the contract selector. The Copy draft is
+`pumpfun-copy-buy-run-draft/v1`; it adds exact `signing_wallets`,
+`take_profit_bps`, `stop_loss_bps`, `maximum_hold_seconds`,
+`observation_delay_transactions` and `buy_delay_transactions`, alongside the
+shared explicit execution mode, fees, wallet accounts and sell delay. The
+currently admitted backend is `reference-pumpfun-copy-buy-v1`. Optimized Copy,
+materialized delivery schedules and ML overlays remain unavailable.
+
+The React **Launch strategy → Pump.fun Copy Buy** form exposes these fields
+and passes the typed draft to the same resolver. **Strategy results** exposes
+the common summary, signals/entries, exits, trade details and lineage. Wallet
+BUYs are exact source signals, not recommendations or automatically selected
+leaders; each mint consumes its one entry even if the buy is rejected.
+
 ## Web UI and Control API
 
 ```bash
@@ -469,12 +491,13 @@ cancel/retry, run comparison, artifacts/lineage, and resource status are
 available. A separate Pump.fun Sniping form discovers its schema through the
 run contract, accepts decimal strings as `BigInt`, displays fixed semantics as
 read-only, and lets the user choose the reference or dedicated optimized
-backend. Summary cards and whole-run charts open in a separate dashboard from
-the `Sniping result` button and use the bounded verified summary. The keyset
-table manually loads at most 200 round trips per page and displays lifecycle,
-both sides of slippage, component fees, account/rent, cashback, and
-realized/open PnL. Summary does not replace a `null` full PnL with zero or the
-valued subtotal.
+backend. Sniping, Copy Buy and FirstSwap open one React **Strategy results**
+view through **Results**. It shows summary cards, bounded whole-run analytics,
+entry/exit distributions, 25-entry keyset pages and a trade-detail overlay.
+Stored details preserve lifecycle, slippage, component fees, account/rent,
+cashback and realized/open PnL. Missing full valuation is never replaced with
+zero or the valued subtotal. English is the default; **Language** in the
+sidebar selects Russian without changing the submitted command.
 
 Contract discovery exposes the v3 form with a required choice between
 `EXOGENOUS_REPLAY` and `EXOGENOUS_VIRTUAL_SETTLEMENT`. Virtual settlement
@@ -495,6 +518,23 @@ Main Sniping API routes:
 The HTTP round-trip cursor has two parts: `after_target_boundary_ordinal` and
 `after_roundtrip_id`; pass either both or neither. These are the same values
 that the CLI encodes in one `BOUNDARY_ORDINAL:ROUNDTRIP_ID` string.
+
+Common read-only result routes (existing family-specific APIs remain compatible):
+
+| Route under `/api/v1/run-artifacts/{id}` | Purpose |
+|---|---|
+| `GET strategy-summary` | Verified common summary |
+| `GET strategy-dashboard?limit=25` | Summary and one entry page |
+| `GET entries?limit=25` | Keyset page; same two-part cursor |
+| `GET entries/{entry_id}?boundary_ordinal=DECIMAL` | Exact stored entry details |
+| `GET entries/{entry_id}/chart?boundary_ordinal=DECIMAL` | Bounded retained Pump history and actual markers |
+| `GET analytics` | Whole-run distributions with explicit denominators |
+
+Chart queries are bounded to 10 million input rows (500,000 clock rows), 128
+files, 1 GiB of Parquet, 50,000 selected venue events, 4,000 points and six
+markers, with a ten-second scan deadline. Optional analytics has separate
+limits of 100,000 rows, 64 MiB and five seconds. Busy/quota failures return
+explicit codes and never partial global statistics or truncated charts.
 
 An HTTP request does not execute a heavy job. Browser disconnect or reload does
 not cancel the child process. SSE is not implemented; the current UI uses

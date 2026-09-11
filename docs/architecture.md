@@ -88,10 +88,11 @@ transitions produce `CURVE_TRANSITION_MISMATCH`; partial checks, checked-in
 admission additionally requires mode-specific three-way exact equivalence and
 representative performance evidence. Cold-cache, 7/30-day, extraction/ML/API
 overhead, and deployment checks remain separate gates. The implemented Web UI
-covers `resolve -> submit -> progress -> result -> lineage` and the Sniping
-result dashboard without extending live-source admission.
+covers `resolve -> submit -> progress -> result -> lineage` with one React
+Strategy results dashboard for Sniping, Copy Buy and FirstSwap, without
+extending live-source admission.
 
-Both pages provide a warm-sunset default and the original dark theme through a
+All screens provide a warm-sunset default and a dark theme through a
 shared browser-local preference, with a visible tab-only fallback when storage
 is unavailable. Appearance does not change commands, identities, or results.
 
@@ -668,9 +669,9 @@ sources is forbidden.
 Deep dive §23.5 defines the separate Pump.fun copy-buy strategy. Its reference
 source/prepare/run/result and CLI/API/UI slice is implemented;
 [deep-dive §3.4](architecture-deep-dive.md#34-current-project-state) bounds current admission.
-The read-only `/copy-results` dashboard adds whole-run summary charts, bounded
-signal pages and per-token SOL market-cap charts with source and actual fill
-markers. Deep-dive §3.4 defines the retained-history query limits and failure
+The common React Strategy results screen includes whole-run summary charts,
+bounded signal pages and per-token SOL market-cap charts with source and
+actual fill markers. `/copy-results` is a bookmark alias to that screen. Deep-dive §3.4 defines the retained-history query limits and failure
 boundary; charts do not change run identities or provide PumpSwap history.
 Optimized copy and materialized schedules remain unavailable. It copies successful
 BUYs by exact `signing_wallet`, consumes each mint on its first signal even if
@@ -1408,6 +1409,16 @@ unresolved alias fails closed; there is no generic JSON editor.
 
 ### 14.5 Control API, Web UI, and observability
 
+One React/TypeScript UI and one shared Strategy results screen cover the
+implemented strategies under deep-dive §34.2. Application result queries own
+the common presentation DTOs; adapters perform bounded read-only reductions
+over verified stored results. FirstSwap audit and actual fills retain ORDER
+correlation; inapplicable PnL/history remain explicit. No engine, strategy,
+artifact identity or financial policy changed. Existing result APIs remain
+compatible; legacy UI scripts/HTML have been removed. The full repository,
+component, real-browser and installed-wheel gates cover this cutover, with
+current execution/admission limits still defined by deep-dive §3.4.
+
 The current Control API includes:
 
 ```text
@@ -1491,26 +1502,40 @@ For CLI compatibility only, job and run queries retain a legacy `offset`
 bounded to 10,000. It cannot be combined with a cursor; the Web UI does not use
 it.
 
-The Web UI provides typed prepare/backtest/sweep forms, queue/progress,
-cancel/retry, bounded typed event history, manifests/results/lineage, and a
-resource budget. For a committed Pump.fun Sniping run, the `Sniping result`
-button opens a dedicated same-origin dashboard: global cards/SVG charts use the
-verified summary, and one combined typed response supplies the summary plus the
-first bounded page. Arrow navigation fetches manual keyset pages of at most 200
-round trips (25 by default), retains only the current page, and offers only
-explicit page-local sorts/search. It contains no SQL/Python editor or arbitrary file browser. Typed
-FeatureSet/Universe/LabelSet/train/ModelSchedule/PredictionSet forms, polling of
-job events, run comparison, artifact/lineage views, and resources are also
-implemented. A disconnect or reload does not affect the child job. Run
-comparison uses a closed set of already calculated scalar metrics; final
-balances are compared by count/content digest. Packaged static UI and HTTP
-contracts have automated checks, while real socket E2E goes further: subprocess
-uvicorn/loopback survives a restart between submission and execution, starts an
-isolated child, stores progress/result/lineage/receipt, and proves exact
-direct/queued equivalence, CLI delegation, and the security/static surface. The
-UI implements the full `resolve -> submit -> progress -> result -> lineage`
-workflow and a separate Sniping result dashboard. Hermetic lifecycle checks
-do not establish live-source fidelity.
+The React Web UI provides overview, typed prepare/backtest/sweep forms,
+queue/progress, cancel/retry, bounded typed events, manifests/results/lineage
+and resources. Every implemented strategy opens the same result tabs:
+overview, entries, exits, trades and verification. Summary cards read verified
+metadata, while optional distributions use §34.2's bounded read-only scan
+(100,000 rows, 64 MiB files/decoded records, 256-row batches, one scan, five
+seconds). Busy, oversized or corrupt reads do not return partial analytics.
+
+The common result endpoints are `strategy-summary`, `strategy-dashboard`,
+`entries`, `entries/{entry_id}`, `entries/{entry_id}/chart`, and `analytics`
+under `/api/v1/run-artifacts/{artifact_id}`; the exact parameters and schemas
+are defined in deep-dive §34.2. One combined response supplies initial summary
+and page; later navigation retains only the current 25 entries, with a 200-row
+server maximum. Search/sort are explicitly page-local. Trade detail uses a
+large accessible overlay, with bounded Pump history, actual attempt markers,
+and local trade/full-history views. Per deep-dive §3.4, chart reads admit up to
+10 million snapshot rows (500,000 clock rows), 128 partitions and 1 GiB, selecting at most 50,000
+venue events before Python decoding. One scan has a ten-second cooperative
+deadline and returns at most 4,000 complete points with six actual markers.
+Committed input authentication, selected-row digests and exact clock checks
+remain mandatory; this presentation query does not replace replay verification.
+React Flow shows verified lineage.
+
+All six typed ML forms and closed scalar run comparisons are implemented.
+There is no SQL/Python editor, arbitrary file browser or raw artifact download.
+English is the default; a closed English/Russian preference and warm/dark
+themes persist locally, synchronize across tabs and preserve mounted forms
+and result selections. These choices never enter commands or identity. Radix, TanStack Query/Table, React Hook Form,
+Zod and Recharts are static build-time UI dependencies; the Python package
+serves all assets without a production Node process. A disconnect/reload does
+not affect child jobs. Real browser checks cover the complete form-to-child
+launch and result/detail/lineage flow, CSP and mobile layout. Real socket E2E
+also proves restart recovery, direct/queued equivalence, CLI delegation and
+security. These hermetic lifecycle checks do not establish live-source fidelity.
 
 The Sniping UI has a dedicated discovery-backed typed form. Editable
 exact data IDs, initial SOL/gross budget, both slippage limits, sell transaction
@@ -1824,7 +1849,7 @@ measurements. Phase 7 also contains a bounded FirstSwap optimized backend;
 neither backend is a general engine replacement outside its exact allowlist.
 
 The shared loopback API and packaged UI implement submission, progress,
-result/lineage queries, and the Sniping dashboard. Their lifecycle checks do
+result/lineage queries, and the shared Strategy results dashboard. Their lifecycle checks do
 not increase live-source fidelity. Deployment durability requires an encrypted
 restore drill on another physical device/host and, when a durable Git remote
 does not preserve code inputs, a separate code/config/schema/lockfile archive.

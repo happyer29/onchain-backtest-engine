@@ -33,6 +33,7 @@ backtest/
 | `configs/` | Коммитимые profiles/examples и gitignored local configs |
 | `docs/` | Пользовательские и архитектурные документы |
 | `scripts/` | Platform setup и smoke helpers, включая Windows 11/WSL2 |
+| `frontend/` | React/TypeScript, языковой каталог, frozen npm lockfile и browser/component tests |
 | `src/backtest/` | Production Python package |
 | `tests/` | Architecture, unit, contract, integration, golden и performance tests |
 | `var/` | Mutable operational state и immutable local artifacts |
@@ -135,6 +136,7 @@ plugins/
   strategies/
     first_swap.py
     pumpfun_sniping.py
+    pumpfun_copybuy.py
   execution/constant_product.py
   risk/static.py
 ```
@@ -170,7 +172,7 @@ Inbound adapters:
 - `interfaces/cli/` — Typer commands;
 - `interfaces/api/` — FastAPI routes и typed DTO;
 - `interfaces/web/static/` — готовые HTML/CSS/JS assets основного Control UI и
-  отдельного bounded Pump.fun Sniping result dashboard.
+  общего React dashboard результатов стратегий.
 
 CLI и API валидируют input, вызывают application use cases и преобразуют
 response. Они не должны напрямую читать SQLite, Parquet или arbitrary paths.

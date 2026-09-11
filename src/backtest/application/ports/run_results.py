@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
@@ -63,6 +64,12 @@ class RoundTripPage:
 # Keep the verified run result reader contract and validation rules together.
 @runtime_checkable
 class VerifiedRunResultReader(Protocol):
+    def entry_records(
+        self,
+    ) -> AbstractContextManager[Iterator[RoundTripRecord | CopyPositionRecord | dict[str, object]]]:
+        """Admit and fully scan bounded verified position or FirstSwap audit records."""
+        ...
+
     @property
     def manifest(self) -> SuccessfulRunManifest: ...
 

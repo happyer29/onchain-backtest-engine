@@ -1,0 +1,1529 @@
+{
+  "inspect-form": [
+    {
+      "name": "source_id",
+      "label": "Logical source ID",
+      "kind": "input",
+      "type": "text",
+      "default": "default-indexer",
+      "required": true,
+      "options": []
+    }
+  ],
+  "dataset-plan-form": [
+    {
+      "name": "source_id",
+      "label": "Source ID",
+      "kind": "input",
+      "type": "text",
+      "default": "default-indexer",
+      "required": true,
+      "options": []
+    },
+    {
+      "name": "source_inspection_artifact_id",
+      "label": "Inspection artifact ID",
+      "kind": "input",
+      "type": "text",
+      "default": "",
+      "required": true,
+      "options": [],
+      "minlength": "64",
+      "maxlength": "64"
+    },
+    {
+      "name": "capability_id",
+      "label": "Capability ID",
+      "kind": "input",
+      "type": "text",
+      "default": "",
+      "required": true,
+      "options": []
+    },
+    {
+      "name": "columns",
+      "label": "Logical columns (comma-separated)",
+      "kind": "input",
+      "type": "text",
+      "default": "",
+      "required": true,
+      "options": []
+    },
+    {
+      "name": "network_id",
+      "label": "Network ID",
+      "kind": "input",
+      "type": "text",
+      "default": "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d",
+      "required": true,
+      "options": []
+    },
+    {
+      "name": "position_schema_id",
+      "label": "Position schema",
+      "kind": "input",
+      "type": "text",
+      "default": "block32-transaction32-v1",
+      "required": true,
+      "options": []
+    },
+    {
+      "name": "from_block_ordinal",
+      "label": "From block ordinal",
+      "kind": "input",
+      "type": "number",
+      "default": "",
+      "required": true,
+      "options": [],
+      "min": "0"
+    },
+    {
+      "name": "to_block_ordinal",
+      "label": "To block ordinal (exclusive)",
+      "kind": "input",
+      "type": "number",
+      "default": "",
+      "required": true,
+      "options": [],
+      "min": "1"
+    },
+    {
+      "name": "warmup_blocks",
+      "label": "Warmup, blocks",
+      "kind": "input",
+      "type": "number",
+      "default": "0",
+      "required": true,
+      "options": [],
+      "min": "0"
+    },
+    {
+      "name": "settlement_tail_blocks",
+      "label": "Settlement tail, blocks",
+      "kind": "input",
+      "type": "number",
+      "default": "0",
+      "required": true,
+      "options": [],
+      "min": "0"
+    },
+    {
+      "name": "max_shard_blocks",
+      "label": "Max shard, blocks",
+      "kind": "input",
+      "type": "number",
+      "default": "100000",
+      "required": true,
+      "options": [],
+      "min": "1"
+    },
+    {
+      "name": "max_remote_gib",
+      "label": "Max source, GiB",
+      "kind": "input",
+      "type": "number",
+      "default": "20",
+      "required": true,
+      "options": [],
+      "min": "1"
+    },
+    {
+      "name": "max_local_gib",
+      "label": "Max local, GiB",
+      "kind": "input",
+      "type": "number",
+      "default": "50",
+      "required": true,
+      "options": [],
+      "min": "1"
+    },
+    {
+      "name": "max_days",
+      "label": "Max days",
+      "kind": "input",
+      "type": "number",
+      "default": "30",
+      "required": true,
+      "options": [],
+      "min": "1"
+    },
+    {
+      "name": "query_memory_mib",
+      "label": "Query memory, MiB",
+      "kind": "input",
+      "type": "number",
+      "default": "1024",
+      "required": true,
+      "options": [],
+      "min": "64"
+    }
+  ],
+  "sniping-form": [
+    {
+      "name": "pumpfun-strategy",
+      "label": "Strategy",
+      "kind": "select",
+      "type": "text",
+      "default": "sniping",
+      "required": false,
+      "options": [
+        {
+          "value": "sniping",
+          "label": "Sniping"
+        },
+        {
+          "value": "copy",
+          "label": "Copy Buy"
+        }
+      ]
+    },
+    {
+      "name": "signing_wallets",
+      "label": "signing_wallet (one wallet per line)",
+      "kind": "textarea",
+      "type": "text",
+      "default": "",
+      "required": true,
+      "options": [],
+      "maxlength": "6000"
+    },
+    {
+      "name": "take_profit_bps",
+      "label": "Take profit, bps",
+      "kind": "input",
+      "type": "number",
+      "default": "2000",
+      "required": true,
+      "options": [],
+      "min": "1"
+    },
+    {
+      "name": "stop_loss_bps",
+      "label": "Stop loss, bps",
+      "kind": "input",
+      "type": "number",
+      "default": "1000",
+      "required": true,
+      "options": [],
+      "min": "1",
+      "max": "10000"
+    },
+    {
+      "name": "maximum_hold_seconds",
+      "label": "Maximum hold, seconds",
+      "kind": "input",
+      "type": "number",
+      "default": "60",
+      "required": true,
+      "options": [],
+      "min": "1"
+    },
+    {
+      "name": "observation_delay_transactions",
+      "label": "Observation delay, transactions",
+      "kind": "input",
+      "type": "number",
+      "default": "0",
+      "required": true,
+      "options": [],
+      "min": "0"
+    },
+    {
+      "name": "buy_delay_transactions",
+      "label": "Buy delay, transactions",
+      "kind": "input",
+      "type": "number",
+      "default": "500",
+      "required": true,
+      "options": [],
+      "min": "1"
+    },
+    {
+      "name": "dataset_revision_id",
+      "label": "Dataset revision ID",
+      "kind": "input",
+      "type": "text",
+      "default": "",
+      "required": true,
+      "options": [],
+      "minlength": "64",
+      "maxlength": "71"
+    },
+    {
+      "name": "snapshot_id",
+      "label": "Snapshot ID",
+      "kind": "input",
+      "type": "text",
+      "default": "",
+      "required": true,
+      "options": [],
+      "minlength": "64",
+      "maxlength": "71"
+    },
+    {
+      "name": "replay_pack_id",
+      "label": "ReplayPack ID (optional)",
+      "kind": "input",
+      "type": "text",
+      "default": "",
+      "required": false,
+      "options": [],
+      "minlength": "64",
+      "maxlength": "71"
+    },
+    {
+      "name": "delivery_schedule_id",
+      "label": "DeliverySchedule ID (optional)",
+      "kind": "input",
+      "type": "text",
+      "default": "",
+      "required": false,
+      "options": [],
+      "minlength": "64",
+      "maxlength": "71"
+    },
+    {
+      "name": "initial_sol_balance_lamports",
+      "label": "Initial SOL, lamports",
+      "kind": "input",
+      "type": "text",
+      "default": "100000000000",
+      "required": true,
+      "options": [],
+      "inputmode": "numeric"
+    },
+    {
+      "name": "gross_buy_budget_lamports",
+      "label": "Gross buy budget, lamports",
+      "kind": "input",
+      "type": "text",
+      "default": "100000000",
+      "required": true,
+      "options": [],
+      "inputmode": "numeric"
+    },
+    {
+      "name": "buy_slippage_bps",
+      "label": "Buy slippage, bps",
+      "kind": "input",
+      "type": "number",
+      "default": "500",
+      "required": true,
+      "options": [],
+      "min": "0",
+      "max": "10000"
+    },
+    {
+      "name": "sell_slippage_bps",
+      "label": "Sell slippage, bps",
+      "kind": "input",
+      "type": "number",
+      "default": "500",
+      "required": true,
+      "options": [],
+      "min": "0",
+      "max": "10000"
+    },
+    {
+      "name": "execution_mode",
+      "label": "Execution mode",
+      "kind": "select",
+      "type": "text",
+      "default": "",
+      "required": true,
+      "options": [
+        {
+          "value": "",
+          "label": "Loading contract…"
+        }
+      ]
+    },
+    {
+      "name": "sell_delay_transactions",
+      "label": "Sell delay, transactions",
+      "kind": "input",
+      "type": "number",
+      "default": "1",
+      "required": true,
+      "options": [],
+      "min": "1"
+    },
+    {
+      "name": "root_seed",
+      "label": "Root seed",
+      "kind": "input",
+      "type": "text",
+      "default": "42",
+      "required": true,
+      "options": [],
+      "inputmode": "numeric"
+    },
+    {
+      "name": "wallet_profile_id",
+      "label": "Wallet profile ID",
+      "kind": "input",
+      "type": "text",
+      "default": "pumpfun-solana-wallet-v2",
+      "required": true,
+      "options": []
+    },
+    {
+      "name": "wallet_mode",
+      "label": "Initial UVA state",
+      "kind": "select",
+      "type": "text",
+      "default": "fresh",
+      "required": false,
+      "options": [
+        {
+          "value": "fresh",
+          "label": "fresh"
+        },
+        {
+          "value": "prewarmed",
+          "label": "prewarmed"
+        }
+      ]
+    },
+    {
+      "name": "wallet_effective_from",
+      "label": "Wallet profile effective from",
+      "kind": "input",
+      "type": "number",
+      "default": "0",
+      "required": true,
+      "options": [],
+      "min": "0"
+    },
+    {
+      "name": "wallet_effective_until",
+      "label": "Wallet profile effective until",
+      "kind": "input",
+      "type": "number",
+      "default": "4102444800",
+      "required": true,
+      "options": [],
+      "min": "1"
+    },
+    {
+      "name": "uva_rent_lamports",
+      "label": "UVA deposit, lamports",
+      "kind": "input",
+      "type": "text",
+      "default": "1844400",
+      "required": true,
+      "options": [],
+      "inputmode": "numeric"
+    },
+    {
+      "name": "legacy_ata_rent_lamports",
+      "label": "Legacy ATA deposit, lamports",
+      "kind": "input",
+      "type": "text",
+      "default": "2039280",
+      "required": true,
+      "options": [],
+      "inputmode": "numeric"
+    },
+    {
+      "name": "token_2022_ata_rent_lamports",
+      "label": "Token-2022 ATA deposit, lamports",
+      "kind": "input",
+      "type": "text",
+      "default": "2074080",
+      "required": true,
+      "options": [],
+      "inputmode": "numeric"
+    },
+    {
+      "name": "pump_profile_id",
+      "label": "Pump fee profile ID",
+      "kind": "input",
+      "type": "text",
+      "default": "pump-static-95-30-v1",
+      "required": true,
+      "options": []
+    },
+    {
+      "name": "pump_program_version",
+      "label": "Pump program version",
+      "kind": "input",
+      "type": "text",
+      "default": "pump-program-static-fee-v1",
+      "required": true,
+      "options": []
+    },
+    {
+      "name": "pump_buy_formula_version",
+      "label": "Pump buy math",
+      "kind": "input",
+      "type": "text",
+      "default": "pump-buy-exact-gross-sol-v1",
+      "required": true,
+      "options": []
+    },
+    {
+      "name": "pump_sell_formula_version",
+      "label": "Pump sell math",
+      "kind": "input",
+      "type": "text",
+      "default": "pump-sell-exact-token-in-v1",
+      "required": true,
+      "options": []
+    },
+    {
+      "name": "pump_effective_from",
+      "label": "Pump effective from, unix s",
+      "kind": "input",
+      "type": "number",
+      "default": "0",
+      "required": true,
+      "options": [],
+      "min": "0"
+    },
+    {
+      "name": "pump_effective_until",
+      "label": "Pump effective until, unix s",
+      "kind": "input",
+      "type": "number",
+      "default": "4102444800",
+      "required": true,
+      "options": [],
+      "min": "1"
+    },
+    {
+      "name": "pump_protocol_fee_bps",
+      "label": "Pump protocol fee, bps",
+      "kind": "input",
+      "type": "number",
+      "default": "95",
+      "required": true,
+      "options": [],
+      "min": "0",
+      "max": "9999"
+    },
+    {
+      "name": "pump_creator_fee_bps",
+      "label": "Pump creator fee, bps",
+      "kind": "input",
+      "type": "number",
+      "default": "30",
+      "required": true,
+      "options": [],
+      "min": "0",
+      "max": "9999"
+    },
+    {
+      "name": "buy_fee_profile_id",
+      "label": "Profile ID",
+      "kind": "input",
+      "type": "text",
+      "default": "solana-buy-v1",
+      "required": true,
+      "options": []
+    },
+    {
+      "name": "buy_fee_formula_version",
+      "label": "Formula",
+      "kind": "input",
+      "type": "text",
+      "default": "solana-legacy-v0-base-priority-v1",
+      "required": true,
+      "options": []
+    },
+    {
+      "name": "buy_transaction_format",
+      "label": "Transaction format",
+      "kind": "input",
+      "type": "text",
+      "default": "V0",
+      "required": true,
+      "options": []
+    },
+    {
+      "name": "buy_fee_effective_from",
+      "label": "Effective from",
+      "kind": "input",
+      "type": "number",
+      "default": "0",
+      "required": true,
+      "options": [],
+      "min": "0"
+    },
+    {
+      "name": "buy_fee_effective_until",
+      "label": "Effective until",
+      "kind": "input",
+      "type": "number",
+      "default": "4102444800",
+      "required": true,
+      "options": [],
+      "min": "1"
+    },
+    {
+      "name": "buy_signature_count",
+      "label": "Signatures",
+      "kind": "input",
+      "type": "number",
+      "default": "1",
+      "required": true,
+      "options": [],
+      "min": "1"
+    },
+    {
+      "name": "buy_lamports_per_signature",
+      "label": "Lamports/signature",
+      "kind": "input",
+      "type": "text",
+      "default": "5000",
+      "required": true,
+      "options": [],
+      "inputmode": "numeric"
+    },
+    {
+      "name": "buy_compute_unit_limit",
+      "label": "CU limit",
+      "kind": "input",
+      "type": "number",
+      "default": "200000",
+      "required": true,
+      "options": [],
+      "min": "1"
+    },
+    {
+      "name": "buy_micro_lamports_per_cu",
+      "label": "Micro-lamports/CU",
+      "kind": "input",
+      "type": "text",
+      "default": "1000",
+      "required": true,
+      "options": [],
+      "inputmode": "numeric"
+    },
+    {
+      "name": "sell_fee_profile_id",
+      "label": "Profile ID",
+      "kind": "input",
+      "type": "text",
+      "default": "solana-sell-v1",
+      "required": true,
+      "options": []
+    },
+    {
+      "name": "sell_fee_formula_version",
+      "label": "Formula",
+      "kind": "input",
+      "type": "text",
+      "default": "solana-legacy-v0-base-priority-v1",
+      "required": true,
+      "options": []
+    },
+    {
+      "name": "sell_transaction_format",
+      "label": "Transaction format",
+      "kind": "input",
+      "type": "text",
+      "default": "V0",
+      "required": true,
+      "options": []
+    },
+    {
+      "name": "sell_fee_effective_from",
+      "label": "Effective from",
+      "kind": "input",
+      "type": "number",
+      "default": "0",
+      "required": true,
+      "options": [],
+      "min": "0"
+    },
+    {
+      "name": "sell_fee_effective_until",
+      "label": "Effective until",
+      "kind": "input",
+      "type": "number",
+      "default": "4102444800",
+      "required": true,
+      "options": [],
+      "min": "1"
+    },
+    {
+      "name": "sell_signature_count",
+      "label": "Signatures",
+      "kind": "input",
+      "type": "number",
+      "default": "1",
+      "required": true,
+      "options": [],
+      "min": "1"
+    },
+    {
+      "name": "sell_lamports_per_signature",
+      "label": "Lamports/signature",
+      "kind": "input",
+      "type": "text",
+      "default": "5000",
+      "required": true,
+      "options": [],
+      "inputmode": "numeric"
+    },
+    {
+      "name": "sell_compute_unit_limit",
+      "label": "CU limit",
+      "kind": "input",
+      "type": "number",
+      "default": "200000",
+      "required": true,
+      "options": [],
+      "min": "1"
+    },
+    {
+      "name": "sell_micro_lamports_per_cu",
+      "label": "Micro-lamports/CU",
+      "kind": "input",
+      "type": "text",
+      "default": "1000",
+      "required": true,
+      "options": [],
+      "inputmode": "numeric"
+    },
+    {
+      "name": "run_backend",
+      "label": "Run backend",
+      "kind": "select",
+      "type": "text",
+      "default": "reference-pumpfun-sniping-v1",
+      "required": false,
+      "options": [
+        {
+          "value": "reference-pumpfun-sniping-v1",
+          "label": "reference-pumpfun-sniping-v1"
+        },
+        {
+          "value": "numpy-mmap-pumpfun-sniping-v1",
+          "label": "numpy-mmap-pumpfun-sniping-v1"
+        }
+      ]
+    },
+    {
+      "name": "reader_batch_rows",
+      "label": "Reader batch rows",
+      "kind": "input",
+      "type": "number",
+      "default": "65536",
+      "required": true,
+      "options": [],
+      "min": "1"
+    },
+    {
+      "name": "reader_readahead",
+      "label": "Reader readahead",
+      "kind": "select",
+      "type": "text",
+      "default": "1",
+      "required": false,
+      "options": [
+        {
+          "value": "1",
+          "label": "1"
+        },
+        {
+          "value": "2",
+          "label": "2"
+        },
+        {
+          "value": "4",
+          "label": "4"
+        }
+      ]
+    },
+    {
+      "name": "output_buffer_rows",
+      "label": "Output buffer rows",
+      "kind": "input",
+      "type": "number",
+      "default": "8192",
+      "required": true,
+      "options": [],
+      "min": "1"
+    },
+    {
+      "name": "run_threads",
+      "label": "Run threads",
+      "kind": "input",
+      "type": "number",
+      "default": "1",
+      "required": true,
+      "options": [],
+      "min": "1"
+    }
+  ],
+  "backtest-form": [
+    {
+      "name": "snapshot_id",
+      "label": "Snapshot ID",
+      "kind": "input",
+      "type": "text",
+      "default": "",
+      "required": true,
+      "options": [],
+      "minlength": "64",
+      "maxlength": "71"
+    },
+    {
+      "name": "replay_pack_id",
+      "label": "ReplayPack ID (optional)",
+      "kind": "input",
+      "type": "text",
+      "default": "",
+      "required": false,
+      "options": [],
+      "minlength": "64",
+      "maxlength": "71"
+    },
+    {
+      "name": "delivery_schedule_id",
+      "label": "DeliverySchedule ID (optional)",
+      "kind": "input",
+      "type": "text",
+      "default": "",
+      "required": false,
+      "options": [],
+      "minlength": "64",
+      "maxlength": "71"
+    },
+    {
+      "name": "pool_id",
+      "label": "Pool ID",
+      "kind": "input",
+      "type": "text",
+      "default": "",
+      "required": true,
+      "options": []
+    },
+    {
+      "name": "sold_asset_id",
+      "label": "Sold asset",
+      "kind": "input",
+      "type": "text",
+      "default": "SOL",
+      "required": true,
+      "options": []
+    },
+    {
+      "name": "bought_asset_id",
+      "label": "Bought asset",
+      "kind": "input",
+      "type": "text",
+      "default": "",
+      "required": true,
+      "options": []
+    },
+    {
+      "name": "amount_in_atomic",
+      "label": "Amount in atomic",
+      "kind": "input",
+      "type": "number",
+      "default": "1000000",
+      "required": true,
+      "options": [],
+      "min": "1"
+    },
+    {
+      "name": "minimum_amount_out_atomic",
+      "label": "Minimum amount out",
+      "kind": "input",
+      "type": "number",
+      "default": "1",
+      "required": true,
+      "options": [],
+      "min": "0"
+    },
+    {
+      "name": "fee_bps",
+      "label": "Fee, bps",
+      "kind": "input",
+      "type": "number",
+      "default": "30",
+      "required": true,
+      "options": [],
+      "min": "0",
+      "max": "10000"
+    },
+    {
+      "name": "execution_mode",
+      "label": "Execution mode",
+      "kind": "select",
+      "type": "text",
+      "default": "SHADOW_STATE_REPLAY",
+      "required": false,
+      "options": [
+        {
+          "value": "SHADOW_STATE_REPLAY",
+          "label": "SHADOW_STATE_REPLAY"
+        },
+        {
+          "value": "EXOGENOUS_REPLAY",
+          "label": "EXOGENOUS_REPLAY"
+        }
+      ]
+    },
+    {
+      "name": "maximum_order_input_atomic",
+      "label": "Risk max input",
+      "kind": "input",
+      "type": "number",
+      "default": "1000000",
+      "required": true,
+      "options": [],
+      "min": "1"
+    },
+    {
+      "name": "initial_balance_atomic",
+      "label": "Initial sold-asset balance",
+      "kind": "input",
+      "type": "number",
+      "default": "1000000000",
+      "required": true,
+      "options": [],
+      "min": "0"
+    },
+    {
+      "name": "observation_slots",
+      "label": "Observation latency, slots",
+      "kind": "input",
+      "type": "number",
+      "default": "1",
+      "required": true,
+      "options": [],
+      "min": "0"
+    },
+    {
+      "name": "order_slots",
+      "label": "Order latency, slots",
+      "kind": "input",
+      "type": "number",
+      "default": "1",
+      "required": true,
+      "options": [],
+      "min": "0"
+    },
+    {
+      "name": "root_seed",
+      "label": "Root seed",
+      "kind": "input",
+      "type": "number",
+      "default": "42",
+      "required": true,
+      "options": [],
+      "min": "0"
+    },
+    {
+      "name": "sweep_seeds",
+      "label": "Sweep seeds (comma-separated)",
+      "kind": "input",
+      "type": "text",
+      "default": "42,43",
+      "required": false,
+      "options": []
+    },
+    {
+      "name": "feature_set_ids",
+      "label": "FeatureSet IDs (comma-separated)",
+      "kind": "input",
+      "type": "text",
+      "default": "",
+      "required": false,
+      "options": []
+    },
+    {
+      "name": "model_schedule_id",
+      "label": "ModelSchedule ID",
+      "kind": "input",
+      "type": "text",
+      "default": "",
+      "required": false,
+      "options": [],
+      "minlength": "64",
+      "maxlength": "64"
+    },
+    {
+      "name": "prediction_set_ids",
+      "label": "PredictionSet IDs (comma-separated)",
+      "kind": "input",
+      "type": "text",
+      "default": "",
+      "required": false,
+      "options": []
+    },
+    {
+      "name": "inference_mode",
+      "label": "Inference mode",
+      "kind": "select",
+      "type": "text",
+      "default": "DISABLED",
+      "required": false,
+      "options": [
+        {
+          "value": "DISABLED",
+          "label": "DISABLED"
+        },
+        {
+          "value": "FROZEN",
+          "label": "FROZEN"
+        },
+        {
+          "value": "EMBEDDED_BATCH",
+          "label": "EMBEDDED_BATCH"
+        }
+      ]
+    },
+    {
+      "name": "prediction_name",
+      "label": "Prediction name",
+      "kind": "input",
+      "type": "text",
+      "default": "",
+      "required": false,
+      "options": []
+    },
+    {
+      "name": "inference_missing_policy",
+      "label": "Missing prediction",
+      "kind": "select",
+      "type": "text",
+      "default": "REJECT",
+      "required": false,
+      "options": [
+        {
+          "value": "REJECT",
+          "label": "REJECT"
+        },
+        {
+          "value": "NULL",
+          "label": "NULL"
+        }
+      ]
+    },
+    {
+      "name": "inference_delay_boundaries",
+      "label": "Inference delay, boundaries",
+      "kind": "input",
+      "type": "number",
+      "default": "0",
+      "required": true,
+      "options": [],
+      "min": "0"
+    },
+    {
+      "name": "run_backend",
+      "label": "Run backend",
+      "kind": "select",
+      "type": "text",
+      "default": "reference-python-v1",
+      "required": false,
+      "options": [
+        {
+          "value": "reference-python-v1",
+          "label": "reference-python-v1"
+        },
+        {
+          "value": "numpy-mmap-first-swap-exact-v1",
+          "label": "numpy-mmap-first-swap-exact-v1"
+        }
+      ]
+    },
+    {
+      "name": "reader_batch_rows",
+      "label": "Reader batch rows",
+      "kind": "input",
+      "type": "number",
+      "default": "65536",
+      "required": true,
+      "options": [],
+      "min": "1"
+    },
+    {
+      "name": "reader_readahead",
+      "label": "Reader readahead",
+      "kind": "select",
+      "type": "text",
+      "default": "1",
+      "required": false,
+      "options": [
+        {
+          "value": "1",
+          "label": "1"
+        },
+        {
+          "value": "2",
+          "label": "2"
+        },
+        {
+          "value": "4",
+          "label": "4"
+        }
+      ]
+    },
+    {
+      "name": "output_buffer_rows",
+      "label": "Output buffer rows",
+      "kind": "input",
+      "type": "number",
+      "default": "8192",
+      "required": true,
+      "options": [],
+      "min": "1"
+    },
+    {
+      "name": "run_threads",
+      "label": "Run threads",
+      "kind": "input",
+      "type": "number",
+      "default": "1",
+      "required": true,
+      "options": [],
+      "min": "1"
+    }
+  ],
+  "ml-features-form": [
+    {
+      "name": "replay_pack_id",
+      "label": "ReplayPack ID",
+      "kind": "input",
+      "type": "text",
+      "default": "",
+      "required": true,
+      "options": [],
+      "minlength": "64",
+      "maxlength": "64"
+    },
+    {
+      "name": "replay_semantics_id",
+      "label": "Replay semantics ID",
+      "kind": "input",
+      "type": "text",
+      "default": "",
+      "required": true,
+      "options": [],
+      "minlength": "64",
+      "maxlength": "64"
+    },
+    {
+      "name": "replay_layout_schema_id",
+      "label": "Replay layout ID",
+      "kind": "input",
+      "type": "text",
+      "default": "",
+      "required": true,
+      "options": [],
+      "minlength": "64",
+      "maxlength": "64"
+    },
+    {
+      "name": "feature_name",
+      "label": "Feature",
+      "kind": "select",
+      "type": "text",
+      "default": "",
+      "required": false,
+      "options": []
+    },
+    {
+      "name": "warmup_boundaries",
+      "label": "Warmup boundaries",
+      "kind": "input",
+      "type": "number",
+      "default": "0",
+      "required": true,
+      "options": [],
+      "min": "0"
+    }
+  ],
+  "ml-universe-form": [
+    {
+      "name": "snapshot_id",
+      "label": "Snapshot ID",
+      "kind": "input",
+      "type": "text",
+      "default": "",
+      "required": true,
+      "options": [],
+      "minlength": "64",
+      "maxlength": "64"
+    },
+    {
+      "name": "feature_set_ids",
+      "label": "FeatureSet IDs",
+      "kind": "input",
+      "type": "text",
+      "default": "",
+      "required": true,
+      "options": []
+    }
+  ],
+  "ml-labels-form": [
+    {
+      "name": "snapshot_id",
+      "label": "Snapshot ID",
+      "kind": "input",
+      "type": "text",
+      "default": "",
+      "required": true,
+      "options": [],
+      "minlength": "64",
+      "maxlength": "64"
+    },
+    {
+      "name": "universe_id",
+      "label": "Universe ID",
+      "kind": "input",
+      "type": "text",
+      "default": "",
+      "required": true,
+      "options": [],
+      "minlength": "64",
+      "maxlength": "64"
+    },
+    {
+      "name": "training_cutoff",
+      "label": "Training cutoff",
+      "kind": "input",
+      "type": "number",
+      "default": "",
+      "required": true,
+      "options": [],
+      "min": "0"
+    }
+  ],
+  "ml-train-form": [
+    {
+      "name": "feature_set_ids",
+      "label": "FeatureSet IDs",
+      "kind": "input",
+      "type": "text",
+      "default": "",
+      "required": true,
+      "options": []
+    },
+    {
+      "name": "feature_schema_digest",
+      "label": "Feature schema digest",
+      "kind": "input",
+      "type": "text",
+      "default": "",
+      "required": true,
+      "options": [],
+      "minlength": "64",
+      "maxlength": "64"
+    },
+    {
+      "name": "label_set_id",
+      "label": "LabelSet ID",
+      "kind": "input",
+      "type": "text",
+      "default": "",
+      "required": true,
+      "options": [],
+      "minlength": "64",
+      "maxlength": "64"
+    },
+    {
+      "name": "universe_id",
+      "label": "Universe ID",
+      "kind": "input",
+      "type": "text",
+      "default": "",
+      "required": true,
+      "options": [],
+      "minlength": "64",
+      "maxlength": "64"
+    },
+    {
+      "name": "train_from",
+      "label": "Train from",
+      "kind": "input",
+      "type": "number",
+      "default": "",
+      "required": true,
+      "options": [],
+      "min": "0"
+    },
+    {
+      "name": "train_until",
+      "label": "Train until",
+      "kind": "input",
+      "type": "number",
+      "default": "",
+      "required": true,
+      "options": [],
+      "min": "1"
+    },
+    {
+      "name": "validation_from",
+      "label": "Validation from",
+      "kind": "input",
+      "type": "number",
+      "default": "",
+      "required": true,
+      "options": [],
+      "min": "1"
+    },
+    {
+      "name": "validation_until",
+      "label": "Validation until",
+      "kind": "input",
+      "type": "number",
+      "default": "",
+      "required": true,
+      "options": [],
+      "min": "1"
+    },
+    {
+      "name": "purge_boundaries",
+      "label": "Purge boundaries",
+      "kind": "input",
+      "type": "number",
+      "default": "0",
+      "required": true,
+      "options": [],
+      "min": "0"
+    },
+    {
+      "name": "embargo_boundaries",
+      "label": "Embargo boundaries",
+      "kind": "input",
+      "type": "number",
+      "default": "0",
+      "required": true,
+      "options": [],
+      "min": "0"
+    },
+    {
+      "name": "training_cutoff",
+      "label": "Training cutoff",
+      "kind": "input",
+      "type": "number",
+      "default": "",
+      "required": true,
+      "options": [],
+      "min": "0"
+    },
+    {
+      "name": "modeled_available_boundary",
+      "label": "Model available boundary",
+      "kind": "input",
+      "type": "number",
+      "default": "",
+      "required": true,
+      "options": [],
+      "min": "0"
+    },
+    {
+      "name": "root_seeds",
+      "label": "Root seeds",
+      "kind": "input",
+      "type": "text",
+      "default": "42",
+      "required": true,
+      "options": []
+    },
+    {
+      "name": "hyperparameter_digest",
+      "label": "Hyperparameter digest",
+      "kind": "input",
+      "type": "text",
+      "default": "",
+      "required": true,
+      "options": [],
+      "minlength": "64",
+      "maxlength": "64"
+    },
+    {
+      "name": "preprocessing_digest",
+      "label": "Preprocessing digest",
+      "kind": "input",
+      "type": "text",
+      "default": "",
+      "required": true,
+      "options": [],
+      "minlength": "64",
+      "maxlength": "64"
+    },
+    {
+      "name": "calibration_digest",
+      "label": "Calibration digest",
+      "kind": "input",
+      "type": "text",
+      "default": "",
+      "required": true,
+      "options": [],
+      "minlength": "64",
+      "maxlength": "64"
+    },
+    {
+      "name": "ridge_lambda",
+      "label": "Ridge lambda",
+      "kind": "input",
+      "type": "number",
+      "default": "1",
+      "required": true,
+      "options": [],
+      "min": "0"
+    }
+  ],
+  "ml-schedule-form": [
+    {
+      "name": "model_bundle_id",
+      "label": "ModelBundle ID",
+      "kind": "input",
+      "type": "text",
+      "default": "",
+      "required": true,
+      "options": [],
+      "minlength": "64",
+      "maxlength": "64"
+    },
+    {
+      "name": "eligible_from",
+      "label": "Eligible from",
+      "kind": "input",
+      "type": "number",
+      "default": "",
+      "required": true,
+      "options": [],
+      "min": "0"
+    },
+    {
+      "name": "eligible_until",
+      "label": "Eligible until",
+      "kind": "input",
+      "type": "number",
+      "default": "",
+      "required": true,
+      "options": [],
+      "min": "1"
+    },
+    {
+      "name": "training_cutoff",
+      "label": "Training cutoff",
+      "kind": "input",
+      "type": "number",
+      "default": "",
+      "required": true,
+      "options": [],
+      "min": "0"
+    },
+    {
+      "name": "model_available_boundary",
+      "label": "Model available boundary",
+      "kind": "input",
+      "type": "number",
+      "default": "",
+      "required": true,
+      "options": [],
+      "min": "0"
+    }
+  ],
+  "ml-predict-form": [
+    {
+      "name": "replay_pack_id",
+      "label": "ReplayPack ID",
+      "kind": "input",
+      "type": "text",
+      "default": "",
+      "required": true,
+      "options": [],
+      "minlength": "64",
+      "maxlength": "64"
+    },
+    {
+      "name": "replay_semantics_id",
+      "label": "Replay semantics ID",
+      "kind": "input",
+      "type": "text",
+      "default": "",
+      "required": true,
+      "options": [],
+      "minlength": "64",
+      "maxlength": "64"
+    },
+    {
+      "name": "replay_layout_schema_id",
+      "label": "Replay layout ID",
+      "kind": "input",
+      "type": "text",
+      "default": "",
+      "required": true,
+      "options": [],
+      "minlength": "64",
+      "maxlength": "64"
+    },
+    {
+      "name": "feature_set_ids",
+      "label": "FeatureSet IDs",
+      "kind": "input",
+      "type": "text",
+      "default": "",
+      "required": true,
+      "options": []
+    },
+    {
+      "name": "model_schedule_id",
+      "label": "ModelSchedule ID",
+      "kind": "input",
+      "type": "text",
+      "default": "",
+      "required": true,
+      "options": [],
+      "minlength": "64",
+      "maxlength": "64"
+    },
+    {
+      "name": "model_bundle_ids",
+      "label": "ModelBundle IDs",
+      "kind": "input",
+      "type": "text",
+      "default": "",
+      "required": true,
+      "options": []
+    },
+    {
+      "name": "prediction_name",
+      "label": "Prediction name",
+      "kind": "input",
+      "type": "text",
+      "default": "score",
+      "required": true,
+      "options": []
+    },
+    {
+      "name": "inference_delay_boundaries",
+      "label": "Inference delay",
+      "kind": "input",
+      "type": "number",
+      "default": "0",
+      "required": true,
+      "options": [],
+      "min": "0"
+    },
+    {
+      "name": "missing_policy",
+      "label": "Missing policy",
+      "kind": "select",
+      "type": "text",
+      "default": "REJECT",
+      "required": false,
+      "options": [
+        {
+          "value": "REJECT",
+          "label": "REJECT"
+        },
+        {
+          "value": "NULL",
+          "label": "NULL"
+        }
+      ]
+    }
+  ]
+}

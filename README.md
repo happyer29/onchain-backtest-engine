@@ -34,6 +34,13 @@ identity is kept separate from physical execution settings. It does not require
 S3, PostgreSQL, a local ClickHouse service, Kafka, Kubernetes, or multi-host
 workers.
 
+The Web UI is built with **React and TypeScript**. Sniping, Copy Buy and
+FirstSwap share one **Strategy results** dashboard with summary cards,
+charts, entry/exit analytics, trade details and verified lineage. The old
+interface has been removed; existing result bookmarks open the React app.
+See [deep-dive §34.2](docs/architecture-deep-dive.md#342-web-ui) for its bounded
+query contract.
+
 > [!IMPORTANT]
 > The current working surface includes the reference stack and exact Pump.fun
 > Sniping. The project is in alpha: every new source range requires its own
@@ -58,13 +65,18 @@ history and a proven full settlement tail. See the
 and materialized schedules remain unavailable; existing Sniping admission
 and fixed semantics are unchanged.
 
-**Copy Buy charts:** start `backtest serve` with the configuration for your
-run's data root, then choose **Copy Buy result** in the run list. The separate
-dashboard shows summary charts and signals. Each token's **График** button
-opens its market cap in SOL, the leader signal, your actual entry/exit and
-failed attempts. Use **Вокруг сделки** / **Вся история** to change the view.
-History comes from the verified local snapshot; large or unavailable histories
-return an explicit error. See deep-dive §3.4 for interactive query limits.
+**Strategy results:** start `backtest serve` with your data-root configuration,
+open **Strategy results**, then **Results**. Every strategy uses the same tabs:
+**Overview**, **Entries**, **Exits**, **Trades**, **Verification**. Pump trade details open
+in a large overlay with SOL market-cap history, the original signal, actual
+entry/exit and failed attempts. **Around trade** / **Full history** changes the
+local view without reloading history. Charts use verified retained snapshots
+of up to 10 million rows, 128 files and 1 GiB. They filter the selected token's
+venue before decoding, with a ten-second scan budget and at most 4,000 exact
+points; unrelated tokens do not become Python event objects. Actual entry/exit
+markers come from stored fills, while rejected or failed attempts remain distinct;
+missing history and exceeded query limits are explicit errors. FirstSwap PnL is marked inapplicable; a chart without the required historical
+evidence is explicitly unavailable. Neither is invented.
 
 ## Features
 
@@ -74,19 +86,22 @@ return an explicit error. See deep-dive §3.4 for interactive query limits.
 | Local storage | Immutable canonical Parquet, verified manifests, and content-addressed references |
 | Deterministic replay | Reference engine, mmap ReplayPack, and optional DeliverySchedule with no SQL/network in the hot loop |
 | Pump.fun Sniping | `EXOGENOUS_REPLAY` and explicit synthetic `EXOGENOUS_VIRTUAL_SETTLEMENT`: exact non-Mayhem universe, `+500` global transactions before buy, `+2s` before the sell decision, integer fees, and ledger-authoritative PnL |
+| Pump.fun Copy Buy | Reference execution, exact signer BUY signals, one token entry, fee-free price TP/SL or timeout, and four bounded sell attempts |
 | Verifiable equivalence | Canonical Parquet reference, ReplayPack reference, and NumPy mmap optimized paths are checked for byte-identical outputs under the same admitted exact contract |
 | Job control | Durable SQLite queue, isolated child processes, cancel/retry/recovery, and bounded progress |
-| Local interface | Typed CLI, loopback-only Control API, and reactive same-origin Web UI with bounded arrow pagination, date-first bounded views, adaptive polling, and a dedicated analytical Sniping dashboard |
+| Local interface | Typed CLI, loopback-only Control API, and React same-origin Web UI, one shared strategy dashboard, bounded pagination, adaptive progress, charts and lineage diagrams |
 | Artifact lifecycle | Verification, lineage, pins, reachability GC, trash grace period, and a verifiable backup/restore contract |
 | Exact ML path | Point-in-time features, frozen predictions, and a safe integer-linear runtime |
 
-The header's theme selector switches between **Тёплый закат** (Warm sunset,
-the default) and the original **Тёмная** (Dark) theme on both Control and
-Sniping result pages. The browser remembers the choice and synchronizes open
-tabs; if storage is unavailable, the selector reports that it is tab-only.
+The sidebar identifies the workspace as **onchain backtest engine**. **English**
+is the default, regardless of the browser language; choose **Русский** using
+**Language**. **Appearance** offers **Warm sunset** (default) and **Dark**.
+Both preferences are stored locally and synchronize across tabs. If storage
+is unavailable, the choice remains active in the current tab. Changing language
+preserves entered form values, selected result tabs and open trade details.
 
 The UI loads only one bounded table page at a time: 20 jobs, 10 runs, and 25
-Sniping round trips by default. Job and run pages are selected globally newest
+strategy entries by default. Job and run pages are selected globally newest
 first through opaque keyset cursors, so a newly inserted row cannot shift an
 already-open continuation page. The Run order comes from a rebuildable manifest-bound SQLite index and
 the selected artifacts are reverified. Alternate table sorts/search are
@@ -96,6 +111,28 @@ and repeated exact artifact reads reuse only bounded, fingerprint-guarded
 process-local verification evidence. A clean restart over an unchanged local
 artifact inventory also reuses a durable rebuildable-index receipt; any crash,
 inventory drift, or corruption falls back to full verification.
+
+Frontend sources live in `frontend/`. Node.js 22.12+ is required only when
+changing or rebuilding the UI: `npm --prefix frontend ci`,
+`npm --prefix frontend run generate`, `npm --prefix frontend test`, and
+`npm --prefix frontend run build`. The build writes packaged static assets;
+`backtest serve` needs no Node server. Browser checks run with
+`npm --prefix frontend run test:browser` after installing Playwright Chromium.
+
+## Interface preview
+
+The screenshots below use the browser test fixtures, not a live portfolio or
+profitability claim. They show the shared interface in English with **Appearance → Dark** selected.
+
+![Shared strategy results in the dark theme, including valuation and entry distributions](docs/assets/strategy-results.png)
+
+![Close-up of a dark market-cap chart with distinct signal, BUY and SELL markers on illustrative UI data](docs/assets/trade-detail.png)
+
+The chart close-up uses an illustrative UI fixture with changing values to
+show the curve and markers clearly; it is not a historical token or a trading result.
+
+The same tabs serve Sniping, Copy Buy and FirstSwap. Available metrics reflect
+each strategy's verified result contract; unsupported metrics stay explicit.
 
 ## How it works
 
@@ -264,6 +301,7 @@ If the project is useful to you, you can support it with a donation:
 | Network | Address |
 |---|---|
 | Bitcoin | `bc1p7xa9amu9pjh5cear5dezulujg2fe86su0afg02w3cpxwp8rkychsvx3cmc` |
+| Ethereum (ETH) | `0x9f0d4b76466a2151d1848ba831c1109ec8fff18d` |
 | Solana | `D7eLSxAPhJaVE9rjyFPeTK6xEsxis1RpQ5Q3FQRMUG1G` |
 | TRON | `TGJFm8HHspMBcJ2maog88cTjzVrqz3izsB` |
 

@@ -100,11 +100,19 @@ def _wait_for_health(process: subprocess.Popen[bytes], port: int) -> dict[str, o
 def _verify_http(port: int, package_root: Path) -> None:
     """Prove each packaged dashboard and its runtime UI assets are actually served."""
     static = package_root / "interfaces/web/static"
-    routes = {"/": "index.html", "/sniping-results": "sniping-results.html"}
-    routes["/copy-results"] = "copy-results.html"
-    # Each dashboard must be self-contained after installation, outside the editable checkout.
-    assets = ("app.js", "sniping-results.js", "theme.js", "styles.css")
-    assets += ("copy-results.js", "copy-market-chart.js")
+    pages = ("/", "/sniping-results", "/copy-results", "/runs", "/launch", "/jobs")
+    pages += ("/data", "/ml", "/resources", "/artifacts", "/runs/" + "a" * 64)
+    routes = dict.fromkeys(pages, "index.html")
+    # Validate all emitted chunks, including lazy charts/lineage, without relying on fixed hashes.
+    assets = [
+        path.relative_to(static).as_posix()
+        for path in static.rglob("*")
+        if path.is_file() and path.suffix in {".js", ".css", ".txt"}
+    ]
+    assert assets and any(name.startswith("assets/") for name in assets)
+    assert "third-party-licenses.txt" in assets
+    assert 'lang="en"' in (static / "index.html").read_text(encoding="utf-8")
+    assert not (static / "app.js").exists() and not (static / "copy-results.html").exists()
     routes.update({f"/static/{name}": name for name in assets})
     # Byte equality catches a missing, stale or incorrectly routed packaged asset.
     for route, name in routes.items():

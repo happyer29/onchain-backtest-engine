@@ -9,45 +9,54 @@ from dataclasses import replace
 # Query timing and single-flight admission are operational, never replay inputs.
 from threading import Lock
 from time import monotonic
-from typing import cast
+from typing import cast, overload
+
+import pyarrow.parquet as pq
 
 from backtest.adapters.artifacts.localfs.repository import LocalArtifactRepository
 from backtest.adapters.columnar.arrow import CanonicalParquetReplaySource
+from backtest.adapters.columnar.arrow.canonical import _schema
 
 # The protocol projector is injected by bootstrap; storage knows no Pump reserve formula.
 from backtest.application.code_bundles import PinnedCodeBundleSet
 from backtest.application.market_charts import (
     MAX_MARKET_CHART_EVENTS,
     MAX_MARKET_CHART_POINTS,
+    MAX_MARKET_CHART_SELECTED_EVENTS,
     CopyChartMarker,
     # Display records are application-owned; this adapter supplies their verified history.
     CopyMarketChart,
     MarketCapPoint,
     MarketCapState,
     MarketChartQueryError,
+    StrategyMarketChart,
 )
 
 # Exact run and snapshot descriptors are the authority for input selection.
 from backtest.application.models import ArtifactKind
 from backtest.application.run_results import SuccessfulRunManifest
 from backtest.domain.chain import ChainPosition
-from backtest.domain.identifiers import ArtifactId
+from backtest.domain.identifiers import ArtifactId, AssetId, ContentDigest, VenueId
 from backtest.domain.market_events import (
     # Only these market event kinds can alter the selected curve display.
     CanonicalEvent,
+    EventKind,
     TokenLaunchEvent,
     VenueLifecycleEvent,
     VenueTradeEvent,
 )
+from backtest.domain.roundtrips import RoundTripRecord
 
 # Existing frozen records and compact clock supply actual attempt positions and time.
 from backtest.engine.copytrading_results import CopyPositionRecord
 from backtest.engine.transaction_clock import CompactTransactionClock
 
 # Operational caps prevent an HTTP request from becoming an unconstrained scan.
-MAX_CHART_PARTITIONS = 64
-MAX_CHART_INPUT_BYTES = 64 * 1024**2
-MAX_CHART_READ_SECONDS = 5.0
+MAX_CHART_PARTITIONS = 128
+MAX_CHART_INPUT_BYTES = 1024**3
+MAX_CHART_READ_SECONDS = 10.0
+# Compact clock construction also has a separate bound on its Python coordinate arrays.
+MAX_CHART_CLOCK_ROWS = 500_000
 
 
 class LocalCopyMarketChartReader:
@@ -65,14 +74,32 @@ class LocalCopyMarketChartReader:
         self._build_tools = build_tools
         self._admission = Lock()
 
+    @overload
+    def read(
+        self, artifact_id: ArtifactId, manifest: SuccessfulRunManifest, position: CopyPositionRecord
+    ) -> CopyMarketChart: ...
+
+    @overload
+    def read(
+        self, artifact_id: ArtifactId, manifest: SuccessfulRunManifest, position: RoundTripRecord
+    ) -> StrategyMarketChart: ...
+
+    @overload
+    def read(
+        self,
+        artifact_id: ArtifactId,
+        manifest: SuccessfulRunManifest,
+        position: CopyPositionRecord | RoundTripRecord,
+    ) -> StrategyMarketChart: ...
+
     # A chart read is selected through an already authenticated result row.
     def read(
         self,
         artifact_id: ArtifactId,
         manifest: SuccessfulRunManifest,
-        position: CopyPositionRecord,
+        position: CopyPositionRecord | RoundTripRecord,
         # No caller-supplied source range or filesystem path enters the reader.
-    ) -> CopyMarketChart:
+    ) -> StrategyMarketChart:
         """Resource rejection is explicit instead of accumulating concurrent scans."""
         if not self._admission.acquire(blocking=False):
             raise MarketChartQueryError("MARKET_CHART_BUSY")
@@ -107,7 +134,7 @@ class LocalCopyMarketChartReader:
             raise ValueError("invalid chart distribution references")
         if len(refs) > MAX_CHART_PARTITIONS:
             raise MarketChartQueryError("MARKET_CHART_LIMIT_EXCEEDED")
-        rows, size = 0, 0
+        rows, size, clock_rows = 0, 0, 0
         # Accumulate every referenced stream before admitting canonical replay reads.
         for ref in refs:
             if not isinstance(ref, dict) or type(ref.get("row_count")) is not int:
@@ -115,6 +142,11 @@ class LocalCopyMarketChartReader:
             # Count every canonical stream, including the compact block clock.
             rows += ref["row_count"]
             if ref["row_count"] < 0 or rows > MAX_MARKET_CHART_EVENTS:
+                raise MarketChartQueryError("MARKET_CHART_LIMIT_EXCEEDED")
+            # A highly compressed block-only snapshot cannot exhaust the controller's RAM.
+            if ref.get("event_kind") == "BLOCK":
+                clock_rows += ref["row_count"]
+            if clock_rows > MAX_CHART_CLOCK_ROWS:
                 raise MarketChartQueryError("MARKET_CHART_LIMIT_EXCEEDED")
             artifact = self._artifacts.open_committed(ArtifactId(ref["artifact_id"]))
             leases.callback(artifact.close)
@@ -124,16 +156,25 @@ class LocalCopyMarketChartReader:
                 size += stream.tell()
             if size > MAX_CHART_INPUT_BYTES:
                 raise MarketChartQueryError("MARKET_CHART_LIMIT_EXCEEDED")
+            # Physical row counts and schemas must agree even for streams excluded by the filter.
+            with artifact.open_binary("events.parquet") as stream:
+                parquet = pq.ParquetFile(stream)
+                if parquet.metadata.num_rows != ref["row_count"]:
+                    raise ValueError("chart input row count mismatch")
+                # Block-clock schema is verified here before its compact projection is loaded.
+                expected_schema = _schema(EventKind[ref["event_kind"]])
+                if not parquet.schema_arrow.equals(expected_schema, check_metadata=True):
+                    raise ValueError("chart input schema mismatch")
 
     # The verified run is the sole authority for selecting history dependencies.
     def _read_history(
         self,
         artifact_id: ArtifactId,
         manifest: SuccessfulRunManifest,
-        position: CopyPositionRecord,
+        position: CopyPositionRecord | RoundTripRecord,
         # The same operational deadline covers metadata and streaming work.
         deadline: float,
-    ) -> CopyMarketChart:
+    ) -> StrategyMarketChart:
         """The chart always names its canonical snapshot, regardless of the run's backend."""
         spec = manifest.resolved_spec
         source = CanonicalParquetReplaySource(
@@ -156,18 +197,21 @@ class LocalCopyMarketChartReader:
             or source.replay_semantics_id != spec.replay_semantics_id
         ):
             raise ValueError("chart snapshot differs from resolved run")
-        # Streaming all bounded inputs completes the canonical logical-hash check.
+        # The successful run pins this authenticated input closure; only its venue is decoded.
         clock = source.transaction_clock()
         points = self._collect_points(source, position, clock, deadline)
         markers = _markers(position, points, clock)
         # Attach the input provenance to the bounded output rather than persisting a new artifact.
-        return CopyMarketChart(
+        chart_type = (
+            CopyMarketChart if isinstance(position, CopyPositionRecord) else StrategyMarketChart
+        )
+        return chart_type(
             artifact_id,
             position.roundtrip_id,
             spec.snapshot_id,
-            position.intent.asset_id,
+            _asset(position),
             # The ordinate unit comes from the recorded pair; it is never guessed.
-            position.intent.quote_asset_id,
+            _quote_asset(position),
             tuple(points),
             markers,
         )
@@ -176,7 +220,7 @@ class LocalCopyMarketChartReader:
     def _collect_points(
         self,
         source: CanonicalParquetReplaySource,
-        position: CopyPositionRecord,
+        position: CopyPositionRecord | RoundTripRecord,
         clock: CompactTransactionClock,
         # The source clock is read-only and never fabricated for display.
         deadline: float,
@@ -185,26 +229,36 @@ class LocalCopyMarketChartReader:
         points: list[MarketCapPoint] = []
         signal_found = False
         seen_creation = False
-        # This concrete reader implements events as a generator; close its artifact leases on error.
-        events = cast(Generator[CanonicalEvent], source.events())
+
+        # The caller's deadline includes compact-clock construction and metadata admission.
+        def check_budget() -> None:
+            """Even empty native filter batches remain subject to the same query deadline."""
+            if monotonic() > deadline:
+                raise MarketChartQueryError("MARKET_CHART_LIMIT_EXCEEDED")
+
+        # This projection cannot be substituted for full execution replay verification.
+        events = cast(
+            Generator[CanonicalEvent],
+            source.events_for_venue(_venue(position), check_budget=check_budget),
+        )
         try:
             for count, event in enumerate(events, 1):
                 # Time and row quotas bound query work without altering run semantics.
-                if count > MAX_MARKET_CHART_EVENTS or monotonic() > deadline:
+                if count > MAX_MARKET_CHART_SELECTED_EVENTS or monotonic() > deadline:
                     raise MarketChartQueryError("MARKET_CHART_LIMIT_EXCEEDED")
                 if not _belongs_to_position(event, position):
                     continue
                 projected = self._projector(event)
                 # Initialization must come from the actual retained creation of this mint.
                 if isinstance(event, TokenLaunchEvent):
-                    if seen_creation or event.asset_id != position.intent.asset_id:
+                    if seen_creation or event.asset_id != _asset(position):
                         raise ValueError("ambiguous chart creation")
                     seen_creation = True
                 # A retained trade without its initialization is incomplete history.
                 elif not seen_creation:
                     raise ValueError("chart history has no initial creation")
                 # Bind the selected signal to its exact source event, signer and direction.
-                if event.envelope.canonical_event_id == position.intent.signal.event_id:
+                if event.envelope.canonical_event_id == _signal_id(position):
                     _verify_signal(event, projected, position, signal_found)
                     signal_found = True
                 # Only the final state of a whole transaction is exposed to the browser.
@@ -239,15 +293,17 @@ class LocalCopyMarketChartReader:
 
 
 # Unrelated venues do not require protocol decoding or per-token allocation.
-def _belongs_to_position(event: CanonicalEvent, position: CopyPositionRecord) -> bool:
+def _belongs_to_position(
+    event: CanonicalEvent, position: CopyPositionRecord | RoundTripRecord
+) -> bool:
     """Venue and asset must agree; unrelated market actors are still included for this venue."""
     if not isinstance(event, (TokenLaunchEvent, VenueTradeEvent, VenueLifecycleEvent)):
         return False
-    if event.venue_id != position.intent.venue_id:
+    if event.venue_id != _venue(position):
         return False
     # A wrong pair must not be decoded using a coincidentally matching venue identifier.
     if isinstance(event, VenueTradeEvent):
-        expected = {position.intent.asset_id, position.intent.quote_asset_id}
+        expected = {_asset(position), _quote_asset(position)}
         if {event.sold_asset_id, event.bought_asset_id} != expected:
             raise ValueError("chart trade has the wrong asset pair")
     return True
@@ -257,11 +313,23 @@ def _belongs_to_position(event: CanonicalEvent, position: CopyPositionRecord) ->
 def _verify_signal(
     event: CanonicalEvent,
     projected: MarketCapState,
-    position: CopyPositionRecord,
+    position: CopyPositionRecord | RoundTripRecord,
     already_found: bool,
     # Duplicate canonical signal identity is a query failure, not deduplication.
 ) -> None:
     """The signal is the original leader BUY, not a payer or another trade in its group."""
+    if isinstance(position, RoundTripRecord):
+        if already_found or not isinstance(event, TokenLaunchEvent):
+            raise ValueError("ambiguous creation signal")
+        # The stored developer is creation ownership, not payer or transaction signer.
+        if (
+            event.envelope.position != position.target_position
+            or event.developer_id != position.developer_id
+            or event.asset_id != position.asset_id
+            or event.quote_asset_id != position.quote_asset_id
+        ):
+            raise ValueError("chart creation binding mismatch")
+        return
     signal = position.intent.signal
     if already_found or not isinstance(event, VenueTradeEvent):
         raise ValueError("ambiguous chart signal")
@@ -295,7 +363,7 @@ def _last_transaction(clock: CompactTransactionClock) -> ChainPosition:
 
 # Attempt markers use their actual effective coordinates independently of trade density.
 def _markers(
-    position: CopyPositionRecord,
+    position: CopyPositionRecord | RoundTripRecord,
     points: list[MarketCapPoint],
     clock: CompactTransactionClock,
 ) -> tuple[CopyChartMarker, ...]:
@@ -315,6 +383,23 @@ def _markers(
 
     # A signal marks the entire historical transaction, not an intermediate callback.
     result = [CopyChartMarker("SIGNAL", "OBSERVED_SOURCE", None, at(position.target_position))]
+    if isinstance(position, RoundTripRecord):
+        for number, leg in enumerate((position.buy, position.sell)):
+            if leg is None:
+                continue
+            coordinate = leg.landing_position or leg.decision_position
+            # Suppressed targets have no own-order marker; rejects remain at decision time.
+            status = (
+                "FILLED"
+                if leg.failure_code is None
+                else "FAILED"
+                if leg.landing_position
+                else "REJECTED"
+            )
+            result.append(
+                CopyChartMarker(leg.side.value, status, number, at(coordinate), leg.failure_code)
+            )
+        return tuple(result)
     for attempt in position.attempts:
         coordinate = attempt.landed_at or attempt.decision
         result.append(
@@ -329,3 +414,31 @@ def _markers(
             )
         )
     return tuple(result)
+
+
+def _asset(position: CopyPositionRecord | RoundTripRecord) -> AssetId:
+    """The result family supplies its own immutable pair identity."""
+    return position.asset_id if isinstance(position, RoundTripRecord) else position.intent.asset_id
+
+
+def _quote_asset(position: CopyPositionRecord | RoundTripRecord) -> AssetId:
+    """No implicit SOL substitution is allowed at the selector boundary."""
+    return (
+        position.quote_asset_id
+        if isinstance(position, RoundTripRecord)
+        else position.intent.quote_asset_id
+    )
+
+
+def _venue(position: CopyPositionRecord | RoundTripRecord) -> VenueId:
+    """Venue scope is fixed by the recorded result, never by a client path."""
+    return position.venue_id if isinstance(position, RoundTripRecord) else position.intent.venue_id
+
+
+def _signal_id(position: CopyPositionRecord | RoundTripRecord) -> ContentDigest:
+    """Creation and copy BUY signals retain their existing distinct event identities."""
+    return (
+        position.target_event_id
+        if isinstance(position, RoundTripRecord)
+        else position.intent.signal.event_id
+    )

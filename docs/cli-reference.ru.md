@@ -470,19 +470,24 @@ origin. Работают typed prepare/backtest/sweep/ML forms, queue/progress,
 cancel/retry, run comparison, artifacts/lineage и resource status. Отдельная
 Pump.fun Sniping form получает schema через run-contract discovery, принимает
 decimal strings как `BigInt`, показывает fixed semantics read-only и позволяет
-выбрать reference либо dedicated optimized backend. Summary cards и
-глобальные графики открываются на отдельном dashboard по кнопке
-`Sniping result`; они используют bounded verified summary всего run.
-Keyset-таблица вручную загружает не более 200 round trips за страницу и
-показывает lifecycle, обе стороны slippage, component fees, account/rent,
-cashback и realized/open PnL. Summary не подменяет
-`null` full PnL нулём или valued subtotal.
+выбрать reference либо dedicated optimized backend. Кнопка **Results** открывает
+общий React-экран **Strategy results** для Sniping, Copy Buy и FirstSwap:
+проверенная сводка, ограниченные диаграммы всего прогона, аналитика входов/выходов,
+одна keyset-страница из 25 записей и детали сделки. API допускает до 200 записей.
+English — язык по умолчанию; **Language** в меню включает русский. Ни язык,
+ни оформление не меняют command. Полный PnL не заменяется нулём/subtotal.
 
 Contract discovery предоставляет форму v3 с обязательным выбором между
 `EXOGENOUS_REPLAY` и `EXOGENOUS_VIRTUAL_SETTLEMENT`. Virtual settlement
 постоянно показывает предупреждение: SOL, покрывающий недостаток ликвидности,
 является синтетическим и доступен для трат только в моделируемом кошельке;
 это не доказывает возможность соответствующей продажи on-chain.
+
+Общие read-only routes под `/api/v1/run-artifacts/{id}`: `strategy-summary`,
+`strategy-dashboard`, `entries`, `entries/{entry_id}`, `entries/{entry_id}/chart`
+и `analytics`. Chart/detail требуют `boundary_ordinal`; страницы используют
+тот же двухчастный cursor. Параметры и лимиты определены в английском
+[§34.2](architecture-deep-dive.md#342-web-ui). Старые API остаются совместимыми.
 
 Основные Sniping API routes:
 

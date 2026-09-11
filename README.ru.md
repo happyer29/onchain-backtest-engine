@@ -56,13 +56,15 @@ Pump.fun Copy Buy доступен через reference engine и CLI/API/Web UI
 Optimized copy и materialized schedules недоступны; фиксированные правила и
 допуск существующего Sniping сохраняются.
 
-**Графики копитрейдинга:** запустите `backtest serve` с конфигурацией data root
-вашего прогона и нажмите **Copy Buy result** в списке результатов. Отдельный
-дашборд показывает сводные диаграммы и сигналы. Кнопка **График** у каждого
-токена открывает маркеткап в SOL, сигнал лидера, ваши фактические вход/выход
-и неудачные попытки. Масштаб переключается кнопками **Вокруг сделки** /
-**Вся история**. Источник — проверенный локальный snapshot; недоступная или
-слишком большая история возвращает явную ошибку. Лимиты чтения описаны в §3.4.
+**Результаты стратегии:** запустите `backtest serve`, откройте **Strategy results**
+и нажмите **Results** у нужного прогона. Общие вкладки для Sniping, Copy Buy и
+FirstSwap: **Overview**, **Entries**, **Exits**, **Trades**, **Verification**.
+В **Trades** нажмите токен или кнопку деталей: overlay покажет проверенную
+историю маркеткапа Pump в SOL, сигнал, фактические вход/выход и отдельные
+неудачные попытки. **Around trade** / **Full history** меняет локальный масштаб.
+Лимиты — 10 миллионов входных строк, 128 файлов, 1 GiB и 4 000 точек при
+десятисекундном scan; точные ограничения описаны в §3.4. Нет источника-замены,
+усечения истории или выдуманного FirstSwap PnL.
 
 ## Что умеет проект
 
@@ -74,17 +76,18 @@ Optimized copy и materialized schedules недоступны; фиксиров�
 | Pump.fun Sniping | `EXOGENOUS_REPLAY` и явный synthetic `EXOGENOUS_VIRTUAL_SETTLEMENT`: exact non-Mayhem universe, `+500` global transactions до buy, `+2s` до sell decision, integer fees и ledger-authoritative PnL |
 | Проверяемая эквивалентность | Canonical Parquet reference, ReplayPack reference и NumPy mmap optimized paths проверяются на byte-identical outputs в рамках одного допущенного exact contract |
 | Управление задачами | Durable SQLite queue, isolated child processes, cancel/retry/recovery и bounded progress |
-| Локальный интерфейс | Typed CLI, loopback-only Control API и реактивный same-origin Web UI с bounded arrow pagination, сортировкой по дате, adaptive polling и отдельным аналитическим Sniping dashboard |
+| Локальный интерфейс | Typed CLI, loopback-only Control API и реактивный same-origin Web UI с bounded arrow pagination, сортировкой по дате, adaptive polling и общим React-экраном результатов стратегий |
 | Жизненный цикл artifacts | Verification, lineage, pins, reachability GC, trash grace period и проверяемый backup/restore contract |
 | Exact ML path | Point-in-time features, frozen predictions и безопасный integer-linear runtime |
 
-Переключатель «Тема» в шапке страниц Control и Sniping result предлагает
-**Тёплый закат** (по умолчанию) и исходную **Тёмную** тему. Браузер запоминает
-выбор и синхронизирует открытые вкладки; если хранилище недоступно, переключатель
-сообщает, что выбор действует только для текущей вкладки.
+Весь UI использует React/TypeScript. В меню указано **onchain backtest engine**.
+Английский — язык по умолчанию, русский выбирается через **Language → Русский**.
+**Appearance** предлагает **Warm sunset** (по умолчанию) и **Dark**. Настройки
+сохраняются локально, синхронизируются между вкладками и не сбрасывают форму
+или выбранную сделку. При запрете хранилища они действуют только в этой вкладке.
 
 UI загружает только одну bounded-страницу таблицы: по умолчанию 20 jobs,
-10 runs и 25 Sniping round trips. Jobs и runs выбираются глобально от новых к
+10 runs и 25 записей стратегии. Jobs и runs выбираются глобально от новых к
 старым через opaque keyset cursors, поэтому новая запись не сдвигает уже
 открытую continuation page. Run-порядок берётся из rebuildable manifest-bound SQLite-индекса, после
 чего выбранные artifacts повторно проверяются. Альтернативные сортировки и
@@ -95,6 +98,18 @@ verification evidence, защищённый fingerprint-ом файлов. Clean
 неизменившемся local artifact inventory также использует durable receipt
 rebuildable-индексов; crash, inventory drift или corruption возвращают полную
 проверку.
+
+## Интерфейс
+
+На изображениях используются изолированные browser fixtures, а не ваш рабочий
+портфель или доказательство прибыльности. Показан английский интерфейс с выбранной темой **Appearance → Dark**.
+
+![Общий React-экран результатов стратегии в тёмной теме](docs/assets/strategy-results.png)
+
+![Крупный график маркеткапа в тёмной теме с метками сигнала, BUY и SELL на демонстрационных данных](docs/assets/trade-detail.png)
+
+Крупный план графика использует демонстрационный UI fixture с изменяющимися
+значениями для наглядности кривой и меток; это не история реального токена или результат торговли.
 
 ## Как это работает
 
@@ -268,6 +283,7 @@ Live ClickHouse и performance tests запускаются отдельно и 
 | Сеть | Адрес |
 |---|---|
 | Bitcoin | `bc1p7xa9amu9pjh5cear5dezulujg2fe86su0afg02w3cpxwp8rkychsvx3cmc` |
+| Ethereum (ETH) | `0x9f0d4b76466a2151d1848ba831c1109ec8fff18d` |
 | Solana | `D7eLSxAPhJaVE9rjyFPeTK6xEsxis1RpQ5Q3FQRMUG1G` |
 | TRON | `TGJFm8HHspMBcJ2maog88cTjzVrqz3izsB` |
 

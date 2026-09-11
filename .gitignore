@@ -32,6 +32,11 @@ Thumbs.db
 
 /dist/
 /build/
+frontend/node_modules/
+frontend/coverage/
+frontend/test-results/
+frontend/playwright-report/
+frontend/*.tsbuildinfo
 *.egg-info/
 
 /var/
@@ -55,3 +60,15 @@ Thumbs.db
 .hypothesis/
 
 TODO.md
+
+# Local agent state, source inventory and experiment notes are not public deliverables.
+/.agents/
+/.codex/
+/AGENTS.md
+/AGENTS.ru.md
+/docs/indexer-profile*.md
+/docs/release-readiness*.md
+/docs/public-release-checklist*.md
+/docs/rust-migration-plan*.md
+/docs/architecture-audit-and-rust-plan*.md
+/docs/copytrading-trial-*.md

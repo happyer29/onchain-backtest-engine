@@ -10,7 +10,9 @@ from backtest.domain.identifiers import AccountId, ArtifactId, AssetId, ContentD
 MARKET_CAP_CHART_SCHEMA = "pumpfun-copy-market-cap/v1"
 MARKET_CAP_POLICY = "post-transaction-total-supply-market-cap-lamports-floor/v1"
 # Small synchronous reads have explicit ceilings; larger analysis needs a separate job.
-MAX_MARKET_CHART_EVENTS = 50_000
+MAX_MARKET_CHART_EVENTS = 10_000_000
+# Only selected venue rows become Python events; the snapshot cap bounds physical scanning.
+MAX_MARKET_CHART_SELECTED_EVENTS = 50_000
 MAX_MARKET_CHART_POINTS = 4_000
 MAX_MARKET_CHART_MARKERS = 6
 
@@ -115,7 +117,7 @@ class CopyChartMarker:
 
 
 @dataclass(frozen=True, slots=True)
-class CopyMarketChart:
+class StrategyMarketChart:
     """A response is bound to one run, one recorded position and its exact snapshot."""
 
     run_artifact_id: ArtifactId
@@ -131,7 +133,7 @@ class CopyMarketChart:
         # Transport never carries an unbounded series or omits the requested signal.
         if not 1 <= len(self.points) <= MAX_MARKET_CHART_POINTS:
             raise ValueError("invalid market chart point count")
-        if not 2 <= len(self.markers) <= MAX_MARKET_CHART_MARKERS:
+        if not 1 <= len(self.markers) <= MAX_MARKET_CHART_MARKERS:
             raise ValueError("invalid market chart marker count")
         # The signal is mandatory even when the own buy was rejected.
         if self.quote_asset_id != AssetId("SOL") or self.markers[0].kind != "SIGNAL":
@@ -149,3 +151,13 @@ class CopyMarketChart:
             self.points[0].position.require_same_chain(point.position)
             if not keys[0] <= point.position.boundary_ordinal <= keys[-1]:
                 raise ValueError("market marker falls outside chart coverage")
+
+
+@dataclass(frozen=True, slots=True)
+class CopyMarketChart(StrategyMarketChart):
+    """The existing copy contract always includes its consumed entry attempt."""
+
+    def __post_init__(self) -> None:
+        StrategyMarketChart.__post_init__(self)
+        if len(self.markers) < 2:
+            raise ValueError("copy chart requires a signal and an entry attempt")

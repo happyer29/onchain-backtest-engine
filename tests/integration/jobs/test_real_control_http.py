@@ -282,7 +282,7 @@ def _real_http_security_and_static_smoke(port: int, data_root: Path) -> None:
     # steps.
     root = _http_request(port, "GET", "/")
     assert root.status == 200
-    assert b"On-Chain Backtest Engine" in root.body
+    assert b'id="root"' in root.body
     assert root.headers["content-security-policy"].startswith("default-src 'none'")
     assert "httponly" in root.headers["set-cookie"].casefold()
     # Verify the casefold, headers and set-cookie relationship before this scenario is
@@ -297,30 +297,23 @@ def _real_http_security_and_static_smoke(port: int, data_root: Path) -> None:
     # accepted.
     assert refreshed.headers["set-cookie"].partition(";")[0] == cookie
 
-    script = _http_request(port, "GET", "/static/app.js")
-    assert script.status == 200
-    assert b"textContent" in script.body
-    assert b"innerHTML" not in script.body
-    # Verify b'document.cookie' not in script.body before this scenario is accepted.
-    assert b"document.cookie" not in script.body
+    # Built entry scripts are external same-origin resources, including the React bootstrap.
+    import re
 
-    dashboard = _http_request(
-        port,
-        "GET",
-        "/sniping-results?run_artifact_id=" + "a" * 64,
-        headers={"Cookie": cookie},
-    )
-    assert dashboard.status == 200
-    assert b"Sniping result" in dashboard.body
-    assert dashboard.headers["content-security-policy"].startswith("default-src 'none'")
-    assert dashboard.headers["cache-control"] == "no-cache"
-
-    dashboard_script = _http_request(port, "GET", "/static/sniping-results.js")
-    assert dashboard_script.status == 200
-    assert b"createElementNS" in dashboard_script.body
-    assert b"textContent" in dashboard_script.body
-    assert b"innerHTML" not in dashboard_script.body
-    assert b"document.cookie" not in dashboard_script.body
+    scripts = re.findall(rb'<script[^>]+src="([^"]+)"', root.body)
+    assert scripts
+    for path in scripts:
+        assert path.startswith(b"/static/")
+        assert _http_request(port, "GET", path.decode()).status == 200
+    # Original result bookmarks and new SPA routes all share the same session-protected shell.
+    for path in ("/sniping-results", "/copy-results", "/runs/" + "a" * 64, "/launch"):
+        dashboard = _http_request(port, "GET", path, headers={"Cookie": cookie})
+        assert dashboard.status == 200 and dashboard.body == root.body
+        assert dashboard.headers["content-security-policy"].startswith("default-src 'none'")
+        assert dashboard.headers["cache-control"] == "no-cache"
+    # Old handlers cannot be served accidentally through a second static implementation.
+    assert _http_request(port, "GET", "/static/app.js").status == 404
+    assert _http_request(port, "GET", "/static/copy-results.js").status == 404
 
     bad_host = _http_request(
         port,
@@ -485,6 +478,8 @@ def test_real_uvicorn_durable_http_restart_and_isolated_child_equivalence(
     )
     direct = RuntimeCliBackend(container, config_path).run_backtest(request)
     direct_job = container.jobs.list_jobs(limit=10)[0]
+    # The common result query must describe the real FirstSwap order without inventing PnL.
+    _assert_generic_strategy_results(container, direct)
 
     server: subprocess.Popen[str] | None = None
     # Keep expected failures inside the test real uvicorn durable http restart and
@@ -657,3 +652,25 @@ def test_real_uvicorn_durable_http_restart_and_isolated_child_equivalence(
         # restart and isolated child equivalence operation.
         if server is not None:
             _stop_server(server)
+
+
+def _assert_generic_strategy_results(container, result):
+    """Exercise common presentation against a genuinely published FirstSwap artifact."""
+    queries = container.control.query_strategy_results
+    assert queries is not None
+    dashboard = queries.dashboard(result.artifact.artifact_id, limit=1)
+    assert dashboard.summary.family == "FIRST_SWAP"
+    # A filled generic entry is an order outcome, without an invented exit or valuation policy.
+    assert len(dashboard.entries.items) == 1
+    assert dashboard.entries.items[0].status == "FILLED"
+    assert dashboard.entries.items[0].signal_event_id is None
+    assert dashboard.entries.items[0].details["fills"]
+    assert dashboard.entries.items[0].asset_id is not None
+    assert dashboard.entries.items[0].economic_pnl_atomic is None
+    metrics = {item.key: item for item in dashboard.summary.metrics}
+    assert metrics["economic_pnl_atomic"].availability == "NOT_APPLICABLE"
+    # The bounded audit reduction reconciles the same actual order count.
+    analytics = queries.analytics(result.artifact.artifact_id)
+    assert analytics.entry_count == 1
+    outcomes = next(item for item in analytics.distributions if item.key == "entry_outcomes")
+    assert outcomes.items == (("FILLED", 1),)

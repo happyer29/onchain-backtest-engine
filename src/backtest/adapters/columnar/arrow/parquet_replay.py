@@ -8,7 +8,7 @@ import json
 from bisect import bisect_left
 
 # Import abc at the visible module dependency boundary.
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import ExitStack
 from itertools import islice, pairwise
 from pathlib import Path
@@ -16,6 +16,7 @@ from typing import Any, Protocol, cast
 
 # Import duckdb at the visible module dependency boundary.
 import duckdb
+import pyarrow.dataset as ds
 import pyarrow.parquet as pq
 
 from backtest.adapters.artifacts.localfs.repository import LocalArtifactRepository
@@ -365,6 +366,98 @@ class CanonicalParquetReplaySource:
             if stream_digest.hexdigest() != self._logical_content_hash.hex:
                 raise CanonicalDataError("snapshot logical event stream hash mismatch")
 
+    def events_for_venue(
+        self, venue_id: VenueId, *, check_budget: Callable[[], None]
+    ) -> Iterator[CanonicalEvent]:
+        """Project one venue from authenticated inputs; this is not an execution replay."""
+        with ExitStack() as stack:
+            # Merge capability shards in their canonical order without decoding other venues.
+            streams = [
+                self._venue_events(stack, group, venue_id, check_budget)
+                for group in self._capability_distribution_groups()
+            ]
+            previous = None
+            # A filtered projection has no claim to the whole snapshot's logical stream hash.
+            for event, stored_digest in heapq.merge(
+                *streams, key=lambda item: canonical_event_sort_key(item[0])
+            ):
+                check_budget()
+                key = canonical_event_sort_key(event)
+                # Revalidate selected semantics and order before any price reaches the caller.
+                if previous is not None and key <= previous:
+                    raise CanonicalDataError("selected market history order is invalid")
+                if canonical_event_digest(event).hex != stored_digest.hex():
+                    raise CanonicalDataError("canonical row semantic digest mismatch")
+                # Historical coordinates must exist in the exact retained all-transaction clock.
+                self._transaction_clock.require_position(event.envelope.position)
+                previous = key
+                yield event
+            check_budget()
+
+    # Filtering is confined to this display path; the execution iterator above stays unchanged.
+    def _venue_events(
+        self,
+        stack: ExitStack,
+        distributions: tuple[tuple[ArtifactId, EffectiveSourceBoundary, dict[str, object]], ...],
+        # The selector originates from a verified stored result, not arbitrary browser SQL.
+        venue_id: VenueId,
+        check_budget: Callable[[], None],
+    ) -> Iterator[tuple[CanonicalEvent, bytes]]:
+        """Keep exact partition leases while bounded Arrow batches filter a single venue."""
+        for artifact_id, boundary, document in distributions:
+            # The compact clock is loaded separately; block rows have no venue column.
+            check_budget()
+            if boundary.event_kind is EventKind.BLOCK:
+                continue
+            handle = cast(_LocalHandle, self._artifacts.open_committed(artifact_id))
+            stack.callback(handle.close)
+            # Authentication is repeated at open; a matching manifest ID alone is insufficient.
+            manifest = _read_distribution_manifest(
+                handle,
+                artifact_id,
+                expected_boundary=boundary,
+                expected_ref=document,
+                # Pinned writer/projector identities bind every shard to its committed derivation.
+                expected_projector_bundle_id=self._projector_bundle_id,
+                expected_writer_bundle_id=self._writer_bundle_id,
+                # Chain identity is checked independently of the selected venue string.
+                expected_network_id=self._network_id,
+                expected_position_schema_id=self._position_schema_id,
+            )
+            kind = EventKind[cast(str, manifest["event_kind"])]
+            path = handle.local_path("events.parquet")
+            # Validate the physical schema before asking Arrow to bind the predicate.
+            parquet = pq.ParquetFile(path)
+            if not parquet.schema_arrow.equals(_schema(kind), check_metadata=True):
+                raise CanonicalDataError("canonical partition schema mismatch")
+            if parquet.metadata.num_rows != manifest["row_count"]:
+                raise CanonicalDataError("canonical partition row count mismatch")
+            # One worker, one batch of readahead; no selected-history list or native thread pool.
+            scanner = ds.dataset(path, format="parquet").scanner(
+                filter=ds.field("venue_id") == venue_id.value,
+                batch_size=self._reader_batch_rows,
+                batch_readahead=1,
+                fragment_readahead=1,
+                # Interactive queries share the controller host's native-thread budget.
+                use_threads=False,
+                fragment_scan_options=ds.ParquetFragmentScanOptions(pre_buffer=False),
+            )
+            for batch in scanner.to_batches():
+                # Empty filtered batches still consume time and must not evade the deadline.
+                check_budget()
+                for row in batch.to_pylist():
+                    # Filtering is complete before Python objects and protocol payloads are built.
+                    event = _event_from_row(
+                        row,
+                        kind,
+                        network_id=self._network_id,
+                        # The decoder preserves integer amounts and exact event coordinates.
+                        position_schema_id=self._position_schema_id,
+                    )
+                    yield event, _bytes(row, "logical_row_digest", width=32)
+            check_budget()
+
+    # Both readers preserve the existing gap-free capability shard sequence.
     def _capability_distribution_groups(
         self,
     ) -> tuple[

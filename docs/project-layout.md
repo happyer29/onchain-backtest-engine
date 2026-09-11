@@ -34,6 +34,7 @@ backtest/
 | `configs/` | Committed profiles/examples and gitignored local configs |
 | `docs/` | User and architecture documentation |
 | `scripts/` | Platform setup and smoke helpers, including Windows 11/WSL2 |
+| `frontend/` | React/TypeScript sources, locale catalog, component/browser tests and frozen npm lockfile |
 | `src/backtest/` | Production Python package |
 | `tests/` | Architecture, unit, contract, integration, golden, and performance tests |
 | `var/` | Mutable operational state and immutable local artifacts |
@@ -137,12 +138,13 @@ plugins/
   strategies/
     first_swap.py
     pumpfun_sniping.py
+    pumpfun_copybuy.py
   execution/constant_product.py
   risk/static.py
 ```
 
 The current runtime composition statically allowlists the FirstSwap and
-Pump.fun Sniping stacks by exact source-bundle digest. Merely placing a new
+Pump.fun Sniping and Copy Buy stacks by exact source-bundle digest. Merely placing a new
 `.py` file in the directory is insufficient: it must implement the core-owned
 contract, declare a versioned bundle/config, be wired only in `bootstrap`, add
 fidelity/preflight/golden tests, and preserve dependency direction. Automatic
@@ -170,8 +172,8 @@ Inbound adapters:
 
 - `interfaces/cli/` — Typer commands;
 - `interfaces/api/` — FastAPI routes and typed DTOs;
-- `interfaces/web/static/` — prebuilt HTML/CSS/JS assets for the main Control
-  UI and the separate bounded Pump.fun Sniping result dashboard.
+- `interfaces/web/static/` — prebuilt React assets and third-party notices
+  for the common Control UI and shared strategy-results dashboard.
 
 The CLI and API validate input, call application use cases, and transform the
 response. They must not read SQLite, Parquet, or arbitrary paths directly. The
