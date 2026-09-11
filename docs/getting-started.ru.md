@@ -137,7 +137,7 @@ React UI открывается на английском; **Language → Рус
 **Appearance** — оформление. **Launch strategy** содержит выбор Sniping, Copy Buy
 и FirstSwap, с раскрывающимися разделами комиссий, аккаунтов и ресурсов.
 
-![Форма Copy Buy на английском языке, изолированные тестовые данные](assets/launch-strategy.png)
+![Форма Copy Buy на английском языке в тёмной теме, изолированные тестовые данные](assets/launch-strategy.png)
 
 
 UI можно открыть до настройки live source:

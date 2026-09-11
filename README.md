@@ -122,11 +122,11 @@ changing or rebuilding the UI: `npm --prefix frontend ci`,
 ## Interface preview
 
 The screenshots below use the browser test fixtures, not a live portfolio or
-profitability claim. They show the shared interface in its default language.
+profitability claim. They show the shared interface in English with **Appearance → Dark** selected.
 
-![Shared strategy results in English, including valuation and entry distributions](docs/assets/strategy-results.png)
+![Shared strategy results in the dark theme, including valuation and entry distributions](docs/assets/strategy-results.png)
 
-![Trade detail with SOL market-cap history, signal, filled entry and exit markers](docs/assets/trade-detail.png)
+![Dark trade detail with SOL market-cap history, signal, filled entry and exit markers](docs/assets/trade-detail.png)
 
 The same tabs serve Sniping, Copy Buy and FirstSwap. Available metrics reflect
 each strategy's verified result contract; unsupported metrics stay explicit.
