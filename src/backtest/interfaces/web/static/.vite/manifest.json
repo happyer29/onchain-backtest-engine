@@ -1,6 +1,6 @@
 {
-  "_forms-C4Q2bufV.js": {
-    "file": "assets/forms-C4Q2bufV.js",
+  "_forms-B2uJamHq.js": {
+    "file": "assets/forms-B2uJamHq.js",
     "name": "forms",
     "imports": [
       "index.html",
@@ -13,7 +13,7 @@
     "name": "value"
   },
   "index.html": {
-    "file": "assets/index-DaAanU3U.js",
+    "file": "assets/index-C7ydP6O0.js",
     "name": "index",
     "src": "index.html",
     "isEntry": true,
@@ -21,14 +21,14 @@
       "src/research/page.tsx",
       "src/workspace.tsx",
       "src/results.tsx",
-      "_forms-C4Q2bufV.js"
+      "_forms-B2uJamHq.js"
     ],
     "css": [
-      "assets/index-BZBCwnVR.css"
+      "assets/index-IqVdmjXV.css"
     ]
   },
   "src/charts.tsx": {
-    "file": "assets/charts-BuOCTe0f.js",
+    "file": "assets/charts-ag65noFx.js",
     "name": "charts",
     "src": "src/charts.tsx",
     "isDynamicEntry": true,
@@ -39,7 +39,7 @@
     ]
   },
   "src/lineage.tsx": {
-    "file": "assets/lineage-CrkCssyC.js",
+    "file": "assets/lineage-7J6nVcvu.js",
     "name": "lineage",
     "src": "src/lineage.tsx",
     "isDynamicEntry": true,
@@ -53,7 +53,7 @@
     ]
   },
   "src/research/graph.tsx": {
-    "file": "assets/graph-cLO7UT2j.js",
+    "file": "assets/graph-DWVWGZsE.js",
     "name": "graph",
     "src": "src/research/graph.tsx",
     "isDynamicEntry": true,
@@ -65,13 +65,13 @@
     ]
   },
   "src/research/page.tsx": {
-    "file": "assets/page-DPgHZb4Z.js",
+    "file": "assets/page-Cs7OS9Sr.js",
     "name": "page",
     "src": "src/research/page.tsx",
     "isDynamicEntry": true,
     "imports": [
-      "_forms-C4Q2bufV.js",
       "index.html",
+      "_forms-B2uJamHq.js",
       "src/results.tsx",
       "src/workspace.tsx"
     ],
@@ -80,7 +80,7 @@
     ]
   },
   "src/results.tsx": {
-    "file": "assets/results-DIhZWsTe.js",
+    "file": "assets/results-x-aUZkMM.js",
     "name": "results",
     "src": "src/results.tsx",
     "isDynamicEntry": true,
@@ -92,7 +92,7 @@
     ]
   },
   "src/workspace.tsx": {
-    "file": "assets/workspace-BZcLhVgA.js",
+    "file": "assets/workspace-CqwGWvZz.js",
     "name": "workspace",
     "src": "src/workspace.tsx",
     "isDynamicEntry": true,

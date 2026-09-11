@@ -132,7 +132,10 @@ profitability claim. They show the shared interface in English with **Appearance
 
 ![Shared strategy results in the dark theme, including valuation and entry distributions](docs/assets/strategy-results.png)
 
-![Dark trade detail with SOL market-cap history, signal, filled entry and exit markers](docs/assets/trade-detail.png)
+![Close-up of a dark market-cap chart with distinct signal, BUY and SELL markers on illustrative UI data](docs/assets/trade-detail.png)
+
+The chart close-up uses an illustrative UI fixture with changing values to
+show the curve and markers clearly; it is not a historical token or a trading result.
 
 The same tabs serve Sniping, Copy Buy and FirstSwap. Available metrics reflect
 each strategy's verified result contract; unsupported metrics stay explicit.

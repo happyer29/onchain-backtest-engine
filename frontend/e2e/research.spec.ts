@@ -43,6 +43,7 @@ test('research uses the shared shell, actual artifacts, all graph levels and exa
   await expect(page.getByTestId('graph-counts')).toContainText('1 groups · 2 wallets');
   await page.getByRole('button',{name:'Back to previous view'}).click();await expect(page.getByLabel('Show links between neighbours')).toBeChecked();await expect(page.getByTestId('graph-view-filter')).toContainText('restored');
   await page.getByRole('button',{name:'1 / All groups',exact:true}).click();await expect(page.getByTestId('graph-counts')).toContainText('1 groups · 2 wallets');
+  await page.getByRole('button',{name:'Settings',exact:true}).click();
   await page.getByLabel('Language').selectOption('ru');
   await expect(page.getByRole('heading',{name:'Ончейн-исследования'})).toBeVisible();
   await page.getByLabel('Оформление').selectOption('dark');
