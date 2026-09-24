@@ -67,11 +67,12 @@ The target single-host envelope is:
 - 32 GB RAM as the recommended profile;
 - one local NVMe;
 - one researcher and one trusted codebase;
-- batch backtests, feature builds, and training jobs;
+- batch backtests, feature builds, training jobs, and bounded research jobs;
 - CPU-first, with an optional local GPU;
-- external ClickHouse available only to the source-facing `inspect-source` and
-  `prepare-dataset` commands and the optional metadata estimate in
-  `plan-dataset`;
+- external ClickHouse available only to source-facing `inspect-source`,
+  `prepare-dataset`, the optional metadata estimate in `plan-dataset`, and
+  the bounded research-only `research prepare` acquisition in section 24.6;
+- `research analyze` is local-artifact-only;
 - compilation, feature/ML jobs, and backtest runs using only committed local
   artifacts;
 - optional Control API and Web UI on the same device;
@@ -259,6 +260,15 @@ flowchart LR
 
 ## 3.4 Current project state
 
+The separate §34.3 static demo is implemented with 60 synthetic wallets,
+423/426 research pairs and two reference Copy Buy outcomes. Development tooling
+uses existing use cases with network access disabled and exports 933 read-only
+API response variants (about 4.3 MB). The independent React build checks response
+lengths/hashes, rejects commands and uses project-relative assets/hash routes.
+Whole-graph, evidence, trade-history, lineage and failure paths pass local browser
+checks. A manual Pages workflow is prepared; this status does not assert hosting
+or publication and does not extend live-source admission.
+
 The implementation provides a production-oriented reference vertical slice of
 the architecture and network-aware Pump.fun Sniping on verified local
 artifacts. Live data requires exact, cut-scoped admission:
@@ -274,6 +284,37 @@ produces a different `logical_run_id`, order IDs, and round-trip IDs, but
 reuses the same verified Dataset/Snapshot/ReplayPack without source
 re-extraction or ReplayPack recompilation.
 
+- the separate §24.6 wallet-research slice: bounded successful SOL-paired
+  Pump observations, immutable ResearchSnapshot/ResearchResult, local DuckDB
+  activity/co-buy analysis, exact source-row evidence, durable isolated jobs,
+  and v2 same-source token-mode classification. Shared CLI/API resolution defaults
+  to `NON_MAYHEM`, with explicit `ALL`; empty creation signatures are skipped
+  in both modes with bounded per-mint warnings; filtering precedes activity, first buys,
+  pair aggregation and thresholds. Separate Mayhem/UNKNOWN exclusions are visible.
+  Legacy v1 remains readable and supports new ALL analyses; NON_MAYHEM on v1
+  requires a fresh preparation. The source-row layout and Sniping are unchanged.
+  The slice also provides a CLI and same-origin `/research` dashboard. The page explains first BUY per
+  signer/mint within the snapshot, including missed later co-buys, and ships
+  pinned local Sigma.js/React Sigma with zoom/pan/drag, accessible selection and exact
+  pair-evidence navigation. Graph scope is either 25 page pairs / 50 nodes or
+  an opt-in whole result up to 200,000 pairs / 5,000 participating wallets.
+  The latter loads verified pages with progress, cancellation and exact
+  completeness checks; search covers all loaded wallets, neighbour controls
+  are paginated, and table navigation preserves the complete graph. Graph
+  layout and selection are presentation only. Three levels show all visual
+  groups, a group’s complete internal graph with external-pair drilldown, and
+  a wallet’s global neighbours, with optional neighbour-to-neighbour pairs.
+  Internal/cross-group totals reconcile, grouping is bounded and deterministic,
+  and only the active projection enters Sigma. A bounded ForceAtlas2 worker
+  arranges nodes by relationships; display-only strength filtering reports shown
+  and hidden exact pairs, and bounded navigation restores positions/camera.
+  Worker/WebGL failures preserve tables and evidence. Signer/payer roles and duplicate
+  multiplicity are preserved; completeness, finality, source consistency and
+  causal availability remain `UNKNOWN`. Hermetic source contracts and isolated
+  CLI/API execution are verified; the real-browser workflow and installed-wheel
+  CLI/child/API/assets gate passed. This does not establish general
+  live-source capacity or fidelity. Transfers, full wallet PnL, owner clustering
+  and automatic strategy promotion remain unimplemented;
 - an installable Python 3.13 package, reproducible `uv.lock`, hexagonal ports,
   Import Linter/AST guardrails, and separate CLI/serve/child composition roots;
 - the current source stack uses `bounded-source-evidence/v2`, network-aware
@@ -2879,7 +2920,11 @@ Preflight requires:
 - `model_available_at <= eligible_from`;
 - training inputs/labels/fitted components available no later than model
   availability;
-- a gap produces typed `MODEL_UNAVAILABLE`;
+- an uncovered decision produces typed `MODEL_UNAVAILABLE` by default;
+- an explicit, identity-pinned `PREFIX_UNAVAILABLE` inference policy may represent
+  only boundaries before the first eligible interval as `MODEL_UNAVAILABLE`
+  with no selected model or prediction; it never selects a future model;
+  uncovered interior or trailing decisions still fail;
 - fallback is explicit and enters the schedule hash.
 
 ### 24.5 Inference modes
@@ -2949,8 +2994,328 @@ equal audit/result hashes for frozen and embedded paths across batch and
 readahead values and prove that future rows/models do not change earlier
 decisions.
 
+For same-ReplayPack temporal training and later inference, the opt-in
+`PREFIX_UNAVAILABLE` policy keeps one row per ReplayPack event but records a
+distinct no-model status on the uncovered prefix. Those rows contain no model
+selection or prediction value and remain unavailable to Strategy at every
+boundary. The frozen representation is versioned separately from the existing
+reject-on-gap PredictionSet; its status, exact prefix boundary and policy enter
+the physical/logical identity. The model remains bound to its exact training
+FeatureSet. Both frozen and embedded exact modes apply the same prefix rule;
+neither treats a missing feature's `NULL` policy as permission for a missing
+model. Interior and trailing schedule gaps, malformed status or a non-prefix
+unavailable row fail closed during build and verified read.
+
 Tree/ONNX/GPU tolerance and stateful sequential runtimes remain target extension
 points but are absent from current reference composition and fail closed.
+
+### 24.6 On-chain wallet research
+
+Research is an independent data consumer before a strategy exists. The first
+slice studies observed successful SOL-paired `pumpfun_v2_swaps` participation
+on one Solana network and a typed half-open block range. Acquisition retains
+every returned swap, including identical rows with multiplicity. Version two
+additionally classifies the observed mints from creation records in the same
+source; it does not restrict swaps to launches inside the observation range
+or apply the Sniping execution universe.
+The exact observation scope is visible in every result and dashboard.
+
+Two new artifact kinds, `RESEARCH_SNAPSHOT` and `RESEARCH_RESULT`, use the
+existing publication, verified-reader, lease, lineage, pin, GC and backup
+protocols. Their top-level directories are `research-snapshots/` and
+`research-results/`. Neither kind is an executable canonical snapshot,
+ReplayPack, FeatureSet, Universe or SuccessfulRun. Existing artifact IDs and
+Sniping source-evidence/settlement gates are not redefined or relaxed.
+
+`research-dataset-spec/v2` pins one source ID, immutable NetworkId and position
+schema, exact block range, the fixed source profile/mapping/query digest, and
+the installed research code/runtime digest. Acquisition accepts no SQL, table
+name, path or executable code through a transport DTO. The fixed adapter
+checks the required source columns/types before its first data scan and uses
+explicit columns, parameterized block bounds, a unique credential-free query
+ID, streaming batches, and throw-on-excess server row/byte/time/memory limits.
+Local row, output and temporary quotas are mandatory too. A schema change,
+malformed row, limit failure or interrupted scan publishes no snapshot.
+
+The approved Mayhem extension uses `wallet-research-snapshot/v2`, retaining the
+unchanged `wallet-observations/v1` table and adding `token_modes.parquet`
+and the bounded `data_issues.parquet` warning table.
+After spooling the complete swap range, one bounded lookup selects exactly its
+canonical distinct mint set (at most 50,000) from `pumpfun_token_creation` in
+the same source/network. Its authoritative creation BlockRange is `[0, swap
+range end)`; launches before the swap range are eligible classification inputs.
+The fixed query/profile and this range rule enter DatasetSpec v2 identity.
+No `FINAL`, latest-version choice, arbitrary history mirror or source merge is
+allowed: relevant creation identity and mode must agree across all returned
+rows. Metadata duplicates are counted, never used to multiply or deduplicate
+swaps. Each of the two source streams is capped at 20 million scanned rows,
+2 GiB scanned bytes, 2 million returned rows, 1 GiB returned bytes, 120 seconds,
+one native thread and the existing remote memory budget. The mint operand is
+bounded to 50,000 full addresses. Any cap violation rejects the entire snapshot.
+
+The fixed creation projection contains mint, block/transaction/instruction,
+signature and explicit immutable creation-time `mayhem_mode`. Malformed/null/
+out-of-domain mode, inconsistent creation identity or conflicting modes reject
+preparation; a missing creation record yields explicit `UNKNOWN`, never false.
+The user-approved research-only exception is a literal empty creation signature:
+retain its reported mode and partial coordinates, record the closed issue code
+`MISSING_CREATION_SIGNATURE`, and exclude that mint from analysis in both modes.
+A nonempty malformed signature still rejects. The issue does not fabricate a
+transaction identity or imply replay eligibility. All returned creation fields
+must still agree, including the signature; an empty and nonempty version of the
+same creation remain conflicting evidence and reject. Repeated identical partial
+records preserve multiplicity. Missing/null/invalid mode is never excused by a
+missing signature. Original swap observations remain intact in the snapshot.
+A known creation must precede or coincide with the first observed source
+position for that mint. Every mint gets exactly one canonical mode row, with
+`NON_MAYHEM`, `MAYHEM` or `UNKNOWN`, exact canonical creation-reference text (empty
+only for missing creation), the count of matching source metadata rows, and
+an issue string (empty or `MISSING_CREATION_SIGNATURE`). A partial creation
+reference retains its literal empty signature only with that issue.
+This table is itself content-addressed, sorted by mint, bounded, and committed
+atomically with the observations. Mode-row coverage must equal the exact
+observed mint set; neither missing nor extra classification rows may publish.
+Snapshot metadata records reconciled mode-specific mint and observation counts.
+Classification describes source observations and does not establish past causal
+availability, source completeness/finality or executable replay admission.
+
+The `wallet-observations/v1` table preserves source signature, source instruction
+position, block/transaction position, second-resolution UTC source block time,
+mint and quote asset, BUY/SELL, integer source-reported amount legs, signing
+wallet and fee payer as separate roles. Addresses and signatures are validated
+as complete Solana base58 values. A signer or fee payer is not automatically a
+beneficial owner, creator, token-account owner or cluster. Amount legs are
+source observations; they do not establish wallet cash PnL, net proceeds or
+complete fee accounting. Invalid/null required roles or amounts fail closed.
+
+Source completeness, finality, snapshot consistency and causal availability
+remain `UNKNOWN` unless independently proven by an applicable source contract.
+The initial research profile does not claim these proofs. Successful local
+validation proves only that the bounded scan completed and its observed rows
+satisfy the declared schema/range. It cannot establish the absence of trades
+or relationships outside those observations. In particular, a research
+snapshot cannot admit the rejected two-day Sniping cut or become evidence for
+exact replay. No research-mode flag changes an existing execution validator.
+
+Rows are canonical-sorted by source chain coordinates followed by all observed
+fields with a fixed bytewise string order. A stable row ordinal identifies an
+observation inside its exact snapshot, not a globally unique on-chain event.
+No payload hash is used for deduplication. Identical observations remain
+separate rows; metrics called row counts explicitly count source rows. Query
+batch boundaries and source delivery order do not affect logical row digests.
+Without an authoritative source revision, a new acquisition performs a fresh
+bounded scan rather than treating an old range as current. Its build key pins
+the request, observed schema, actual canonical observation digest and writer/
+runtime contract; committed content ID remains a separate manifest/byte hash.
+Operational extraction time and endpoint/credentials are excluded from both.
+
+The installed research runtime digest uses `backtest.research-runtime/v1`
+over the existing runtime manifest's `abi`, `dependencies`, `python` and
+`operating_system` fields. An explicit research source-code allowlist is pinned
+separately. Native thread counts and environment settings remain physical
+attempt settings, so changing them does not redefine an analytical recipe.
+
+`wallet-co-buy-analysis/v2` is a closed, versioned recipe over exactly one
+verified ResearchSnapshot. Parameters are a canonical sorted optional signer
+selection, a nonnegative inclusive `window_seconds`, a positive minimum
+shared-mint count and an explicit `mode`: `NON_MAYHEM` or `ALL`. Shared CLI/API
+resolution materializes `NON_MAYHEM` as the default. An empty signer selection
+means all observed signers. `NON_MAYHEM` includes only explicitly classified
+ordinary mints, excluding both Mayhem and UNKNOWN mints with separate visible
+counts; `ALL` retains both plus unknowns, subject to the data-issue exclusion
+common to both modes. This is an observational allowlist,
+not a claim that UNKNOWN tokens are Mayhem. Filtering precedes activity, first
+BUY selection, pair aggregation and the minimum-shared-mint threshold. A wallet
+is not globally excluded merely because it also traded Mayhem tokens.
+
+`wallet-research-result/v2` retains the existing activity/pair/evidence schemas
+and exact snapshot observation references. Its bounded mode counts describe
+the signer-selected rows before the mode filter; ordinary + Mayhem + unknown
+counts reconcile to that scope, and the included subset reconciles to
+`selected_rows`. Changing mode creates a new analysis/build/content identity,
+never a cosmetic graph filter or reinterpretation of a committed result.
+
+Both v2 snapshot and result publish `data_issues.parquet` atomically with their
+other tables. Its fixed columns are canonical mint-sorted `row_id`, `mint`,
+`issue`, and `observation_rows`. It lists each affected mint once, at most 50,000;
+counts preserve original swap multiplicity. Snapshot warnings cover all source
+rows; result warnings cover signer-selected rows before either filter. The
+bounded `data_issue_counts` map contains `mints`, `non_mayhem_rows` and
+`mayhem_rows`, reconciled with mode counts, warning-table cardinality and the
+included row count. The partial-record issue never belongs to UNKNOWN.
+UI must show a visible warning with the excluded mint/row counts and expose
+all affected addresses and reasons through existing bounded table pagination.
+No unbounded mint list enters a manifest or HTTP response. The mode and warning
+spools share one quarter of the existing temporary quota; the other quarters
+remain raw observations, sorted observations and native spill. All published
+tables share the existing total output quota. Legacy v1 retains its original
+meaning and has no retrospective data-quality exclusions or invented warnings.
+
+Legacy dataset/snapshot/analysis/result v1 remains readable with its original
+meaning and identity; a v1 analysis means ALL and never carries fabricated mode
+information. New preparation/queued execution must resolve current v2 operands.
+A new ALL recipe may read a v1 snapshot, reporting its modes as unknown;
+NON_MAYHEM on v1 rejects with `RESEARCH_REPREPARE_REQUIRED` before queue admission
+and again before calculation. No in-place migration, silent default mode or
+fallback to ALL is permitted. The recipe
+publishes source-row activity counts, per-signer distinct-mint participation,
+and evidence-backed signer pairs. It has no wallet-PnL, common-owner, transfer,
+profitability, predictive-power or strategy-executability claim.
+
+For each selected signer/mint, choose the first observed BUY in source-position
+order within the snapshot, breaking otherwise equal coordinates by canonical
+observation ordinal. Two different signers form one candidate for that mint;
+the candidate qualifies when the absolute difference of those two reported
+block timestamps is at most `window_seconds`. Each mint contributes at most
+once to a pair, regardless of repeated buys or duplicate source rows. Pairs
+use lexical signer order; a direction count describes only which first
+observation precedes the other in reported source position. Same transaction
+positions are tied, not an inferred intra-transaction trading sequence.
+The minimum shared-mint filter is applied after complete candidate aggregation.
+
+Pair evidence stores the mint and both exact snapshot row ordinals. Drilldown
+reopens that snapshot and verifies those references. Activity, pair counts,
+thresholds, direction/tie counts and evidence totals reconcile. Result identity
+pins snapshot ID, recipe/code/runtime digest and canonical semantic parameters;
+physical batch size, thread count, memory budgets and chart styling are not
+semantic operands. A deterministic rebuild declaration is valid only with
+transitively retained exact inputs and code/runtime. A build key producing
+different bytes follows the existing collision/quarantine protocol.
+
+DuckDB performs bounded local sorting, joins and aggregation through an
+application-owned port; domain/application import no DuckDB or PyArrow.
+Candidate cardinality and per-mint participant limits are checked before the
+pair join. Exceeding a hard limit rejects the complete calculation, never
+silently drops a popular token, truncates a relation or computes a top-k sample
+while describing it as complete. Source rows, result rows, native threads,
+memory, spill, output and wall time are bounded under existing admission.
+
+`PREPARE_RESEARCH` and `ANALYZE_WALLETS` are strict resolved job types using the
+same controller, idempotency, queue, isolated child, progress, cancellation,
+receipt and completion-verification path as existing heavy jobs. Only the
+prepare child can receive source credentials. Analysis resolves and rechecks
+the exact input schema/code/runtime before queue admission and child mutation.
+No browser or heavy HTTP handler reads Parquet or runs a scan.
+
+The same-origin research page provides typed acquisition/analysis forms,
+job/result navigation, bounded activity/pair pages and pair-evidence drilldown.
+The graph has two explicit display scopes: the current pair page (at most 25
+pairs / 50 wallets), and an opt-in whole-result view (at most 200,000 pairs /
+5,000 participating wallets). The latter includes every qualifying pair in
+one exact committed result, independently of table pagination; it is not a
+claim to show all market connections. Whole-result counters come from verified
+summary metadata, not the currently loaded page. Filters that affect an
+analysis create a new result; display changes do not. Responses preserve wide
+integers as decimal strings and accept exact artifact IDs, closed table roles,
+scope-bound keyset cursors and bounded limits. Raw SQL, file paths, source
+credentials, traces and execution artifacts remain unavailable to the browser.
+
+Whole-result loading uses the existing verified keyset API in sequential pages
+of at most 200 rows, with a 2 MiB response cap, 128 MiB cumulative transport cap,
+15-second request deadline and 180-second overall load/build deadline. One
+active loader, one complete bounded pair/adjacency model and one rendered
+projection are retained. Before declaring completion,
+the client checks exact artifact/table scope, contiguous pair ordinals from
+zero, cursor exhaustion and equality with the verified summary pair count.
+Exceeding a row, wallet, byte or time bound rejects the whole view explicitly;
+no truncation, top-k selection or partially loaded graph is labelled complete.
+Cancellation, result replacement and display-scope replacement release pending
+requests, buffers and graph instances, and stale callbacks cannot alter the
+replacement view. Construction yields in bounded chunks. The approved whole-view
+presentation has three navigable levels: all visual groups, every wallet and
+internal pair of one group, and a selected wallet with all incident pairs across
+the entire result. An optional explicit toggle adds all pairs among those
+neighbours; the displayed counters distinguish both sets.
+
+Visual grouping is a presentation heuristic over the complete loaded pair set,
+not a research recipe or an ownership/coordinated-trading assertion. The
+versioned `local-modularity-20-v1` display policy starts with singleton wallets,
+uses shared-mint counts as positive edge weights, canonical address order,
+resolution one and at most twenty greedy local-moving sweeps, with deterministic
+ties and no RNG. It stops early when no node moves; reaching twenty sweeps is
+labelled a bounded heuristic, never a proof of optimum or convergence. This is
+the local-moving stage only, not a claim to implement full multilevel Louvain.
+Group numbers are local navigation labels, not persistent analytical IDs.
+
+The overview represents every wallet once. Every exact pair contributes either
+to one group's internal count or one inter-group edge count; these counts MUST
+reconcile to the verified total. Group views expose all internal pairs and
+explicit external-group counts with paginated access to every crossing pair.
+All groups, including small and disconnected ones, remain navigable. Overview
+edges mean numbers of wallet pairs, whereas wallet edges retain shared-token
+counts; the UI MUST explain the distinction and never add those counts as if
+they had the same meaning. Exact ordinal drilldown remains available at all
+levels. Breadcrumbs and global wallet search make navigation reversible without
+fetching another result or changing table pagination.
+
+Grouping, projection construction and rendering yield in bounded batches with
+ownership checks. The existing 180-second initial deadline includes grouping;
+each later projection has a cancellable 30-second deadline. No partial
+projection is labelled complete, and a rejected projection releases its canvas
+while retaining the verified model for another navigation attempt. Scope/result
+replacement discards both. Only the active projection enters the pinned
+Sigma.js/React Sigma WebGL renderer. The user-approved replacement uses
+Graphology only as a browser display structure and ForceAtlas2 only for node
+coordinates; it adds no Python analytical engine, source query or server process.
+The `research-forceatlas2-120-v1` presentation layout uses canonical node/edge
+order, deterministic non-coincident initial coordinates, positive stored
+weights, fixed settings and at most 120 iterations. Barnes-Hut approximation
+is explicit for large views. It runs in one same-origin static module worker
+under the existing script CSP, with no blob/eval worker, network calls or
+runtime source text. A fresh projection retains only its compact numeric
+worker buffers until completion. The projection's 30-second deadline also
+bounds layout and mounting; abort/replacement terminates the worker and releases
+WebGL resources. Nonfinite output, worker failure, missing/lost WebGL or a
+budget failure produces a visible graph error while exact tables/evidence
+remain available. No partial projection is presented as complete. Coordinates
+are visual aids, not measured similarity, importance or an analytical artifact.
+
+A closed positive shared-token threshold is a **display filter** over the
+already complete result. It does not regroup wallets, recalculate the research
+recipe or change committed tables. All nodes remain represented, including
+those isolated by the filter. Every wallet-pair edge is shown exactly when its
+stored shared-mint count meets the threshold. An overview edge represents only
+the matching crossing pairs; zero-count edges are hidden. The page reports
+shown/hidden exact-pair counts separately from total result counts; group
+internal/crossing counts and paginated pair inspectors reconcile to the chosen
+display filter. Clearing the filter restores every pair without another fetch.
+The pair identity and purchase-evidence mapping remain exact. Search can still
+find every loaded wallet, even when its incident edges are hidden.
+
+Reversible graph navigation may retain at most eight coordinate/camera snapshots
+and sixteen view-history entries for the current loaded scope. Coordinate
+snapshots include the four normalization-bound scalars needed to restore dragging
+and use at most 5000 x/y float pairs each, without copied edge tables or
+inactive renderer instances. Only retained views restore their exact previous
+camera and dragged positions; an evicted view is rebuilt explicitly. Scope or
+artifact replacement releases the complete cache and history. Semantic zoom,
+hover/focus highlighting, node dragging, and same-page fullscreen controls are
+presentation only.
+
+Search and selection operate on all participating wallets and their complete
+incident connections in the loaded scope. Inspector controls are separately
+paginated so neither a wallet's degree nor the full result becomes unbounded
+DOM. Exact pair ordinals continue to drive verified purchase drilldown, even
+when the pair is outside the table page. Display scope, search, selection and
+layout never change recipe identity, source fidelity, artifacts or strategy
+inputs. No new analytical query, source read or graph artifact is introduced.
+
+New exploratory calculations may be developed in trusted local code over
+verified artifacts and promoted to reviewed versioned recipes. This does not
+introduce a browser SQL/Python editor or unverified plugin execution. A
+research finding enters a strategy only through a separately admitted causal
+FeatureSpec/Universe/strategy bundle. Wallet selection and clustering used for
+decisions must be fitted only from information available at the historical
+decision boundary; future poisoning must not change earlier decisions.
+
+Acceptance requires observed-role/range/schema validation, multiplicity and
+batch/order equivalence, independently specified co-buy fixtures, inclusive
+window boundaries, same-transaction ties, evidence reconciliation, quota/
+corruption/failure non-publication, exact-input/identity checks, research-kind
+rejection by execution readers, CLI/API resolved-job equivalence, isolated
+source-free analysis, cancellation/restart/receipt integration, bounded browser
+smoke, and installed-package assets. Live extraction remains opt-in, read-only
+and bounded; hermetic tests do not claim live source fidelity or capacity.
 
 ## 25. RunSpec, RunManifest, and RNG
 
@@ -3566,7 +3931,8 @@ component prohibits resume. Pickle is not used.
 - This opt-in is not protection and means accepting the risk of credential
   interception, disclosure of queries/results, and modification of source
   bytes by an intermediary. It applies only to outgoing read-only ClickHouse
-  operations: `inspect-source`, the optional estimate, and `prepare-dataset`;
+  operations: `inspect-source`, the optional estimate, `prepare-dataset`, and
+  the bounded `research prepare` acquisition;
   it does not permit public binding of the Control API/UI.
 - The transport opt-in is an operational deployment setting and is not part of
   RunSpec/artifact semantic identities. It does not raise source fidelity,
@@ -3783,6 +4149,8 @@ require their own evidence.
   completion;
 - a future-trained model/transform is rejected;
 - schedule overlap is rejected and a gap is typed;
+- an explicitly unavailable prefix has no model or prediction, while an
+  interior/trailing gap still rejects and frozen/embedded outputs agree;
 - exact/tolerance modes are not mixed.
 
 ### Determinism/performance
@@ -4284,6 +4652,15 @@ invent timestamps, or call a rejection a fill. A family lacking the evidence
 required for a chart reports the missing capability explicitly.
 
 React owns every screen and typed form; legacy scripts/HTML have been removed.
+The §24.6 research workflow belongs to this same React shell at `/research`;
+historical `?artifact=` links select the same exact immutable snapshot/result.
+React owns research forms, durable-job feedback, tables, warnings, evidence,
+search, graph controls and component lifecycle. The approved Sigma.js 3.0.3 / React Sigma 5.0.6 renderer, Graphology 0.26.0
+display structure and ForceAtlas2 0.10.1 layout are bundled as local frontend
+modules, with a bounded same-origin layout worker; no standalone research HTML, global DOM controller, CDN,
+second application shell or additional analytical dependency remains. Research
+keeps its own §24.6 table/whole-graph bounds and observation semantics; it does
+not pass through strategy result decoding or alter source/engine admission.
 Old result URLs resolve to the same React application. The
 landing screen is the work overview, launch forms use expandable sections,
 and trade detail opens in an accessible large overlay without losing the
@@ -4407,6 +4784,53 @@ max_request_mb = 2
 
 After benchmarking, values are separated into `local-16gb` and `local-32gb`
 profiles.
+
+### 34.3 Static demonstration distribution
+
+The user-approved GitHub Pages demonstration is a separate build-time frontend
+profile, not an operational deployment or a second Control API. It reuses the
+React research, graph, results and chart components. A persistent banner and
+result labels identify all inputs as synthetic test fixtures and all calculations
+as prepared offline. It makes no claim about real wallet behaviour or profitability.
+
+Development-only tooling constructs bounded synthetic observations and runs the
+existing preparation, research and reference execution use cases in a fresh
+temporary data root. Only allowlisted read-only API presentation responses are
+exported after committed-input/result verification. Production source configuration,
+credentials, environment values, operational data roots, SQLite, Parquet, raw
+tracebacks, absolute paths and executable manifests are never copied. Export
+failure cannot produce a completed demo bundle. The export manifest declares
+its fixture recipe, exact example IDs, response paths, lengths and SHA-256 hashes;
+these hashes verify transport integrity, not real-source fidelity. No demo bytes
+may be imported as a production snapshot, run or evidence receipt.
+
+The closed corpus admits at most 100 wallets, 5,000 observations, 1,000 pairs per
+research result, two strategy results, 2,048 response records, 2 MiB per response
+and 16 MiB of response bytes. These limits are independent of operational quotas.
+All requested pages and pair evidence must be exported completely within them.
+The browser uses an explicit demo-only GET transport, validates manifest paths,
+response length/digest and bounded decoding, and rejects unsupported IDs, query
+combinations or methods without a network/API fallback. It retains a bounded
+manifest and one bounded response per request, not an unbounded response cache.
+Graph completeness, cancellation, layout budgets and exact integer handling stay
+unchanged. Display filters and navigation work on the prepared result; no browser
+strategy execution, recipe resolution, source acquisition or synthetic job-success
+responses are introduced. Execution routes are unavailable in the demo.
+
+The ordinary packaged UI remains bound to the same-origin Control API and never
+falls back to fixtures when it fails. The demo has a distinct entry/build output,
+relative local assets and hash routing so project-subdirectory deep links reload
+on a static host. It bundles its worker, fonts/styles and libraries locally, uses
+a restrictive static-page CSP, and contains no service worker, analytics beacon,
+external data fetch or credential. Tests must cover the ordinary UI as well as
+static-only loading under a repository path, direct reload, exact evidence,
+filters, language/theme, missing/corrupt data and rejected mutations.
+
+Publication is separate from preparation. A checked-in manual deployment recipe
+may publish only the verified demo output directory, with least-privilege Pages
+permissions; preparing or testing the demo must not push code, trigger deployment
+or alter repository hosting settings. The existing operational host and security
+contracts remain unchanged.
 
 ## 35. Phased implementation
 

@@ -33,6 +33,7 @@ from backtest.application.ml_contracts import (
     ExactInferencePolicy,
     InferenceMissingPolicy,
     InferenceMode,
+    InferenceScheduleGapPolicy,
     ModelCanonicality,
 )
 
@@ -283,6 +284,13 @@ class NumpyEmbeddedExactPredictionProvider:
                     # Process range(start, stop) inside the bounded numpy embedded exact
                     # prediction provider materialize loop.
                     boundary = int(effective[row_id])
+                    if (
+                        policy.schedule_gap_policy is InferenceScheduleGapPolicy.PREFIX_UNAVAILABLE
+                        and schedule.schedule.is_unavailable_prefix(boundary)
+                    ):
+                        values[row_id] = 0
+                        available[row_id] = boundary
+                        continue
                     model = models[schedule.model_for(boundary)]
                     feature_available = max(
                         feature.available_boundary_for_row(row_id) for feature in features

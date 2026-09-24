@@ -1,24 +1,34 @@
 {
+  "_forms-ByXJ6Qle.js": {
+    "file": "assets/forms-ByXJ6Qle.js",
+    "name": "forms",
+    "imports": [
+      "index.html",
+      "src/results.tsx",
+      "src/workspace.tsx"
+    ]
+  },
   "_value-SIcts_1p.js": {
     "file": "assets/value-SIcts_1p.js",
     "name": "value"
   },
   "index.html": {
-    "file": "assets/index-CkaJB1ut.js",
+    "file": "assets/index-B6_-fJIh.js",
     "name": "index",
     "src": "index.html",
     "isEntry": true,
     "dynamicImports": [
+      "src/research/page.tsx",
       "src/workspace.tsx",
       "src/results.tsx",
-      "src/forms.tsx"
+      "_forms-ByXJ6Qle.js"
     ],
     "css": [
-      "assets/index-CUduF9Mw.css"
+      "assets/index-aBzeewUx.css"
     ]
   },
   "src/charts.tsx": {
-    "file": "assets/charts-B6K43zAF.js",
+    "file": "assets/charts-DDi0F0zD.js",
     "name": "charts",
     "src": "src/charts.tsx",
     "isDynamicEntry": true,
@@ -28,19 +38,8 @@
       "src/results.tsx"
     ]
   },
-  "src/forms.tsx": {
-    "file": "assets/forms-D2hX3S9n.js",
-    "name": "forms",
-    "src": "src/forms.tsx",
-    "isDynamicEntry": true,
-    "imports": [
-      "index.html",
-      "src/results.tsx",
-      "src/workspace.tsx"
-    ]
-  },
   "src/lineage.tsx": {
-    "file": "assets/lineage-CiY33zUw.js",
+    "file": "assets/lineage-Kwyy5zqi.js",
     "name": "lineage",
     "src": "src/lineage.tsx",
     "isDynamicEntry": true,
@@ -53,8 +52,35 @@
       "assets/lineage-DLioOiRN.css"
     ]
   },
+  "src/research/graph.tsx": {
+    "file": "assets/graph-DR5TyGdi.js",
+    "name": "graph",
+    "src": "src/research/graph.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "index.html"
+    ],
+    "assets": [
+      "assets/layout.worker-CFsaXSMB.js"
+    ]
+  },
+  "src/research/page.tsx": {
+    "file": "assets/page-Ajvms0hb.js",
+    "name": "page",
+    "src": "src/research/page.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "index.html",
+      "_forms-ByXJ6Qle.js",
+      "src/results.tsx",
+      "src/workspace.tsx"
+    ],
+    "dynamicImports": [
+      "src/research/graph.tsx"
+    ]
+  },
   "src/results.tsx": {
-    "file": "assets/results-BQWOFrat.js",
+    "file": "assets/results-Bxg_8jyS.js",
     "name": "results",
     "src": "src/results.tsx",
     "isDynamicEntry": true,
@@ -66,7 +92,7 @@
     ]
   },
   "src/workspace.tsx": {
-    "file": "assets/workspace-HInCMSWd.js",
+    "file": "assets/workspace-CBpkSvNW.js",
     "name": "workspace",
     "src": "src/workspace.tsx",
     "isDynamicEntry": true,

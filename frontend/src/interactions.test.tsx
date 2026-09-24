@@ -5,7 +5,8 @@ import { MemoryRouter } from 'react-router-dom';
 import { encode, queryClient, type Schema } from './api';
 // Controlled transport ignores abort deliberately, reproducing queued late network completions.
 import { EntryDetail, StrategyResults } from './results';
-import { useSubmission } from './forms';
+import { MachineLearning, useSubmission } from './forms';
+import { mlCommand } from './commands';
 import { DataTable } from './table';
 import { JobEvents } from './workspace';
 import { chartFixture, entryFixture, runId, summaryFixture } from './test-fixtures';
@@ -84,6 +85,32 @@ it('one uncertain submission reuses its exact body, nonce and idempotency key', 
   expect(prepare).toHaveBeenCalledTimes(1);
   await act(async () => { pending[1].respond({ job_id: 'job-fixture', job_type: 'RUN_BACKTEST' }); await retry; });
   expect(result.current.receipt?.job_id).toBe('job-fixture');
+});
+it('prediction form exposes causal prefix policy without treating NULL as a missing model', async () => {
+  render(<MachineLearning />, { wrapper });
+  await waitFor(() => expect(pending).toHaveLength(1));
+  await act(async () => pending[0].respond({ compiler_version: 'fixture', supported_feature_names: [] }));
+  fireEvent.click(screen.getByRole('button', { name: 'Predictions' }));
+  expect(screen.getByText(/Training can use earlier ReplayPack rows/)).toHaveTextContent('Interior or trailing schedule gaps still fail.');
+  expect(screen.getByRole('combobox', { name: 'Rows before first model' })).toHaveValue('PREFIX_UNAVAILABLE');
+});
+it('prediction submission keeps the explicit no-model prefix policy', () => {
+  const digest = 'a'.repeat(64);
+  const command = mlCommand('predict', {
+    replay_pack_id: digest,
+    replay_semantics_id: digest,
+    replay_layout_schema_id: digest,
+    feature_set_ids: digest,
+    model_schedule_id: digest,
+    model_bundle_ids: digest,
+    prediction_name: 'score',
+    inference_delay_boundaries: '0',
+    missing_policy: 'NULL',
+    schedule_gap_policy: 'PREFIX_UNAVAILABLE',
+  }, { compiler_version: 'fixture' });
+  expect(command.schedule_gap_policy).toBe('PREFIX_UNAVAILABLE');
+  expect(command.missing_policy).toBe('NULL');
+  expect(command.feature_set_ids).toEqual([digest]);
 });
 it('table defaults preserve server order and explicit sorting keeps nulls after exact wide values', () => {
   const rows = [{ id: 'null', money: null }, { id: 'larger', money: 9007199254740993n }, { id: 'smaller', money: 9007199254740992n }];

@@ -564,7 +564,7 @@ def _verify_licensing(provenance: dict[str, Any]) -> None:
         "schema redistribution basis",
     )
     # Require both the public notice reference and the package's documented limitation.
-    _require_equal(licensing.get("notice_path"), "THIRD_PARTY_NOTICES.md", "notice path")
+    _require_equal(licensing.get("notice_path"), "docs/THIRD_PARTY_NOTICES.md", "notice path")
     _string(licensing.get("residual_caveat"), "licensing residual caveat")
 
 

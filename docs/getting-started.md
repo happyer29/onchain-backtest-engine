@@ -155,6 +155,20 @@ sections for wallet/account profiles, fees, reproducibility and resources.
 This screenshot uses an isolated browser fixture with **Appearance → Dark** selected. Its defaults illustrate the
 form and do not supply source evidence or recommend trading parameters.
 
+To run exact ML on one ReplayPack in the Web UI, open **Models and features**
+and publish the FeatureSet, Universe, LabelSet, trained model and ModelSchedule
+in order. Set the schedule's first `eligible_from` no earlier than the model's
+availability, and cover every later decision. In **Predictions**, select
+**No prediction before first model** to leave earlier rows unscored and build
+PredictionSet v2. For a FirstSwap run using that PredictionSet, choose
+`FROZEN`, the same prefix policy, and `NULL` for **Missing prediction** if
+early unscored rows should be skipped. The model must use the exact FeatureSet
+used for training; internal or trailing schedule gaps remain errors.
+
+A short [video walkthrough with Russian narration](assets/ml-workflow-demo-ru.mp4)
+illustrates the UI and this rule with synthetic data. It does not show a live
+source connection or a complete ML job run through the UI.
+
 No username or password is required. The localhost UI uses an automatically
 created HttpOnly session cookie. Stop the server with `Ctrl+C`; completed
 committed artifacts and the durable queue remain in `data_root`.

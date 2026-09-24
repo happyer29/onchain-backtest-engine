@@ -97,6 +97,7 @@ from backtest.application.ml_artifacts import (
     FrozenMissingPolicy,
     FrozenPredictionRow,
     LabelOverlayRow,
+    MlArtifactSchema,
     PublishedFeatureSet,
     # Include published label set so the ml artifacts dependency remains explicit.
     PublishedLabelSet,
@@ -120,6 +121,7 @@ from backtest.application.ml_contracts import (
     InferenceMissingPolicy,
     # Include inference mode so the ml contracts dependency remains explicit.
     InferenceMode,
+    InferenceScheduleGapPolicy,
     ModelCanonicality,
     ModelSchedule,
     ModelScheduleEntry,
@@ -824,6 +826,53 @@ def test_exact_trainer_reads_training_only_ports_and_fits_without_row_materializ
         assert model.output_divisor > 0
         assert model.fitted_component_available_boundaries == (training_spec.training_cutoff,)
 
+    # The same ReplayPack supplies training rows and later inference rows, without
+    # assigning the newly trained model to its own earlier history.
+    schedule = PublishModelSchedule(publisher).execute(
+        PublishModelScheduleRequest(
+            schedule=ModelSchedule(
+                (
+                    ModelScheduleEntry(
+                        eligible_from=stack.effective[3],
+                        eligible_until=stack.effective[-1] + 100,
+                        model_bundle_id=trained.model_bundle_id,
+                        training_cutoff=training_spec.training_cutoff,
+                        model_available_boundary=training_spec.modeled_available_boundary,
+                        availability_basis="modeled-training-completion-v1",
+                    ),
+                )
+            ),
+            canonicality=ModelCanonicality.CANONICAL_EXACT,
+            compiler_version=ml_physical.COMPILER_VERSION,
+        )
+    )
+    replay_semantics, replay_layout = _replay_ids(stack)
+    predicted = BuildFrozenPredictions(
+        LocalExactFrozenPredictionBuilder(stack.artifacts, publisher)
+    ).execute(
+        BuildFrozenPredictionsRequest(
+            replay_pack_id=stack.replay_pack_id,
+            replay_semantics_id=replay_semantics,
+            replay_layout_schema_id=replay_layout,
+            feature_set_ids=(stack.feature.feature_set_id,),
+            model_schedule_id=schedule.model_schedule_id,
+            model_bundle_ids=(trained.model_bundle_id,),
+            prediction_name="trained-score",
+            inference_delay_boundaries=0,
+            missing_policy=FrozenMissingPolicy.NULL,
+            canonicality=ModelCanonicality.CANONICAL_EXACT,
+            compiler_version=ml_physical.COMPILER_VERSION,
+            schedule_gap_policy=InferenceScheduleGapPolicy.PREFIX_UNAVAILABLE,
+        )
+    )
+    with NumpyPredictionSetProvider(stack.artifacts, predicted.prediction_set_id) as saved:
+        assert saved.manifest.artifact_schema is MlArtifactSchema.PREDICTION_SET_V2
+        assert all(
+            saved.value_at("trained-score", row, stack.effective[-1] + 100) is None
+            for row in range(3)
+        )
+        assert saved.value_at("trained-score", 3, stack.effective[-1] + 100) is not None
+
 
 def test_frozen_builder_computes_values_and_causal_rows_from_exact_inputs(
     # Keep the tmp path input explicit in the test frozen builder computes values and
@@ -884,6 +933,207 @@ def test_frozen_builder_computes_values_and_causal_rows_from_exact_inputs(
             # Verify the value at, computed-score and predictions relationship before this
             # scenario is accepted.
             is None
+        )
+
+
+def test_frozen_builder_rejects_uncovered_training_period_even_with_null_policy(
+    tmp_path: Path,
+) -> None:
+    stack = _publish_stack(tmp_path)
+    with NumpyModelScheduleReader(stack.artifacts, stack.schedule.model_schedule_id) as original:
+        model_id = original.model_for(stack.effective[2])
+    schedule = PublishModelSchedule(_publisher(stack.artifacts)).execute(
+        PublishModelScheduleRequest(
+            schedule=ModelSchedule(
+                (
+                    ModelScheduleEntry(
+                        eligible_from=stack.effective[2],
+                        eligible_until=stack.effective[-1] + 100,
+                        model_bundle_id=model_id,
+                        training_cutoff=20,
+                        model_available_boundary=stack.effective[2],
+                        availability_basis="modeled-training-completion-v1",
+                    ),
+                )
+            ),
+            canonicality=ModelCanonicality.CANONICAL_EXACT,
+            compiler_version=ml_physical.COMPILER_VERSION,
+        )
+    )
+    replay_semantics, replay_layout = _replay_ids(stack)
+
+    with pytest.raises(ModelUnavailableError, match="MODEL_UNAVAILABLE"):
+        BuildFrozenPredictions(
+            LocalExactFrozenPredictionBuilder(stack.artifacts, _publisher(stack.artifacts))
+        ).execute(
+            BuildFrozenPredictionsRequest(
+                replay_pack_id=stack.replay_pack_id,
+                replay_semantics_id=replay_semantics,
+                replay_layout_schema_id=replay_layout,
+                feature_set_ids=(stack.feature.feature_set_id,),
+                model_schedule_id=schedule.model_schedule_id,
+                model_bundle_ids=(model_id,),
+                prediction_name="computed-score",
+                inference_delay_boundaries=0,
+                missing_policy=FrozenMissingPolicy.NULL,
+                canonicality=ModelCanonicality.CANONICAL_EXACT,
+                compiler_version=ml_physical.COMPILER_VERSION,
+            )
+        )
+
+
+def test_prefix_unavailable_v2_preserves_later_predictions_and_embedded_parity(
+    tmp_path: Path,
+) -> None:
+    stack = _publish_stack(tmp_path)
+    model_id = stack.models[0].model_bundle_id
+    with NumpyModelBundleReader(stack.artifacts, model_id) as model:
+        cutoff = model.training_spec.training_cutoff
+        model_available = model.model_available_boundary
+    start = stack.effective[2]
+    schedule = PublishModelSchedule(_publisher(stack.artifacts)).execute(
+        PublishModelScheduleRequest(
+            schedule=ModelSchedule(
+                (
+                    ModelScheduleEntry(
+                        eligible_from=start,
+                        eligible_until=stack.effective[-1] + 100,
+                        model_bundle_id=model_id,
+                        training_cutoff=cutoff,
+                        model_available_boundary=model_available,
+                        availability_basis="modeled-training-completion-v1",
+                    ),
+                )
+            ),
+            canonicality=ModelCanonicality.CANONICAL_EXACT,
+            compiler_version=ml_physical.COMPILER_VERSION,
+        )
+    )
+    replay_semantics, replay_layout = _replay_ids(stack)
+    prediction = BuildFrozenPredictions(
+        LocalExactFrozenPredictionBuilder(stack.artifacts, _publisher(stack.artifacts))
+    ).execute(
+        BuildFrozenPredictionsRequest(
+            replay_pack_id=stack.replay_pack_id,
+            replay_semantics_id=replay_semantics,
+            replay_layout_schema_id=replay_layout,
+            feature_set_ids=(stack.feature.feature_set_id,),
+            model_schedule_id=schedule.model_schedule_id,
+            model_bundle_ids=(model_id,),
+            prediction_name="computed-score",
+            inference_delay_boundaries=0,
+            missing_policy=FrozenMissingPolicy.NULL,
+            canonicality=ModelCanonicality.CANONICAL_EXACT,
+            compiler_version=ml_physical.COMPILER_VERSION,
+            schedule_gap_policy=InferenceScheduleGapPolicy.PREFIX_UNAVAILABLE,
+        )
+    )
+    frozen_policy = ExactInferencePolicy.frozen_exact_linear(
+        prediction_name="computed-score",
+        missing_policy=InferenceMissingPolicy.NULL,
+        inference_delay_boundaries=0,
+        schedule_gap_policy=InferenceScheduleGapPolicy.PREFIX_UNAVAILABLE,
+    )
+    embedded_policy = ExactInferencePolicy.embedded_exact_linear(
+        prediction_name="computed-score",
+        missing_policy=InferenceMissingPolicy.NULL,
+        inference_delay_boundaries=0,
+        schedule_gap_policy=InferenceScheduleGapPolicy.PREFIX_UNAVAILABLE,
+    )
+    frozen_spec = _resolve_inference_spec(
+        stack,
+        frozen_policy,
+        prediction_set_ids=(prediction.prediction_set_id,),
+        model_schedule_id=schedule.model_schedule_id,
+    )
+    embedded_spec = _resolve_inference_spec(
+        stack,
+        embedded_policy,
+        model_schedule_id=schedule.model_schedule_id,
+    )
+    with NumpyPredictionSetProvider(stack.artifacts, prediction.prediction_set_id) as saved:
+        assert saved.manifest.artifact_schema is MlArtifactSchema.PREDICTION_SET_V2
+        assert all(
+            saved.value_at("computed-score", row, stack.effective[-1] + 100) is None
+            for row in (0, 1)
+        )
+        assert saved.value_at("computed-score", 2, saved.available_boundary_for_row(2)) is not None
+        with LocalNumpyCausalOverlayFactory(stack.artifacts).open_resolved(frozen_spec) as frozen:
+            assert frozen.predictions is not None
+            for row in range(len(stack.effective)):
+                assert frozen.predictions.value_at(
+                    "computed-score", row, stack.effective[-1] + 100
+                ) == saved.value_at("computed-score", row, stack.effective[-1] + 100)
+            frozen_summary = _run_with_predictions(stack, frozen.predictions, "computed-score")
+        factory = LocalNumpyCausalOverlayFactory(
+            stack.artifacts,
+            embedded_temporary_parent=tmp_path / "embedded-prefix",
+            embedded_maximum_temporary_bytes=1 << 20,
+            embedded_batch_rows=2,
+        )
+        with factory.open_resolved(embedded_spec) as embedded:
+            assert embedded.predictions is not None
+            for row in range(len(stack.effective)):
+                assert embedded.predictions.value_at(
+                    "computed-score", row, stack.effective[-1] + 100
+                ) == saved.value_at("computed-score", row, stack.effective[-1] + 100)
+            embedded_summary = _run_with_predictions(stack, embedded.predictions, "computed-score")
+        assert embedded_summary.audit_hash == frozen_summary.audit_hash
+
+
+@pytest.mark.parametrize("trailing", [False, True])
+def test_prefix_policy_still_rejects_interior_and_trailing_schedule_gaps(
+    tmp_path: Path,
+    trailing: bool,
+) -> None:
+    stack = _publish_stack(tmp_path)
+    model_id = stack.models[0].model_bundle_id
+    with NumpyModelBundleReader(stack.artifacts, model_id) as model:
+        cutoff = model.training_spec.training_cutoff
+        model_available = model.model_available_boundary
+
+    def entry(start: int, end: int) -> ModelScheduleEntry:
+        return ModelScheduleEntry(
+            eligible_from=start,
+            eligible_until=end,
+            model_bundle_id=model_id,
+            training_cutoff=cutoff,
+            model_available_boundary=model_available,
+            availability_basis="modeled-training-completion-v1",
+        )
+
+    entries = (entry(stack.effective[1], stack.effective[2]),)
+    if not trailing:
+        entries += (entry(stack.effective[3], stack.effective[-1] + 100),)
+    schedule = PublishModelSchedule(_publisher(stack.artifacts)).execute(
+        PublishModelScheduleRequest(
+            schedule=ModelSchedule(entries),
+            canonicality=ModelCanonicality.CANONICAL_EXACT,
+            compiler_version=ml_physical.COMPILER_VERSION,
+        )
+    )
+    replay_semantics, replay_layout = _replay_ids(stack)
+    with pytest.raises(ModelUnavailableError, match="MODEL_UNAVAILABLE"):
+        BuildFrozenPredictions(
+            LocalExactFrozenPredictionBuilder(
+                stack.artifacts,
+                _publisher(stack.artifacts),
+            )
+        ).execute(
+            BuildFrozenPredictionsRequest(
+                replay_pack_id=stack.replay_pack_id,
+                replay_semantics_id=replay_semantics,
+                replay_layout_schema_id=replay_layout,
+                feature_set_ids=(stack.feature.feature_set_id,),
+                model_schedule_id=schedule.model_schedule_id,
+                model_bundle_ids=(model_id,),
+                prediction_name="computed-score",
+                inference_delay_boundaries=0,
+                missing_policy=FrozenMissingPolicy.NULL,
+                canonicality=ModelCanonicality.CANONICAL_EXACT,
+                compiler_version=ml_physical.COMPILER_VERSION,
+                schedule_gap_policy=InferenceScheduleGapPolicy.PREFIX_UNAVAILABLE,
+            )
         )
 
 

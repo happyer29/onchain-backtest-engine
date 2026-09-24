@@ -23,6 +23,7 @@ from backtest.application.models import JobRecord, JobType, ResolvedJobSpec
 # Import job resolution at the visible module dependency boundary.
 from backtest.application.ports.job_resolution import PrepareDatasetJobResolver
 from backtest.application.ports.jobs import JobQueue
+from backtest.application.use_cases.research import ResearchUseCases
 from backtest.domain.identifiers import ArtifactId, ContentDigest
 
 
@@ -44,10 +45,13 @@ class SubmitJob:
         self,
         queue: JobQueue,
         prepare_resolver: PrepareDatasetJobResolver | None = None,
+        # Research needs exact-input preflight even when submitted through a generic transport.
+        research: ResearchUseCases | None = None,
     ) -> None:
         # Execute the submit job init workflow in explicit, reviewable steps.
         self._queue = queue
         self._prepare_resolver = prepare_resolver
+        self._research = research
 
     def execute(self, request: SubmitJobRequest) -> JobRecord:
         # Execute the submit job execute workflow in explicit, reviewable steps.
@@ -95,6 +99,11 @@ class SubmitJob:
         return self._queue.submit(spec, request.idempotency_key)
 
     def _resolve_command(self, job_type: JobType, payload: bytes) -> ResolvedJobCommand:
+        # Generic transports cannot bypass research's exact-input resolution boundary.
+        if job_type in {JobType.PREPARE_RESEARCH, JobType.ANALYZE_WALLETS}:
+            if self._research is None:
+                raise ResolvedJobCommandError("research resolver is not configured")
+            self._research.validate_command(payload, prepare=job_type is JobType.PREPARE_RESEARCH)
         # Execute the submit job resolve command workflow in explicit, reviewable steps.
         if job_type is not JobType.PREPARE_DATASET:
             return resolve_job_command(job_type, payload)

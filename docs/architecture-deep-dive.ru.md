@@ -1,5 +1,14 @@
 # Архитектура On-Chain Backtest Engine: подробное описание
 
+Ончейн-исследования встроены в общий React-дашборд по адресу `/research`.
+Старые ссылки `?artifact=`, подготовка и анализ, предупреждения, страницы
+доказательств и три уровня полного графа сохраняют контракт §24.6.
+Прежний отдельный HTML и глобальные DOM-контроллеры удалены. React управляет
+формами, таблицами и жизненным циклом графа; Sigma.js 3.0.3 / React Sigma 5.0.6 поставляется
+в локальной сборке. Раскладка рассчитывается в ограниченном worker; фильтр
+силы связей показывает точные видимые/скрытые пары, возврат восстанавливает
+координаты и масштаб. Семантика анализа и правила артефактов не изменяются.
+
 Статус: принято как постоянное углублённое описание архитектуры
 
 > Это полный синхронизированный русский перевод нормативного описания целевой
@@ -68,10 +77,12 @@ Browser Web UI -> localhost Control API -> SQLite job queue
 - 32 GB RAM — рекомендованный profile;
 - один local NVMe;
 - один исследователь и один доверенный codebase;
-- batch backtests, feature builds и training jobs;
+- batch backtests, feature builds, training jobs и bounded research jobs;
 - CPU-first, optional local GPU;
 - внешний ClickHouse доступен только source-facing командам `inspect-source`,
-  `prepare-dataset` и optional metadata estimate в `plan-dataset`;
+  `prepare-dataset`, optional metadata estimate в `plan-dataset` и
+  ограниченному `research prepare` из §24.6;
+- `research analyze` читает только committed local artifacts;
 - compile, feature/ML jobs и backtest runs работают только с committed local artifacts;
 - optional Control API и Web UI работают на том же устройстве;
 - Control API по умолчанию слушает только localhost;
@@ -247,6 +258,15 @@ flowchart LR
 
 ### 3.4 Текущее состояние проекта
 
+Отдельное статическое демо §34.3 реализовано: 60 тестовых кошельков,
+423/426 пар и два эталонных результата Copy Buy. Инструмент разработки вызывает
+существующие use cases с запрещённой сетью и выгружает 933 варианта ответов API
+(около 4,3 МБ). Отдельная React-сборка проверяет размеры/хеши, отклоняет команды
+и использует относительные ресурсы/hash-маршруты. Полный граф, покупки, история
+сделок, происхождение данных и ошибки проверены локально в браузере. Ручной
+Pages workflow подготовлен; это не означает публикацию сайта или расширение
+допуска реальных источников.
+
 Реализация включает production-oriented reference vertical slice архитектуры
 и network-aware Pump.fun Sniping на verified local artifacts. Live data
 требует точного cut-scoped admission:
@@ -262,6 +282,23 @@ optimized engines и один typed CLI/API/Web UI contract. Смена mode
 order IDs и round-trip IDs, но повторно использует те же verified
 Dataset/Snapshot/ReplayPack без source extraction и compile-replay.
 
+- отдельный wallet-research сценарий §24.6: bounded successful SOL-paired
+  Pump observations, immutable ResearchSnapshot/ResearchResult, локальный
+  DuckDB activity/co-buy analysis, exact source-row evidence, durable isolated
+  jobs, CLI и same-origin `/research` dashboard. Страница объясняет первую BUY
+  для каждой пары «подписант/токен» внутри снимка и пропуск поздних совпадений.
+  Локально поставляемая фиксированная версия Sigma.js/React Sigma даёт масштабирование,
+  перемещение, перетаскивание, доступный выбор и переход к покупкам точной пары
+  для максимум 25 пар / 50 узлов страницы либо всего результата до
+  200 000 пар / 5 000 участвующих кошельков. Полная загрузка имеет прогресс,
+  отмену, проверку полноты, поиск всех кошельков и постраничный список соседей;
+  перелистывание таблицы сохраняет полный граф. Раскладка и выделение — только
+  отображение. Signer/payer роли и кратность
+  строк сохраняются; completeness, finality, source consistency и causal
+  availability остаются `UNKNOWN`. Hermetic source contracts, isolated CLI/API,
+  real-browser workflow и installed-wheel CLI/child/API/assets gate прошли.
+  Live research-source capacity/fidelity не заявляются. Переводы, полный wallet
+  PnL, owner clustering и automatic strategy promotion не реализованы;
 - installable Python 3.13 package, reproducible `uv.lock`, hexagonal ports,
   Import Linter/AST guardrails и отдельные CLI/serve/child composition roots;
 - current source stack использует `bounded-source-evidence/v2`,
@@ -2763,6 +2800,9 @@ Preflight требует:
 - `model_available_at <= eligible_from`;
 - training inputs/labels/fitted components available не позже model availability;
 - gap даёт typed `MODEL_UNAVAILABLE`;
+- явное закреплённое в идентичности правило `PREFIX_UNAVAILABLE` допускает
+  статус отсутствия модели только до первого допустимого интервала, без выбора
+  будущей модели; внутренние и конечные пробелы по-прежнему отклоняются;
 - fallback явный и входит в schedule hash.
 
 ### 24.5 Inference modes
@@ -2826,8 +2866,138 @@ overflow и exact/tolerance mixing без silent fallback. Focused golden tests
 фиксируют одинаковые audit/result hashes frozen и embedded при разных batch и
 readahead и то, что будущие rows/models не меняют prior decisions.
 
+При обучении на ранних строках того же ReplayPack режим `PREFIX_UNAVAILABLE`
+сохраняет по одной строке на событие, но помечает начальный непокрытый префикс
+отдельным статусом без модели и значения прогноза. Это отдельный формат
+PredictionSet v2; статус, граница и правило входят в идентичность. Привязка
+модели к исходному FeatureSet сохраняется. Frozen и embedded режимы используют
+одинаковое правило; `NULL` для признака не означает разрешение на отсутствие
+модели. Внутренние и конечные пробелы, некорректный статус и ложный префикс
+отклоняются при построении и проверенном чтении.
+
 Tree/ONNX/GPU tolerance и stateful sequential runtimes остаются target extension
 points, но в current reference composition отсутствуют и fail closed.
+
+### 24.6 Исследование ончейн-активности кошельков
+
+Исследование является самостоятельным потребителем данных до появления
+стратегии. Первый сценарий анализирует наблюдаемые успешные SOL-пары из
+`pumpfun_v2_swaps` в одной Solana-сети и типизированном полуоткрытом диапазоне
+блоков. Он не ограничивается токенами, созданными в decision range, и не
+применяет Sniping non-Mayhem universe. Кратность строк источника сохраняется.
+
+Новые виды `RESEARCH_SNAPSHOT` и `RESEARCH_RESULT` используют существующие
+публикацию, проверенное чтение, leases, lineage, pins, GC и backup. Каталоги:
+`research-snapshots/` и `research-results/`. Эти артефакты не являются
+исполняемыми canonical snapshots, ReplayPack, FeatureSet, Universe или
+SuccessfulRun. Идентичности и проверки допуска Sniping не меняются.
+
+`research-dataset-spec/v1` фиксирует source ID, immutable NetworkId, схему
+позиций, диапазон, фиксированные profile/mapping/query и code/runtime digest.
+`research prepare` проверяет схему перед чтением и использует явные колонки,
+параметризованные границы, безопасный query ID, потоковые batches и серверные
+лимиты строк/байтов/времени/памяти с ошибкой при превышении. Локальные лимиты
+строк, результата и временного диска также обязательны. Ошибка схемы, строки,
+диапазона, квоты или прерванное чтение не публикует снимок.
+
+`wallet-observations/v1` сохраняет signature, source instruction position,
+block/transaction position, UTC block time секундной точности, mint/quote asset,
+BUY/SELL, целочисленные наблюдаемые суммы, signing wallet и fee payer отдельно.
+Адреса и signatures проверяются как полные Solana base58 значения. Подписант и
+плательщик не объявляются экономическим владельцем или кластером. Суммы не
+доказывают cash PnL, net proceeds или полноту комиссий. Некорректные обязательные
+поля отклоняются. Полнота, финальность, snapshot consistency и причинная
+доступность остаются UNKNOWN; успешное чтение не доказывает отсутствие других
+сделок. Исследование не разрешает ранее отклонённый Sniping cut.
+
+Наблюдения сортируются по source positions и всем остальным полям в фиксированном
+побайтовом порядке. Ordinal обозначает строку конкретного снимка, а не глобальную
+идентичность события. Payload hash не используется для deduplication. Новое
+извлечение без авторитетной source revision перечитывает ограниченный диапазон.
+Build key включает request, наблюдаемую схему, фактический canonical row digest
+и writer/runtime; content ID отдельно хеширует manifest и байты. Endpoint,
+credentials и operational extraction time исключаются из идентичности.
+
+Research runtime digest использует `backtest.research-runtime/v1` над полями
+`abi`, `dependencies`, `python` и `operating_system` существующего runtime
+manifest. Явный allowlist исходников research фиксируется отдельно. Native
+thread counts и environment settings остаются physical attempt settings,
+поэтому их изменение не переопределяет аналитический рецепт.
+
+`wallet-co-buy-analysis/v1` принимает один проверенный ResearchSnapshot,
+отсортированный необязательный список подписантов (пустой означает всех),
+неотрицательное включительное окно `window_seconds` и положительный минимум
+общих токенов. Для signer/mint выбирается первый наблюдаемый BUY в source-position
+порядке, с ordinal как tie-breaker. Пара разных подписантов получает совпадение
+по mint, если абсолютная разность reported block time не превышает окно. Один
+mint учитывается один раз независимо от повторных покупок и дублей. Пары
+лексически упорядочены; одинаковая transaction position является tie, а не
+доказательством intra-transaction порядка. Порог применяется после полной
+агрегации. Evidence хранит mint и два точных ordinal исходного снимка.
+
+Activity, distinct-mint counts, direction/tie counts, пороги и evidence должны
+сходиться. Результат фиксирует snapshot ID, recipe/code/runtime и semantic
+parameters; batch, threads, memory и оформление графика не входят в semantic
+operands. Rebuildable допустим только при сохранённых точных входах и
+code/runtime. Конфликт одного build key подчиняется обычному quarantine.
+
+DuckDB выполняет локальные sort/join/aggregate через application-owned port.
+До pair join проверяются cardinality и per-mint participant limits. Превышение
+отклоняет весь расчёт, не отбрасывает популярные токены или лишние связи.
+`PREPARE_RESEARCH` и `ANALYZE_WALLETS` используют существующие controller,
+idempotency, queue, child, progress, cancel, receipts и verified completion.
+Только prepare child получает source credentials; analysis использует точные
+локальные входы. Тяжёлого SQL внутри HTTP request нет.
+
+Same-origin UI содержит типизированные формы, job/result navigation,
+ограниченные activity/pair pages и evidence drilldown. Граф явно показывает
+текущую pair page (25 пар / 50 кошельков) либо, после явного выбора, весь
+результат (до 200 000 пар / 5 000 участвующих кошельков). Во втором режиме
+последовательные страницы API по 200 строк проверяются на точный artifact/table,
+непрерывные ordinal от нуля, исчерпание cursor и совпадение с summary. Лимиты:
+2 MiB на ответ, 128 MiB суммарно, 15 секунд на запрос, 180 секунд на загрузку и
+построение. Один loader и граф; отмена/смена режима или результата освобождает
+запросы, буферы и граф, устаревшие ответы отбрасываются. Превышение любого
+лимита отклоняет весь граф без усечения. Построение порционное, раскладка
+вычисляется ограниченным ForceAtlas2 worker; поиск охватывает все кошельки и связи, списки инспектора
+постраничные. Точные ordinal открывают evidence независимо от страницы таблицы.
+Общие метрики берутся из проверенного summary.
+Semantic filters создают новый результат, visual settings — нет. Wide integers
+передаются decimal strings. API принимает content IDs, закрытые table roles,
+scope-bound keyset cursors и bounded limits; SQL, paths, credentials и
+tracebacks в браузер не передаются. Локальные исследования могут превращаться
+в reviewed versioned recipes; browser SQL/Python editor не добавляется.
+
+Переход в стратегию требует отдельного причинного FeatureSpec/Universe/bundle.
+Отбор кошельков и clustering должны использовать только доступные к историческому
+решению факты. Требуются tests ролей/границ/схемы, multiplicity и batch/order
+equivalence, независимые co-buy fixtures, inclusive windows, transaction ties,
+evidence reconciliation, quota/corruption/failure non-publication, execution
+rejection исследовательских видов, CLI/API job equivalence, source-free child,
+cancel/restart/receipt integration, bounded browser smoke и installed assets.
+Live tests остаются opt-in/read-only/bounded; hermetic QA не доказывает live
+fidelity или capacity. Полный нормативный контракт: английский §24.6.
+
+Одобренная замена визуализации (§24.6 английского deep dive): локальные
+Sigma.js 3.0.3 / React Sigma 5.0.6, Graphology 0.26.0 и ForceAtlas2 0.10.1.
+Graphology хранит только структуру отображения, ForceAtlas2 вычисляет координаты
+в одном статическом worker того же origin: до 120 итераций, фиксированные
+настройки, канонический порядок и детерминированные начальные позиции;
+Barnes-Hut для больших проекций. Общий лимит проекции 30 секунд включает
+раскладку и монтирование. Blob/eval, сеть из worker, новый сервер и аналитический
+движок запрещены. Отмена/смена вида завершают worker; ошибки worker/WebGL,
+нечисловые координаты и превышение лимита показывают ошибку графа, сохраняя
+таблицы и доказательства. Неполный граф не выдаётся за полный.
+
+Порог общих токенов фильтрует только отображаемые пары. Группы, все узлы,
+исследование и артефакт не меняются. Межгрупповые рёбра учитывают только
+подходящие пары; нулевые скрываются. Счётчики видимых/скрытых пар и списки
+согласованы с фильтром; поиск охватывает все кошельки. Сброс восстанавливает
+все связи без нового запроса. Координаты не являются мерой сходства.
+Возврат хранит до 8 снимков координат/камеры (по 5000 пар float x/y и четыре числа границ нормализации) и 16 шагов
+истории без копий рёбер и неактивных рендереров. Вытесненный вид строится заново;
+смена области или артефакта очищает всё. Подсветка, перетаскивание, подписи
+при приближении и полный экран относятся только к представлению.
 
 ## 25. RunSpec, RunManifest и RNG
 
@@ -3407,7 +3577,8 @@ engine/strategy/feature/model states, queues, ledger/audit chain, RNG coordinate
 - Этот opt-in не является защитой и означает принятие риска перехвата
   credential, раскрытия запросов/результатов и изменения source bytes
   посредником. Он действует только для исходящих read-only ClickHouse операций
-  `inspect-source`, optional estimate и `prepare-dataset`; он не разрешает
+  `inspect-source`, optional estimate, `prepare-dataset` и bounded
+  `research prepare`; он не разрешает
   public bind Control API/UI.
 - Transport opt-in является operational deployment setting и не входит в
   RunSpec/artifact semantic identities. Он не повышает source fidelity,
@@ -4177,6 +4348,33 @@ max_request_mb = 2
 ```
 
 Значения после benchmark разделяются на profile `local-16gb` и `local-32gb`.
+
+### 34.3 Статическая демонстрационная сборка
+
+Согласован отдельный профиль сборки для GitHub Pages с теми же React-компонентами
+исследования, графа и результатов. Постоянная отметка сообщает: данные тестовые,
+расчёты выполнены заранее. Инструмент разработки создаёт синтетические наблюдения
+и настоящие результаты через существующие use cases во временном data root.
+Экспортируются только разрешённые ответы API для чтения после проверки артефактов.
+Рабочие конфиги, секреты, пути, SQLite/Parquet и исполняемые манифесты не копируются.
+
+Манифест демо содержит рецепт fixture, точные ID, пути, размеры и SHA-256 ответов.
+Пределы: 100 кошельков, 5 000 наблюдений, 1 000 пар на исследование, два результата
+стратегий, 2 048 ответов, 2 MiB на ответ и 16 MiB данных. Превышение, неполная
+выгрузка или повреждение останавливают сборку/чтение; частичный успех запрещён.
+Демотранспорт принимает только известные GET-запросы, проверяет размеры/хеши,
+отклоняет команды и неизвестные запросы без обращения к API. Фильтры, полный граф,
+точные суммы и просмотр исходных покупок сохраняют прежние ограничения.
+Демобайты не являются импортируемыми входами рабочего исполнения.
+
+Рабочая сборка не подменяет API тестовыми данными. У демо отдельные entry/output,
+относительные ресурсы, hash-маршрутизация и строгий статический CSP. Нет внешних
+источников, service worker или исполнения стратегий в браузере. Проверяются оба
+профиля, загрузка под путём репозитория без API, прямые ссылки, целостность данных,
+отклонение команд и интерфейс. Подготовка не публикует сайт: ручной Pages workflow
+может выгружать только проверенный каталог демо после отдельного решения.
+Нормативные подробности — в английском deep dive §34.3.
+
 
 ## 35. Поэтапная реализация
 

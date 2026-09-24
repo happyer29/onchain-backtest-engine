@@ -53,7 +53,7 @@ _TESTS_ROOT = Path(__file__).resolve().parents[3]
 # Bind golden root once as an explicit module-level contract.
 _GOLDEN_ROOT = _TESTS_ROOT / "golden" / "pumpfun" / "program-v1"
 _DECODER_PATH = Path(__file__).with_name("pumpfun_program_golden_support.py")
-_THIRD_PARTY_NOTICES_PATH = _TESTS_ROOT.parent / "THIRD_PARTY_NOTICES.md"
+_THIRD_PARTY_NOTICES_PATH = _TESTS_ROOT.parent / "docs" / "THIRD_PARTY_NOTICES.md"
 
 _NETWORK_ID = "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d"
 _PROGRAM_ID = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"
@@ -145,7 +145,7 @@ def test_corpus_is_closed_and_pins_authoritative_program_sources(
     # Retain the precise package-level licensing basis and attribution path.
     licensing = _object(provenance["licensing"])
     assert licensing["redistribution_basis"] == "official-package-level-SPDX-declarations"
-    assert licensing["notice_path"] == _THIRD_PARTY_NOTICES_PATH.name
+    assert licensing["notice_path"] == "docs/THIRD_PARTY_NOTICES.md"
     # Package metadata must not be presented as an archive-level copyright notice.
     assert (
         "Neither pinned archive contains a standalone license file or copyright-holder notice"

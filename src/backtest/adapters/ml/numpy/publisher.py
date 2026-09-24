@@ -71,6 +71,8 @@ from backtest.application.ml_artifacts import (
     ModelScheduleBuildManifest,
     PredictionSetArtifactManifest,
     PredictionSetBuildManifest,
+    PredictionSetV2ArtifactManifest,
+    PredictionSetV2BuildManifest,
     PublishedFeatureSet,
     PublishedLabelSet,
     # Include published model bundle so the ml artifacts dependency remains explicit.
@@ -82,6 +84,7 @@ from backtest.application.ml_artifacts import (
     # Include publish model schedule request so the ml artifacts dependency remains
     # explicit.
     PublishModelScheduleRequest,
+    UnavailablePredictionRow,
     UniverseArtifactManifest,
     UniverseBuildManifest,
     UniverseMembershipRow,
@@ -90,7 +93,7 @@ from backtest.application.ml_artifacts import (
     model_schedule_document,
     training_spec_document,
 )
-from backtest.application.ml_contracts import ModelSchedule, NullPolicy
+from backtest.application.ml_contracts import InferenceScheduleGapPolicy, ModelSchedule, NullPolicy
 from backtest.application.models import ArtifactDraft, ArtifactKind, CommittedArtifact
 
 # Import artifacts at the visible module dependency boundary.
@@ -702,6 +705,10 @@ class LocalNumpyMlArtifactPublisher:
         self._require_current_tools()
         _require_compiler_version(request.compiler_version)
         inference_compiler_bundle_id = self._build_tools.require_current(ML_FROZEN_INFERENCE_ROLE)
+        prefix_mode = request.schedule_gap_policy is InferenceScheduleGapPolicy.PREFIX_UNAVAILABLE
+        schema = (
+            MlArtifactSchema.PREDICTION_SET_V2 if prefix_mode else MlArtifactSchema.PREDICTION_SET
+        )
         semantic_inputs = {
             "canonicality": request.canonicality.value,
             # Keep the causal availability policy component named inside the semantic
@@ -722,6 +729,8 @@ class LocalNumpyMlArtifactPublisher:
             # contract.
             "replay_semantics_id": request.replay_semantics_id.hex,
         }
+        if prefix_mode:
+            semantic_inputs["schedule_gap_policy"] = request.schedule_gap_policy.value
         inputs = _sorted_ids(
             (
                 request.replay_pack_id,
@@ -736,8 +745,8 @@ class LocalNumpyMlArtifactPublisher:
         # Assemble build once so the local numpy ml artifact publisher build prediction
         # set workflow shares one value.
         build = _build_manifest(
-            PredictionSetBuildManifest,
-            MlArtifactSchema.PREDICTION_SET,
+            PredictionSetV2BuildManifest if prefix_mode else PredictionSetBuildManifest,
+            schema,
             inputs,
             semantic_inputs,
             # Pass self explicitly so _build_manifest receives a reviewable prediction set
@@ -842,11 +851,14 @@ class LocalNumpyMlArtifactPublisher:
                 "maximum_available_boundary": maximum,
                 "model_availability_operands": operands,
             }
-            manifest = PredictionSetArtifactManifest(
+            manifest_type = (
+                PredictionSetV2ArtifactManifest if prefix_mode else PredictionSetArtifactManifest
+            )
+            manifest = manifest_type(
                 # Pass artifact schema explicitly so PredictionSetArtifactManifest
                 # receives a reviewable prediction set and canonical json bytes input in
                 # local numpy ml artifact publisher build prediction set.
-                artifact_schema=MlArtifactSchema.PREDICTION_SET,
+                artifact_schema=schema,
                 build=build,
                 row_count=count,
                 logical_content_hash=logical_hash,
@@ -1412,7 +1424,10 @@ def _write_predictions(
     arrays = _open_arrays(root, layout)
     validity = arrays[physical.PREDICTION_VALIDITY]
     validity[:] = 0
-    hasher = MlLogicalStreamHasher(MlArtifactSchema.PREDICTION_SET)
+    prefix_mode = request.schedule_gap_policy is InferenceScheduleGapPolicy.PREFIX_UNAVAILABLE
+    hasher = MlLogicalStreamHasher(
+        MlArtifactSchema.PREDICTION_SET_V2 if prefix_mode else MlArtifactSchema.PREDICTION_SET
+    )
     maximum: int | None = None
     # Assemble effective array once so the write predictions workflow shares one value.
     effective_array = replay.arrays()[replay_physical.ENVELOPE_BOUNDARY_ORDINAL]
@@ -1427,7 +1442,6 @@ def _write_predictions(
             # loop.
             row_id = _document_u64(document, "replay_row_id")
             effective = _document_u64(document, "effective_boundary_ordinal")
-            inference = _document_u64(document, "inference_completion_boundary")
             if row_id != expected_row:
                 raise NumpyMlArtifactCompileError("PredictionSet replay row IDs must be dense")
             # Evaluate the complete write predictions effective, effective array and row
@@ -1446,6 +1460,37 @@ def _write_predictions(
                 # Complete max only after its available boundary for row and row id inputs are
                 # visible in write predictions.
             )
+            if document.get("status") == "MODEL_UNAVAILABLE":
+                if not prefix_mode or not schedule.schedule.is_unavailable_prefix(effective):
+                    raise NumpyMlArtifactCompileError(
+                        "unavailable prediction is not a schedule prefix"
+                    )
+                if _document_u64(document, "feature_available_boundary") != feature_available:
+                    raise NumpyMlArtifactCompileError(
+                        "unavailable prediction feature operand changed"
+                    )
+                arrays[physical.PREDICTION_ROW_ID][row_id] = row_id
+                arrays[physical.PREDICTION_EFFECTIVE][row_id] = effective
+                arrays[physical.PREDICTION_FEATURE_AVAILABLE][row_id] = feature_available
+                arrays[physical.PREDICTION_INFERENCE_COMPLETION][row_id] = 0
+                arrays[physical.PREDICTION_AVAILABLE][row_id] = effective
+                arrays[physical.PREDICTION_MODEL_CODE][row_id] = (1 << 32) - 1
+                arrays[physical.PREDICTION_VALUE][row_id] = 0
+                maximum = effective if maximum is None else max(maximum, effective)
+                hasher.update(
+                    {
+                        "available_boundary_ordinal": effective,
+                        "effective_boundary_ordinal": effective,
+                        "feature_available_boundary": feature_available,
+                        "inference_completion_boundary": 0,
+                        "model_bundle_id": None,
+                        "replay_row_id": row_id,
+                        "status": "MODEL_UNAVAILABLE",
+                        "value": None,
+                    }
+                )
+                continue
+            inference = _document_u64(document, "inference_completion_boundary")
             selected_model = schedule.model_for(effective)
             try:
                 selected_reader = models_by_id[selected_model]
@@ -1515,22 +1560,21 @@ def _write_predictions(
             maximum = available if maximum is None else max(maximum, available)
             # Invoke update for available boundary ordinal and effective boundary ordinal
             # as a visible write predictions step.
-            hasher.update(
-                {
-                    "available_boundary_ordinal": available,
-                    "effective_boundary_ordinal": effective,
-                    "feature_available_boundary": feature_available,
-                    # Keep inference completion boundary named so the available boundary
-                    # ordinal and effective boundary ordinal payload passed to update
-                    # remains self-describing within write predictions.
-                    "inference_completion_boundary": inference,
-                    "model_bundle_id": selected_model.hex,
-                    "replay_row_id": row_id,
-                    "value": None if raw_value is None else value,
-                }
-                # Complete update only after its available boundary ordinal and effective
-                # boundary ordinal inputs are visible in write predictions.
-            )
+            hash_document = {
+                "available_boundary_ordinal": available,
+                "effective_boundary_ordinal": effective,
+                "feature_available_boundary": feature_available,
+                # Keep inference completion boundary named so the available boundary
+                # ordinal and effective boundary ordinal payload passed to update
+                # remains self-describing within write predictions.
+                "inference_completion_boundary": inference,
+                "model_bundle_id": selected_model.hex,
+                "replay_row_id": row_id,
+                "value": None if raw_value is None else value,
+            }
+            if prefix_mode:
+                hash_document["status"] = "VALUE" if raw_value is not None else "FEATURE_MISSING"
+            hasher.update(hash_document)
     finally:
         _close_arrays(arrays)
     return hasher.content_digest(), maximum, operands
@@ -1690,8 +1734,15 @@ def _label_document(row: LabelOverlayRow) -> dict[str, object]:
     }
 
 
-def _prediction_document(row: FrozenPredictionRow) -> dict[str, object]:
+def _prediction_document(row: FrozenPredictionRow | UnavailablePredictionRow) -> dict[str, object]:
     # Execute the prediction document workflow in explicit, reviewable steps.
+    if isinstance(row, UnavailablePredictionRow):
+        return {
+            "effective_boundary_ordinal": row.effective_boundary_ordinal,
+            "feature_available_boundary": row.feature_available_boundary,
+            "replay_row_id": row.replay_row_id,
+            "status": "MODEL_UNAVAILABLE",
+        }
     return {
         "availability": {
             "feature_available_boundary": row.availability.feature_available_boundary,

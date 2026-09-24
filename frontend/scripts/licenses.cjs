@@ -26,4 +26,4 @@ for (const [location, metadata] of Object.entries(lock.packages).sort(([a], [b])
   sections.push(`${location.replace(/^node_modules\//, '')} @ ${metadata.version}\nDeclared license: ${metadata.license ?? 'See notices'}\n${files.map(file => `\n${file.relative}\n${file.text}\n`).join('')}`);
 }
 // This public text accompanies the minified code in every Python wheel, without local paths.
-fs.writeFileSync(path.join(root, '../src/backtest/interfaces/web/static/third-party-licenses.txt'), sections.join('\n' + '='.repeat(72) + '\n\n'));
+fs.writeFileSync(process.argv[2] ? path.resolve(root, process.argv[2]) : path.join(root, '../src/backtest/interfaces/web/static/third-party-licenses.txt'), sections.join('\n' + '='.repeat(72) + '\n\n'));

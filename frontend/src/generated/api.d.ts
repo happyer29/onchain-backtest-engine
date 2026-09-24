@@ -4,6 +4,106 @@
  */
 
 export interface paths {
+    "/api/v1/research/prepare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Prepare
+         * @description Materialize installed acquisition operands before durable submission.
+         */
+        post: operations["prepare_api_v1_research_prepare_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/research/analyze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Analyze
+         * @description Resolve the exact local snapshot and fixed recipe, never a user-provided query.
+         */
+        post: operations["analyze_api_v1_research_analyze_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/research/{artifact_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Summary
+         * @description Map verified manifests into useful display fields without exposing file paths.
+         */
+        get: operations["summary_api_v1_research__artifact_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/research/jobs/{job_id}/result": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Job Result
+         * @description Let a completed preparation or analysis navigate to its verified output.
+         */
+        get: operations["job_result_api_v1_research_jobs__job_id__result_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/research/{artifact_id}/rows/{table}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Rows
+         * @description A graph or evidence table is one explicitly labelled page of a complete result.
+         */
+        get: operations["rows_api_v1_research__artifact_id__rows__table__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -681,7 +781,7 @@ export interface components {
          * ArtifactKind
          * @enum {string}
          */
-        ArtifactKind: "SOURCE_INSPECTION" | "CANONICAL_DISTRIBUTION" | "SNAPSHOT" | "REPLAY_PACK" | "DELIVERY_SCHEDULE" | "FEATURE_SET" | "LABEL_SET" | "UNIVERSE" | "MODEL_BUNDLE" | "MODEL_SCHEDULE" | "PREDICTION_SET" | "STRATEGY_BUNDLE" | "SWEEP" | "BENCHMARK" | "RUN";
+        ArtifactKind: "RESEARCH_SNAPSHOT" | "RESEARCH_RESULT" | "SOURCE_INSPECTION" | "CANONICAL_DISTRIBUTION" | "SNAPSHOT" | "REPLAY_PACK" | "DELIVERY_SCHEDULE" | "FEATURE_SET" | "LABEL_SET" | "UNIVERSE" | "MODEL_BUNDLE" | "MODEL_SCHEDULE" | "PREDICTION_SET" | "STRATEGY_BUNDLE" | "SWEEP" | "BENCHMARK" | "RUN";
         /** ArtifactLineageResponse */
         ArtifactLineageResponse: {
             /** Root Artifact Id */
@@ -1223,7 +1323,7 @@ export interface components {
          * JobType
          * @enum {string}
          */
-        JobType: "PREPARE_DATASET" | "COMPILE_REPLAY" | "COMPILE_DELIVERY_SCHEDULE" | "RUN_BACKTEST" | "RUN_SWEEP" | "BUILD_FEATURES" | "BUILD_LABELS" | "BUILD_UNIVERSE" | "TRAIN_MODEL" | "BUILD_MODEL_SCHEDULE" | "PREDICT" | "VERIFY_ARTIFACT" | "GC" | "BACKUP" | "BENCHMARK";
+        JobType: "PREPARE_RESEARCH" | "ANALYZE_WALLETS" | "PREPARE_DATASET" | "COMPILE_REPLAY" | "COMPILE_DELIVERY_SCHEDULE" | "RUN_BACKTEST" | "RUN_SWEEP" | "BUILD_FEATURES" | "BUILD_LABELS" | "BUILD_UNIVERSE" | "TRAIN_MODEL" | "BUILD_MODEL_SCHEDULE" | "PREDICT" | "VERIFY_ARTIFACT" | "GC" | "BACKUP" | "BENCHMARK";
         /**
          * LedgerCorrelationKind
          * @description Typed owner of one immutable ledger transaction.
@@ -1299,7 +1399,7 @@ export interface components {
          * @description Finite, safe lifecycle stages emitted outside execution hot loops.
          * @enum {string}
          */
-        ProgressStage: "VALIDATING_INPUTS" | "PREPARING_DATASET" | "COMPILING_REPLAY" | "COMPILING_DELIVERY_SCHEDULE" | "BUILDING_FEATURES" | "BUILDING_UNIVERSE" | "BUILDING_LABELS" | "TRAINING_MODEL" | "BUILDING_MODEL_SCHEDULE" | "BUILDING_PREDICTIONS" | "RUNNING_BACKTEST" | "RUNNING_SWEEP" | "VERIFYING_OUTPUTS" | "PUBLISHING_RECEIPT" | "COMPLETED";
+        ProgressStage: "VALIDATING_INPUTS" | "PREPARING_RESEARCH" | "ANALYZING_WALLETS" | "PREPARING_DATASET" | "COMPILING_REPLAY" | "COMPILING_DELIVERY_SCHEDULE" | "BUILDING_FEATURES" | "BUILDING_UNIVERSE" | "BUILDING_LABELS" | "TRAINING_MODEL" | "BUILDING_MODEL_SCHEDULE" | "BUILDING_PREDICTIONS" | "RUNNING_BACKTEST" | "RUNNING_SWEEP" | "VERIFYING_OUTPUTS" | "PUBLISHING_RECEIPT" | "COMPLETED";
         /**
          * PumpfunSnipingDashboardResponse
          * @description Bounded first-paint projection for the dedicated result dashboard.
@@ -1469,6 +1569,28 @@ export interface components {
          * @enum {string}
          */
         ReplayContract: "CANONICAL_EXACT" | "NON_CANONICAL_TOLERANCE";
+        /**
+         * ResearchRows
+         * @description Each response contains one bounded view and its exclusive continuation.
+         */
+        ResearchRows: {
+            /** Artifact Id */
+            artifact_id: string;
+            /** Table */
+            table: string;
+            /** Rows */
+            rows: {
+                [key: string]: string;
+            }[];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /**
+         * ResearchTable
+         * @description Closed result table roles; callers never provide a filename or SQL.
+         * @enum {string}
+         */
+        ResearchTable: "observations" | "token_modes" | "data_issues" | "activity" | "pairs" | "evidence";
         /** ResolvedRunSpecResponse */
         ResolvedRunSpecResponse: {
             /** Spec Id */
@@ -2058,6 +2180,185 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    prepare_api_v1_research_prepare_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** From Block */
+                    from_block: number;
+                    /** To Block */
+                    to_block: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobResponse"];
+                };
+            };
+        };
+    };
+    analyze_api_v1_research_analyze_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * Snapshot Id
+                     * @description Exact lowercase SHA-256 content ID without an alias or path
+                     */
+                    snapshot_id: string;
+                    /**
+                     * Window Seconds
+                     * @default 60
+                     */
+                    window_seconds?: number;
+                    /**
+                     * Minimum Shared Mints
+                     * @default 2
+                     */
+                    minimum_shared_mints?: number;
+                    /**
+                     * Mode
+                     * @default NON_MAYHEM
+                     * @enum {string}
+                     */
+                    mode?: "NON_MAYHEM" | "ALL";
+                    /** Wallets */
+                    wallets?: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobResponse"];
+                };
+            };
+        };
+    };
+    summary_api_v1_research__artifact_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                artifact_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    job_result_api_v1_research_jobs__job_id__result_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rows_api_v1_research__artifact_id__rows__table__get: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+                pair?: number | null;
+            };
+            header?: never;
+            path: {
+                artifact_id: string;
+                table: components["schemas"]["ResearchTable"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResearchRows"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     health_api_v1_health_get: {
         parameters: {
             query?: never;

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 
 import pytest
 from pydantic import ValidationError
@@ -18,6 +19,7 @@ from backtest.application.ml_artifacts import (
 # Import ml contracts at the visible module dependency boundary.
 from backtest.application.ml_contracts import (
     FeatureSpec,
+    InferenceScheduleGapPolicy,
     ModelCanonicality,
     ModelSchedule,
     ModelScheduleEntry,
@@ -63,6 +65,20 @@ from backtest.interfaces.api.ml_schemas import (
     PredictJobForm,
     TrainModelJobForm,
 )
+
+
+def test_predict_form_round_trips_prefix_unavailable_policy() -> None:
+    predict = _commands()[5]
+    assert isinstance(predict, ResolvedPredictJob)
+    prefix = ResolvedPredictJob(
+        replace(
+            predict.request,
+            schedule_gap_policy=InferenceScheduleGapPolicy.PREFIX_UNAVAILABLE,
+        )
+    )
+    form = PredictJobForm.from_domain(prefix)
+    assert form.schedule_gap_policy is InferenceScheduleGapPolicy.PREFIX_UNAVAILABLE
+    assert PredictJobForm.model_validate_json(form.model_dump_json()).to_domain() == prefix
 
 
 def test_all_ml_api_forms_round_trip_exact_domain_commands_and_json() -> None:

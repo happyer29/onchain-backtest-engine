@@ -10,7 +10,9 @@ import pytest
 # Import canonical json at the visible module dependency boundary.
 from backtest.application.canonical_json import resolved_job_spec_hex
 from backtest.application.job_commands import ResolvedCompileReplayJob
+from backtest.application.ml_contracts import ModelUnavailableError
 from backtest.application.models import JobType, ResolvedJobSpec
+from backtest.bootstrap import job_child
 from backtest.bootstrap.job_child import ChildEnvelopeError, load_launch_envelope
 from backtest.domain.hashing import canonical_json_bytes
 
@@ -91,6 +93,18 @@ def test_launch_envelope_accepts_only_exact_canonical_resolved_closure(tmp_path:
     # Verify envelope.attempt_id == attempt_id before this scenario is accepted.
     assert envelope.attempt_id == attempt_id
     assert envelope.spec == spec
+
+
+def test_missing_model_is_a_user_error_not_an_internal_child_failure(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def unavailable(*_args: object, **_kwargs: object) -> None:
+        raise ModelUnavailableError("MODEL_UNAVAILABLE")
+
+    monkeypatch.setattr(job_child, "execute_envelope", unavailable)
+
+    assert job_child.main(["--config", "unused", "--capabilities", "unused", "unused"]) == 78
+    assert "MODEL_UNAVAILABLE" in capsys.readouterr().err
 
 
 def test_launch_envelope_rejects_payload_input_filename_and_format_tampering(

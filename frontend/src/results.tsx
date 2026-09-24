@@ -18,7 +18,7 @@ const MarketHistoryChart = lazy(() => import('./charts').then(module => ({ defau
 const tabs: [string, string][] = [['overview', "Overview"], ['entries', "Entries"], ['exits', "Exits"], ['trades', "Trades"], ['verification', "Verification"]];
 
 // Exact run identity owns the entire result selection and its independent query lifetimes.
-export function StrategyResults({ runId }: { runId: string }) {
+export function StrategyResults({ runId, demo = false }: { runId: string; demo?: boolean }) {
   const locale = useLocale();
   const valid = digestSchema.safeParse(runId).success;
   const [tab, setTab] = useState('overview');
@@ -61,7 +61,7 @@ export function StrategyResults({ runId }: { runId: string }) {
   if (!valid) return <Failure message={t("An exact SHA-256 artifact ID is required for this result.")} />;
   return <><Link to="/runs" className="back-link"><ArrowLeft size={15} /> {t("All runs")}</Link>
     <PageTitle eyebrow={summary.data ? familyLabel(summary.data.family) : t("Run analytics")} title={t("Strategy results")}><Button onClick={() => { void entries.refetch(); void analytics.refetch(); }}><RefreshCw size={15} /> {t("Refresh")}</Button></PageTitle>
-    {summary.data && <div className="result-identity"><Badge tone="positive"><ShieldCheck size={13} /> {t("Verified result")}</Badge><code title={runId}>{shortId(runId, 14)}</code><span>{summary.data.network_id}</span></div>}
+    {summary.data && <div className="result-identity"><Badge tone="positive"><ShieldCheck size={13} /> {t(demo ? "Test result · prepared offline" : "Verified result")}</Badge><code title={runId}>{shortId(runId, 14)}</code><span>{summary.data.network_id}</span></div>}
     {/* This assumption remains visible on every tab and alongside each trade detail. */}
     {summary.data?.execution_mode === 'EXOGENOUS_VIRTUAL_SETTLEMENT' && <div className="notice synthetic"><strong>{t("Synthetic execution model")}</strong><p>{t("Some proceeds may come from a virtual SOL source and may be reused by the wallet. This result does not prove that such a sale could execute on-chain.")}</p></div>}
     {entries.isError && <Failure message={errorText(entries.error)} retry={() => void entries.refetch()} />}

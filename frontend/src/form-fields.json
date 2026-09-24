@@ -1006,6 +1006,18 @@
       ]
     },
     {
+      "name": "inference_schedule_gap_policy",
+      "label": "Rows before first model",
+      "kind": "select",
+      "type": "text",
+      "default": "REJECT",
+      "required": false,
+      "options": [
+        { "value": "REJECT", "label": "Reject uncovered rows" },
+        { "value": "PREFIX_UNAVAILABLE", "label": "No prediction before first model" }
+      ]
+    },
+    {
       "name": "inference_delay_boundaries",
       "label": "Inference delay, boundaries",
       "kind": "input",
@@ -1523,6 +1535,18 @@
           "value": "NULL",
           "label": "NULL"
         }
+      ]
+    },
+    {
+      "name": "schedule_gap_policy",
+      "label": "Rows before first model",
+      "kind": "select",
+      "type": "text",
+      "default": "PREFIX_UNAVAILABLE",
+      "required": true,
+      "options": [
+        { "value": "PREFIX_UNAVAILABLE", "label": "No prediction before first model" },
+        { "value": "REJECT", "label": "Reject uncovered rows" }
       ]
     }
   ]

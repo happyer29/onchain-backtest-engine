@@ -47,6 +47,7 @@ from backtest.application.ml_artifacts import (
     PublishModelBundleRequest,
     TrainExactLinearModelRequest,
     # Close the ml artifacts import after its required symbols are visible.
+    UnavailablePredictionRow,
 )
 from backtest.application.ml_contracts import (
     EXACT_LINEAR_MODEL_KIND,
@@ -55,6 +56,7 @@ from backtest.application.ml_contracts import (
     # Include inference missing policy so the ml contracts dependency remains explicit.
     InferenceMissingPolicy,
     InferenceMode,
+    InferenceScheduleGapPolicy,
     ModelCanonicality,
     PredictionAvailability,
 )
@@ -381,6 +383,7 @@ class LocalExactFrozenPredictionBuilder:
             prediction_name=request.prediction_name,
             missing_policy=InferenceMissingPolicy(request.missing_policy.value),
             inference_delay_boundaries=request.inference_delay_boundaries,
+            schedule_gap_policy=request.schedule_gap_policy,
         )
         return self._publisher.build_prediction_set(
             # Include build prediction set request in the completed local exact frozen
@@ -405,6 +408,7 @@ class LocalExactFrozenPredictionBuilder:
                 canonicality=request.canonicality,
                 rows=self._prediction_rows(request),
                 compiler_version=request.compiler_version,
+                schedule_gap_policy=request.schedule_gap_policy,
             )
             # Complete build_prediction_set only after its replay pack id and replay semantics
             # id inputs are visible in local exact frozen prediction builder build frozen
@@ -414,7 +418,7 @@ class LocalExactFrozenPredictionBuilder:
     def _prediction_rows(
         self,
         request: BuildFrozenPredictionsRequest,
-    ) -> Iterator[FrozenPredictionRow]:
+    ) -> Iterator[FrozenPredictionRow | UnavailablePredictionRow]:
         # Execute the local exact frozen prediction builder prediction rows workflow in
         # explicit, reviewable steps.
         with ExitStack() as stack:
@@ -504,6 +508,18 @@ class LocalExactFrozenPredictionBuilder:
                 # Process range(replay.manifest.event_count) inside the bounded local
                 # exact frozen prediction builder prediction rows loop.
                 boundary = int(effective[row_id])
+                if (
+                    request.schedule_gap_policy is InferenceScheduleGapPolicy.PREFIX_UNAVAILABLE
+                    and schedule.schedule.is_unavailable_prefix(boundary)
+                ):
+                    yield UnavailablePredictionRow(
+                        replay_row_id=row_id,
+                        effective_boundary_ordinal=boundary,
+                        feature_available_boundary=max(
+                            feature.available_boundary_for_row(row_id) for feature in features
+                        ),
+                    )
+                    continue
                 selected_id = schedule.model_for(boundary)
                 try:
                     model = models[selected_id]

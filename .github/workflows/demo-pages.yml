@@ -1,0 +1,73 @@
+name: Static demo / GitHub Pages
+
+# Local preparation does not publish. Even a manual run defaults to verification only.
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the verified synthetic demo to GitHub Pages
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: static-demo-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.7"
+          enable-cache: true
+      - run: uv python install 3.13
+      - run: uv sync --all-groups --frozen
+      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - run: npm ci --prefix frontend
+      - name: Generate only synthetic examples, with network connections disabled
+        run: npm --prefix frontend run demo:prepare
+      - name: Verify transport and build a closed static distribution
+        run: |
+          npm --prefix frontend test
+          npm --prefix frontend run demo:build
+      - name: Install test browser
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Verify subpath routing, complete graphs, trades and integrity failures
+        run: npm --prefix frontend run demo:test
+      - name: Configure existing Pages site
+        if: inputs.publish
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
+      - name: Upload only the verified static directory
+        if: inputs.publish
+        uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4.0.0
+        with:
+          path: frontend/demo-dist
+
+  deploy:
+    if: inputs.publish
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publish verified test examples
+        id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5
