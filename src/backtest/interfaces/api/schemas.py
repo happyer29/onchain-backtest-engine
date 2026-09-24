@@ -20,6 +20,7 @@ from backtest.application.ml_contracts import (
     InferenceMissingPolicy,
     # Include inference mode so the ml contracts dependency remains explicit.
     InferenceMode,
+    InferenceScheduleGapPolicy,
 )
 from backtest.application.ml_reference import ReferenceMlContract
 from backtest.application.models import (
@@ -1228,6 +1229,7 @@ class ReferenceRunDraftCommand(ApiModel):
     # Declare prediction name explicitly in the reference run draft command contract.
     prediction_name: str | None = Field(default=None, min_length=1, max_length=256)
     inference_missing_policy: InferenceMissingPolicy = InferenceMissingPolicy.REJECT
+    inference_schedule_gap_policy: InferenceScheduleGapPolicy = InferenceScheduleGapPolicy.REJECT
     inference_delay_boundaries: int = Field(default=0, ge=0)
 
     def to_domain(self) -> ReferenceRunDraft:
@@ -1254,6 +1256,7 @@ class ReferenceRunDraftCommand(ApiModel):
             if (
                 self.prediction_name is not None
                 or self.inference_missing_policy is not InferenceMissingPolicy.REJECT
+                or self.inference_schedule_gap_policy is not InferenceScheduleGapPolicy.REJECT
                 or self.inference_delay_boundaries != 0
             ):
                 # Fail the reference run draft command to domain path with ValueError for
@@ -1276,6 +1279,7 @@ class ReferenceRunDraftCommand(ApiModel):
                 # receives a reviewable prediction name and inference missing policy input
                 # in reference run draft command to domain.
                 inference_delay_boundaries=self.inference_delay_boundaries,
+                schedule_gap_policy=self.inference_schedule_gap_policy,
             )
         # Handle the reference run draft command to domain complement of inference mode
         # and frozen explicitly.
@@ -1291,6 +1295,7 @@ class ReferenceRunDraftCommand(ApiModel):
                 # receives a reviewable prediction name and inference missing policy input
                 # in reference run draft command to domain.
                 inference_delay_boundaries=self.inference_delay_boundaries,
+                schedule_gap_policy=self.inference_schedule_gap_policy,
             )
         else:
             raise ValueError("stateful inference is not supported by the reference run")

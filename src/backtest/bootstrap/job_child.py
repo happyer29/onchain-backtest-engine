@@ -38,6 +38,7 @@ from backtest.application.job_commands import (
     resolved_prepare_dataset_job_from_bytes,
     resolved_sweep_job_from_bytes,
 )
+from backtest.application.ml_contracts import ModelUnavailableError
 from backtest.application.ml_job_commands import (
     resolved_build_features_job_from_bytes,
     # Include resolved build labels job from bytes so the ml job commands dependency
@@ -79,6 +80,9 @@ _MAX_ENVELOPE_BYTES: Final = 3 * 1024 * 1024
 _USER_ERROR_EXIT: Final = 78
 _INTERNAL_ERROR_EXIT: Final = 70
 _EXECUTION_STAGES: Final = {
+    # The existing progress/receipt lifecycle also governs isolated research jobs.
+    JobType.PREPARE_RESEARCH: ProgressStage.PREPARING_RESEARCH,
+    JobType.ANALYZE_WALLETS: ProgressStage.ANALYZING_WALLETS,
     JobType.PREPARE_DATASET: ProgressStage.PREPARING_DATASET,
     # Keep the job type component named inside the execution stages contract.
     JobType.COMPILE_REPLAY: ProgressStage.COMPILING_REPLAY,
@@ -209,6 +213,23 @@ def execute_envelope(
                 if item.artifact.artifact_id not in reused_ids
             ),
         )
+    # The research worker shares process isolation and receipts while keeping replay untouched.
+    elif envelope.spec.job_type in {
+        JobType.PREPARE_RESEARCH,
+        JobType.ANALYZE_WALLETS,
+    }:
+        from backtest.bootstrap.research import execute_research_job
+
+        # Research uses the same isolated completion receipt and output verification.
+        reporter.publish(_EXECUTION_STAGES[envelope.spec.job_type])
+        artifacts, result_artifact = execute_research_job(
+            settings,
+            envelope.spec.job_type,
+            envelope.spec.canonical_payload,
+            # Source mapping is usable only for acquisition, never for wallet analysis.
+            capabilities_file=capabilities_file,
+        )
+        outputs = (result_artifact,)
     # Route all remaining cases through the explicit alternative branch.
     else:
         # Handle the execute envelope complement of job type, prepare dataset and spec
@@ -619,6 +640,10 @@ def main(argv: list[str] | None = None) -> int:
             # Complete execute_envelope only after its envelope and config inputs are visible
             # in main.
         )
+    except ModelUnavailableError:
+        # A causal schedule gap is a rejected input, not a child-process defect.
+        sys.stderr.write("MODEL_UNAVAILABLE: model schedule does not cover a replay row\n")
+        return _USER_ERROR_EXIT
     except (ChildEnvelopeError, ChildExecutionError, ConfigError, FileNotFoundError, ValueError):
         # Translate the child envelope error, child execution error and config error
         # failure through the main boundary.

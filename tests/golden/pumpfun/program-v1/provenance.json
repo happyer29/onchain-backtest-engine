@@ -112,7 +112,7 @@
   },
   "licensing": {
     "redistribution_basis": "official-package-level-SPDX-declarations",
-    "notice_path": "THIRD_PARTY_NOTICES.md",
+    "notice_path": "docs/THIRD_PARTY_NOTICES.md",
     "residual_caveat": "Neither pinned archive contains a standalone license file or copyright-holder notice; attribution follows the package metadata."
   },
   "extraction": {

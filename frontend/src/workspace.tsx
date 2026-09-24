@@ -76,7 +76,7 @@ export function Overview() {
 }
 
 // Selection is independent from the paged queue; its overlay can follow a job leaving the filter.
-export function JobsPanel({ compact = false }: { compact?: boolean }) {
+export function JobsPanel({ compact = false, researchOnly = false }: { compact?: boolean; researchOnly?: boolean }) {
   useLocale();
   const paging = useCursor();
   const [state, setState] = useState('');
@@ -109,13 +109,13 @@ export function JobsPanel({ compact = false }: { compact?: boolean }) {
     { id: 'submitted', title: t("Created"), value: row => BigInt(row.submitted_at_ns), render: row => nanosecondTime(row.submitted_at_ns) },
     { id: 'updated', title: t("Updated"), value: row => BigInt(row.updated_at_ns), render: row => nanosecondTime(row.updated_at_ns) },
     // Mutations always go through durable API operations and their observed server state.
-    { id: 'actions', title: '', render: row => <div className="row-actions"><Button onClick={() => setSelected(row)}>{t("Events")}</Button>{active.has(row.state) ? <Button tone="danger" disabled={busy === row.job_id} onClick={() => void action(row, 'cancel')}>{t("Cancel")}</Button> : ['FAILED', 'CANCELLED', 'INTERRUPTED'].includes(row.state) && <Button disabled={busy === row.job_id} onClick={() => void action(row, 'retry')}>{t("Retry")}</Button>}</div> },
+    { id: 'actions', title: '', render: row => <div className="row-actions">{row.state === 'SUCCEEDED' && ['PREPARE_RESEARCH','ANALYZE_WALLETS'].includes(row.job_type) && <Button asChild><Link to={`/research?job=${encodeURIComponent(row.job_id)}`}>{t('Open research output')}</Link></Button>}<Button onClick={() => setSelected(row)}>{t("Events")}</Button>{active.has(row.state) ? <Button tone="danger" disabled={busy === row.job_id} onClick={() => void action(row, 'cancel')}>{t("Cancel")}</Button> : ['FAILED', 'CANCELLED', 'INTERRUPTED'].includes(row.state) && <Button disabled={busy === row.job_id} onClick={() => void action(row, 'retry')}>{t("Retry")}</Button>}</div> },
   ];
   // Compact overview and full queue share the same response and action behavior.
-  return <>{!compact && <PageTitle eyebrow={t("Execution")} title={t("Job queue")}><Button onClick={() => void query.refetch()}><RefreshCw size={15} /> {t("Refresh")}</Button></PageTitle>}
+  return <>{!compact && !researchOnly && <PageTitle eyebrow={t("Execution")} title={t("Job queue")}><Button onClick={() => void query.refetch()}><RefreshCw size={15} /> {t("Refresh")}</Button></PageTitle>}
     {failure && <Failure message={failure} />}{query.isError && <Failure message={errorText(query.error)} retry={() => void query.refetch()} />}
-    <Card>{!compact && <div className="table-toolbar"><label>{t("State")} <select value={state} onChange={event => { setState(event.target.value); paging.reset(); }}><option value="">{t("All states")}</option>{['QUEUED', 'STARTING', 'RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELLED', 'INTERRUPTED'].map(state => <option key={state}>{state}</option>)}</select></label><small>{t("Updates automatically · paused in hidden tabs")}</small></div>}
-      {query.isPending ? <Loading /> : <DataTable rows={query.data?.items ?? []} columns={columns} name={t("Job queue")} searchText={compact ? undefined : row => `${row.job_id} ${row.job_type} ${row.state}`} />}
+    <Card>{researchOnly && <p className="subtle">{t("Research tasks on the current queue page. Use the arrows to inspect earlier tasks.")}</p>}{!compact && <div className="table-toolbar"><label>{t("State")} <select value={state} onChange={event => { setState(event.target.value); paging.reset(); }}><option value="">{t("All states")}</option>{['QUEUED', 'STARTING', 'RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELLED', 'INTERRUPTED'].map(state => <option key={state}>{state}</option>)}</select></label><small>{t("Updates automatically · paused in hidden tabs")}</small></div>}
+      {query.isPending ? <Loading /> : <DataTable rows={(query.data?.items ?? []).filter(job => !researchOnly || ['PREPARE_RESEARCH','ANALYZE_WALLETS'].includes(job.job_type))} columns={columns} name={t("Job queue")} searchText={compact ? undefined : row => `${row.job_id} ${row.job_type} ${row.state}`} />}
       {!compact && <Pager index={paging.page.index} busy={query.isFetching} count={query.data?.items.length ?? 0} previous={paging.page.trail.length ? paging.previous : undefined} next={query.data?.next_cursor ? () => paging.next(query.data!.next_cursor!) : undefined} />}
     </Card>{selected && <JobEvents key={selected.job_id} job={selected} onClose={() => setSelected(null)} />}
   </>;

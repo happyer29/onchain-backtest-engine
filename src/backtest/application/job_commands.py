@@ -260,7 +260,20 @@ def resolve_job_command(job_type: JobType, payload: bytes) -> ResolvedJobCommand
     try:
         # Perform the protected resolve job command operation before explicit failure
         # handling.
-        if job_type in ML_JOB_TYPES:
+        if job_type is JobType.PREPARE_RESEARCH:
+            from backtest.application.research import dataset_spec
+
+            # Research snapshots have no replay inputs and require a fresh source scan.
+            normalized = dataset_spec(document).canonical_bytes()
+            inputs = ()
+        elif job_type is JobType.ANALYZE_WALLETS:
+            from backtest.application.research import analysis_spec
+
+            # Exactly one verified research snapshot is retained through job execution.
+            research = analysis_spec(document)
+            normalized = research.canonical_bytes()
+            inputs = (research.snapshot_id,)
+        elif job_type in ML_JOB_TYPES:
             # Handle the resolve job command job_type in ML_JOB_TYPES branch as a distinct
             # logical block.
             ml_command = resolve_ml_job_command(job_type, payload)

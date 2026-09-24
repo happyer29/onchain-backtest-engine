@@ -21,6 +21,7 @@ from backtest.application.ml_artifacts import (
 from backtest.application.ml_contracts import (
     # Include feature spec so the ml contracts dependency remains explicit.
     FeatureSpec,
+    InferenceScheduleGapPolicy,
     ModelCanonicality,
     ModelSchedule,
     ModelScheduleEntry,
@@ -636,6 +637,7 @@ class PredictJobForm(MlApiModel):
     inference_delay_boundaries: int = Field(ge=0)
     # Declare missing policy explicitly in the predict job form contract.
     missing_policy: FrozenMissingPolicy
+    schedule_gap_policy: InferenceScheduleGapPolicy = InferenceScheduleGapPolicy.REJECT
     canonicality: ModelCanonicality
     compiler_version: TokenText
 
@@ -671,6 +673,7 @@ class PredictJobForm(MlApiModel):
                 # a reviewable replay pack id and replay semantics id input in predict job
                 # form to domain.
                 missing_policy=self.missing_policy,
+                schedule_gap_policy=self.schedule_gap_policy,
                 canonicality=self.canonicality,
                 compiler_version=self.compiler_version,
             )
@@ -695,6 +698,7 @@ class PredictJobForm(MlApiModel):
             # Pass missing policy explicitly so cls receives a reviewable hex and replay
             # pack id input in predict job form from domain.
             missing_policy=request.missing_policy,
+            schedule_gap_policy=request.schedule_gap_policy,
             canonicality=request.canonicality,
             compiler_version=request.compiler_version,
         )

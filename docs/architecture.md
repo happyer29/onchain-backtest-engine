@@ -1,5 +1,13 @@
 # On-Chain Backtest Engine architecture: concise overview
 
+On-chain research is integrated into the shared React workspace at `/research`.
+Existing artifact links, preparation/analysis, warnings, paged evidence and the
+three-level whole-result graph retain the §24.6 contract. The replaced research
+HTML and global DOM scripts are removed. The implemented §24.6 renderer replacement
+uses locally bundled Sigma.js/React Sigma, bounded worker layout, explicit
+display-only edge filtering and bounded saved navigation. Implementation status
+is recorded in deep-dive §3.4.
+
 Status: accepted as a synchronized overview
 
 > The complete normative description is in the
@@ -7,6 +15,41 @@ Status: accepted as a synchronized overview
 > map and does not introduce independent decisions. When wording is ambiguous,
 > the deep dive governs, and any discrepancy found must be corrected in both
 > documents.
+
+## Approved wallet-research extension
+
+[Deep dive §24.6](architecture-deep-dive.md#246-on-chain-wallet-research)
+defines a separate observational research consumer: bounded `research prepare`
+creates a verified immutable participant snapshot; local `research analyze`
+builds activity, shared-mint pairs and exact observation evidence in DuckDB.
+The same durable job/publication lifecycle and same-origin bounded dashboard
+apply. The page explains first purchases and their limitations; locally bundled
+Sigma.js/React Sigma adds zoom/pan/drag and accessible exact-pair evidence navigation
+within 25 page pairs / 50 nodes, without changing research identity.
+The §24.6 whole-result mode adds up to 200,000 pairs / 5,000 participating
+wallets: bounded sequential loading, progress/cancellation, exact completeness
+checks and all-neighbour search. The implemented three-level display is
+visual groups → group wallets → complete wallet neighbourhood, with reconciled
+internal/cross-group counts and exact-pair evidence. Grouping is presentation
+only; table pagination preserves the loaded result.
+Research v2 snapshots also store bounded same-source creation classifications.
+Tokens with an empty creation signature are excluded from both analysis modes;
+visible warnings list every affected mint and its source-row count through
+bounded pagination. Original observations remain stored unchanged.
+The shared CLI/API default is `NON_MAYHEM` («Без Mayhem»); `ALL` («Все режимы»)
+is explicit. Filtering excludes Mayhem and unclassified tokens before activity,
+first buys and pair thresholds, with separate visible row/mint counts.
+It never blacklists a wallet for its other Mayhem trades. V1 artifacts retain
+their original readable meaning; their missing classifications require a new
+snapshot for `NON_MAYHEM`, while a new `ALL` analysis remains supported.
+Signer and fee payer remain distinct roles, source-row multiplicity is
+preserved, and completeness/finality remain UNKNOWN. Research artifacts cannot
+enter replay or Strategy directly. Existing Sniping gates and identities are
+unchanged. The first slice is implemented and verified on hermetic source,
+CLI/API/child and browser workflows. General live-source
+fidelity/capacity, transfers, full wallet PnL, ownership clustering and automatic
+strategy promotion remain outside this closure. See the
+[wallet research guide](wallet-research.md).
 
 ## 1. The decision in one paragraph
 
@@ -131,8 +174,8 @@ Guarantees and constraints:
 - one trusted codebase and one Python environment;
 - 16 GB RAM is the minimum supported profile; 32 GB is recommended;
 - one local NVMe; CPU-first, with an optional local GPU;
-- the source is accessible only to `inspect-source`, `prepare-dataset`, and an
-  optional estimate in `plan-dataset`;
+- the source is accessible only to `inspect-source`, `prepare-dataset`,
+  bounded `research prepare`, and an optional estimate in `plan-dataset`;
 - compile, feature/ML, and backtest jobs read only committed local artifacts;
 - a `CANONICAL_EXACT` run with the same logical identity produces a
   byte-identical normalized audit/result regardless of Parquet/ReplayPack,
@@ -569,6 +612,7 @@ snapshot/ReplayPack rebuild with three-way exact equivalence.
 ## 6. Ports and extension contracts
 
 Primary use cases are `inspect-source`, `plan-dataset`, `prepare-dataset`,
+`research prepare`, `research analyze`,
 `compile-replay`, `compile-delivery-schedule`, `run-backtest`, `run-sweep`,
 `build-features`, `train`, `predict`, submit/cancel/query jobs/runs, verify, and
 GC. A `RunSpecDraft` with aliases/defaults is not executable: the resolver
@@ -1238,6 +1282,13 @@ Preflight rejects overlap/gap, a future model, a missing feature, an unsupported
 runtime/dtype, overflow, and mixed exact/tolerance operation. Tree/ONNX/GPU
 tolerance and stateful runtimes remain fail-closed extension points.
 
+For a model trained on early rows of the same ReplayPack, an explicit
+`PREFIX_UNAVAILABLE` policy allows only rows before the first eligible model
+to remain unscored. Frozen PredictionSet v2 records those rows with a distinct
+no-model status; later covered rows use the exact trained model. Embedded
+inference applies the same rule. Interior and trailing schedule gaps still
+fail, while the default PredictionSet v1 reject-on-gap behavior is unchanged.
+
 | Extension | What is added | What does not change |
 |---|---|---|
 | New strategy | `Strategy` plugin | engine, indexers, snapshots |
@@ -1557,6 +1608,16 @@ rows/bytes/sec, compression/spill/QA, compile/run wall time, events/sec,
 RSS/page faults/swap/NVMe, output/model throughput, queue/state/reconciliation,
 SSE/API overhead, and comparison of Direct CLI with an API-queued run.
 
+### 14.6 Static demo
+
+The approved static demo profile (§34.3) reuses React views over bounded, hashed
+API exports from synthetic fixtures calculated offline. It cannot execute commands,
+access a live source or replace operational API failures with samples. Its separate
+build and manual Pages publication do not change the single-host runtime.
+
+[Preparation and manual publication](demo.md). The local slice is implemented;
+this is not a claim that the site is already hosted.
+
 ## 15. Critical invariants and tests
 
 An invariant violation stops the run or sends the artifact to quarantine; a
@@ -1771,102 +1832,6 @@ the declared execution mode, source cut, cache state, and physical grid.
 Hermetic and FirstSwap evidence cannot replace that live gate for another cut
 or strategy. Cold-cache, exact 7/30-day, and extraction/ML/API-overhead cells
 require their own measurements.
-
-## 17. Phased implementation
-
-1. **Phase 0 — foundation:** `pyproject.toml`, lockfile, `src/` layout, CLI,
-   config, test harness, and three composition roots; Docker is not a
-   requirement. Exit: the empty CLI and tests work identically on a PC/server.
-2. **Phase 1 — vertical slice:** one ClickHouse adapter, blocks + token creation
-   + one swap stream, one projector, a bounded one-day snapshot, reference
-   scheduler, four separated states, `SwapExactInIntent`, ledger, a simple
-   strategy, minimal immutable bundle IDs, `runtime_lock_id`, typed
-   `ResolvedRunSpec`, a committed `RunManifest`, and a golden E2E hash. Exit: a
-   repeated run without the source produces the same hash.
-3. **Phase 2 — reliable data layer:** SQLite catalog/job state, locks,
-   revisions/frontier, crash/disk-full safety, GC/pins/trash, external
-   backup/restore, and a 7-day snapshot. Exit: kill/disk-full tests do not
-   publish partial data.
-4. **Phase 3 — ReplayPack:** Arrow IPC/NumPy mmap, stable dictionaries,
-   DeliverySchedule, Parquet equivalence, performance harness, and tuned
-   16/32 GB profiles. Exit: repeated runs are faster with the same audit hash.
-5. **Phase 4 — strategies/sweeps:** immutable bundle registry, resolver/sweep
-   manifests, supervisor/admission, shared read-only mmap, and 1/2/4-process
-   benchmarks. Exit: parallel results match serial results without swap/OOM.
-6. **Phase 5 — Control API/Web UI:** durable submit/cancel/retry,
-   reconciliation, SSE/polling, thin static UI, localhost security, and measured
-   overhead. Exit: the CLI/API produce one spec/result, restart preserves the
-   queue, UI disconnect does not affect a run, and overhead fits within
-   16/32 GB.
-7. **Phase 6 — features/ML:** FeatureSpec, labels/universe separation,
-   ModelBundle, walk-forward schedule, frozen predictions, a deterministic
-   small embedded model, typed ML UI forms, and causal tests. Exit: future
-   features/models do not change prior decisions.
-8. **Phase 7 — profiler optimization:** accelerate only measured pure kernels,
-   retain the reference backend, and complete a 30-day capacity run. Exit:
-   end-to-end wall-time improvement is proven, not only a microbenchmark.
-9. **Phase 8 — network-aware Pump.fun Sniping:** first the normative
-   network/position schema and a clean legacy break; then four-stream source
-   evidence, causal non-Mayhem universe/exclusion count+digest, settlement
-   tail/compact clock, reference strategy+fees+ledger+results, and CLI/API/UI;
-   only after profiling, a dedicated optimized backend. Exit: §15 Sniping
-   acceptance, bounded live proof, three-way exact equivalence, real browser
-   smoke, and the representative 2x/RSS/no-swap gate.
-
-### Current phase status
-
-Functional vertical slices for Phases 0–6 and the software portion of Phase 8
-are implemented for the reference stack. Production data/replay/run, durable
-control-plane/operator paths, exact frozen/embedded ML, and hermetic Pump.fun
-Sniping are connected end to end. Deployment-dependent exit criteria require
-separate evidence.
-
-The source closure uses evidence v2, inspection v5, plan v4, and DatasetSpec v5.
-Fixed queries, live normalization, sentinel/lifecycle transforms, aggregate
-receipts, and preparation binding are implemented. The account closure uses
-strict draft v3/account profile v2, per-mint mode-specific ATA, one-time wallet
-UVA, the shared reference/NumPy reducer, round-trip v4, and summary v3. Draft v2
-requires re-resolution; committed summary v2/round-trip v3 retain their
-original readable meaning.
-
-Native Linux x86_64 and macOS arm64 are execution profiles. Windows 11 x86_64
-uses WSL2/Ubuntu and the PowerShell bootstrap, with repository and `data_root`
-inside the WSL Linux filesystem. Native Win32 and DrvFS roots remain
-unsupported; the profile does not replace host-specific checks.
-
-Live cuts require complete bounded evidence before inspection or downstream
-publication. `CURVE_TRANSITION_MISMATCH` keeps the affected closure fail closed;
-partial checks, source column presence, or manual `PROVEN` do not provide
-admission. Legacy source/universe/account artifacts are not reinterpreted.
-Source transport uses verified TLS/VPN/SSH or the explicit insecure-HTTP opt-in
-with a warning; secrets remain in the external provider.
-
-The optimized Pump.fun backend remains restricted to its mode-specific exact
-allowlist and three-way equivalence contract. Production performance admission
-requires the representative external-data gate. Cold-cache, exact 7/30-day,
-Direct/API overhead, and the remaining deployment resource cells need separate
-measurements. Phase 7 also contains a bounded FirstSwap optimized backend;
-neither backend is a general engine replacement outside its exact allowlist.
-
-The shared loopback API and packaged UI implement submission, progress,
-result/lineage queries, and the shared Strategy results dashboard. Their lifecycle checks do
-not increase live-source fidelity. Deployment durability requires an encrypted
-restore drill on another physical device/host and, when a durable Git remote
-does not preserve code inputs, a separate code/config/schema/lockfile archive.
-
-A multi-host runner is outside the target architecture.
-
-| Heavy technology | Measurable trigger |
-|---|---|
-| Object storage | A versioned off-site archive is required, or retained data no longer fits on NVMe |
-| PostgreSQL + external queue | HA/failover, multiple controller writers, or multi-user scheduling is required |
-| Local ClickHouse | Repeated scans cover hundreds of GB and DuckDB/Parquet p95 misses the SLA |
-| External orchestrator | Recurring DAG/backfills and an operator SLA appear |
-| Online feature store | A live low-latency inference SLA appears |
-
-The practical storage signal is pinned artifacts consistently occupying
-60–70% of NVMe after retention/backup policies no longer help. Infrastructure
-is not added “for the future” before a trigger.
 
 [Continue to the architecture deep dive →](architecture-deep-dive.md)
 

@@ -106,7 +106,7 @@ class _MappedMlArtifact:
         # Close the init signature after its explicit inputs.
         *,
         expected_kind: ArtifactKind,
-        expected_schema: MlArtifactSchema,
+        expected_schema: MlArtifactSchema | tuple[MlArtifactSchema, ...],
         build_tools: PinnedCodeBundleSet | None = None,
     ) -> None:
         # Execute the mapped ml artifact init workflow in explicit, reviewable steps.
@@ -136,7 +136,9 @@ class _MappedMlArtifact:
                 self.manifest = MlArtifactManifest.from_document(document)
             except (MlArtifactContractError, TypeError, ValueError) as error:
                 raise NumpyMlArtifactFormatError("ML manifest is invalid") from error
-            if self.manifest.artifact_schema is not expected_schema:
+            if self.manifest.artifact_schema not in (
+                expected_schema if isinstance(expected_schema, tuple) else (expected_schema,)
+            ):
                 # Fail the mapped ml artifact init path with NumpyMlArtifactFormatError
                 # for ml manifest schema differs from artifact kind when artifact schema,
                 # expected schema and manifest is true; do not continue ambiguously.
@@ -1246,7 +1248,7 @@ class NumpyPredictionSetProvider:
             artifacts,
             prediction_set_id,
             expected_kind=ArtifactKind.PREDICTION_SET,
-            expected_schema=MlArtifactSchema.PREDICTION_SET,
+            expected_schema=(MlArtifactSchema.PREDICTION_SET, MlArtifactSchema.PREDICTION_SET_V2),
             # Pass build tools explicitly so _MappedMlArtifact receives a reviewable
             # prediction set and artifacts input in numpy prediction set provider init.
             build_tools=build_tools,
@@ -1255,37 +1257,45 @@ class NumpyPredictionSetProvider:
             # Perform the protected numpy prediction set provider init operation before
             # explicit failure handling.
             semantic = _semantic(self._mapped.manifest)
+            prefix_mode = (
+                self._mapped.manifest.artifact_schema is MlArtifactSchema.PREDICTION_SET_V2
+            )
             _keys(
                 semantic,
-                {
-                    "canonicality",
-                    # Pass causal availability policy explicitly so _keys receives a
-                    # reviewable canonicality and causal availability policy input in
-                    # numpy prediction set provider init.
-                    "causal_availability_policy",
-                    "feature_set_ids",
-                    "inference_mode",
-                    "inference_compiler_bundle_id",
-                    "inference_policy_digest",
-                    # Pass maximum available boundary explicitly so _keys receives a
-                    # reviewable canonicality and causal availability policy input in
-                    # numpy prediction set provider init.
-                    "maximum_available_boundary",
-                    "model_availability_operands",
-                    "model_bundle_ids",
-                    "model_schedule_id",
-                    "prediction_name",
-                    # Pass replay layout schema id explicitly so _keys receives a
-                    # reviewable canonicality and causal availability policy input in
-                    # numpy prediction set provider init.
-                    "replay_layout_schema_id",
-                    "replay_pack_id",
-                    "replay_semantics_id",
-                },
+                (
+                    {
+                        "canonicality",
+                        # Pass causal availability policy explicitly so _keys receives a
+                        # reviewable canonicality and causal availability policy input in
+                        # numpy prediction set provider init.
+                        "causal_availability_policy",
+                        "feature_set_ids",
+                        "inference_mode",
+                        "inference_compiler_bundle_id",
+                        "inference_policy_digest",
+                        # Pass maximum available boundary explicitly so _keys receives a
+                        # reviewable canonicality and causal availability policy input in
+                        # numpy prediction set provider init.
+                        "maximum_available_boundary",
+                        "model_availability_operands",
+                        "model_bundle_ids",
+                        "model_schedule_id",
+                        "prediction_name",
+                        # Pass replay layout schema id explicitly so _keys receives a
+                        # reviewable canonicality and causal availability policy input in
+                        # numpy prediction set provider init.
+                        "replay_layout_schema_id",
+                        "replay_pack_id",
+                        "replay_semantics_id",
+                    }
+                    | ({"schedule_gap_policy"} if prefix_mode else set())
+                ),
                 "PredictionSet semantic content",
                 # Complete _keys only after its canonicality and causal availability policy
                 # inputs are visible in numpy prediction set provider init.
             )
+            if prefix_mode and semantic["schedule_gap_policy"] != "PREFIX_UNAVAILABLE":
+                raise NumpyMlArtifactFormatError("PredictionSet v2 schedule gap policy is invalid")
             self._prediction_name = _token(semantic["prediction_name"], "prediction_name")
             if semantic["inference_mode"] != InferenceMode.FROZEN.value:
                 raise NumpyMlArtifactFormatError("PredictionSet inference mode is not frozen")
@@ -1586,7 +1596,10 @@ class NumpyPredictionSetProvider:
             # equal, effective expected and np condition before guarded effects.
             if not np.array_equal(arrays[physical.PREDICTION_EFFECTIVE], effective_expected):
                 raise NumpyMlArtifactFormatError("PredictionSet effective boundaries changed")
-            hasher = MlLogicalStreamHasher(MlArtifactSchema.PREDICTION_SET)
+            prefix_mode = (
+                self._mapped.manifest.artifact_schema is MlArtifactSchema.PREDICTION_SET_V2
+            )
+            hasher = MlLogicalStreamHasher(self._mapped.manifest.artifact_schema)
             models_by_id = {model.model_bundle_id: model for model in models}
             for row in range(count):
                 # Process range(count) inside the bounded numpy prediction set provider
@@ -1602,6 +1615,31 @@ class NumpyPredictionSetProvider:
                 effective = int(arrays[physical.PREDICTION_EFFECTIVE][row])
                 if stored_feature != feature_available:
                     raise NumpyMlArtifactFormatError("PredictionSet feature operand changed")
+                model_code = int(arrays[physical.PREDICTION_MODEL_CODE][row])
+                if prefix_mode and schedule.schedule.is_unavailable_prefix(effective):
+                    if (
+                        model_code != (1 << 32) - 1
+                        or inference != 0
+                        or available != effective
+                        or _bitmap_valid(arrays[physical.PREDICTION_VALIDITY], row)
+                        or int(arrays[physical.PREDICTION_VALUE][row]) != 0
+                    ):
+                        raise NumpyMlArtifactFormatError(
+                            "PredictionSet unavailable prefix is invalid"
+                        )
+                    hasher.update(
+                        {
+                            "available_boundary_ordinal": effective,
+                            "effective_boundary_ordinal": effective,
+                            "feature_available_boundary": feature_available,
+                            "inference_completion_boundary": 0,
+                            "model_bundle_id": None,
+                            "replay_row_id": row,
+                            "status": "MODEL_UNAVAILABLE",
+                            "value": None,
+                        }
+                    )
+                    continue
                 try:
                     # Assemble selected model once so the numpy prediction set provider
                     # validate arrays workflow shares one value.
@@ -1625,7 +1663,6 @@ class NumpyPredictionSetProvider:
                     raise NumpyMlArtifactFormatError(
                         "PredictionSet availability lower bound failed"
                     )
-                model_code = int(arrays[physical.PREDICTION_MODEL_CODE][row])
                 if model_code >= len(model_ids) or model_ids[model_code] != selected_model:
                     # Fail the numpy prediction set provider validate arrays path with
                     # NumpyMlArtifactFormatError for prediction set selected model changed
@@ -1638,24 +1675,22 @@ class NumpyPredictionSetProvider:
                     else None
                     # Complete the value group only after its semantic components are visible.
                 )
-                hasher.update(
-                    {
-                        "available_boundary_ordinal": available,
-                        "effective_boundary_ordinal": effective,
-                        # Keep feature available boundary named so the available boundary
-                        # ordinal and effective boundary ordinal payload passed to update
-                        # remains self-describing within numpy prediction set provider
-                        # validate arrays.
-                        "feature_available_boundary": feature_available,
-                        "inference_completion_boundary": inference,
-                        "model_bundle_id": selected_model.hex,
-                        "replay_row_id": row,
-                        "value": value,
-                        # Close the available boundary ordinal and effective boundary ordinal
-                        # payload only after all numpy prediction set provider validate arrays
-                        # fields are present.
-                    }
-                )
+                hash_document = {
+                    "available_boundary_ordinal": available,
+                    "effective_boundary_ordinal": effective,
+                    # Keep feature available boundary named so the available boundary
+                    # ordinal and effective boundary ordinal payload passed to update
+                    # remains self-describing within numpy prediction set provider
+                    # validate arrays.
+                    "feature_available_boundary": feature_available,
+                    "inference_completion_boundary": inference,
+                    "model_bundle_id": selected_model.hex,
+                    "replay_row_id": row,
+                    "value": value,
+                }
+                if prefix_mode:
+                    hash_document["status"] = "VALUE" if value is not None else "FEATURE_MISSING"
+                hasher.update(hash_document)
         maximum = _optional_integer(semantic["maximum_available_boundary"], "maximum availability")
         actual = None if count == 0 else int(arrays[physical.PREDICTION_AVAILABLE].max())
         if maximum != actual:

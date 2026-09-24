@@ -35,7 +35,11 @@ from backtest.application.ml_artifacts import (
     training_spec_document,
     training_spec_from_document,
 )
-from backtest.application.ml_contracts import FeatureSpec, ModelCanonicality
+from backtest.application.ml_contracts import (
+    FeatureSpec,
+    InferenceScheduleGapPolicy,
+    ModelCanonicality,
+)
 from backtest.application.models import JobType
 
 # Import hashing at the visible module dependency boundary.
@@ -61,6 +65,7 @@ BUILD_LABELS_JOB_SCHEMA = "backtest.build-labels-job/v1"
 TRAIN_MODEL_JOB_SCHEMA = "backtest.train-model-job/v1"
 BUILD_MODEL_SCHEDULE_JOB_SCHEMA = "backtest.build-model-schedule-job/v1"
 PREDICT_JOB_SCHEMA = "backtest.predict-job/v1"
+PREDICT_JOB_SCHEMA_V2 = "backtest.predict-job/v2"
 
 
 class MlJobCommandError(ValueError):
@@ -401,7 +406,10 @@ class ResolvedPredictJob:
     def document(self) -> dict[str, object]:
         # Execute the resolved predict job document workflow in explicit, reviewable
         # steps.
-        return {
+        prefix_mode = (
+            self.request.schedule_gap_policy is InferenceScheduleGapPolicy.PREFIX_UNAVAILABLE
+        )
+        document: dict[str, object] = {
             "canonicality": self.request.canonicality.value,
             "compiler_version": self.request.compiler_version,
             "feature_set_ids": [item.hex for item in self.request.feature_set_ids],
@@ -417,8 +425,11 @@ class ResolvedPredictJob:
             # result.
             "replay_pack_id": self.request.replay_pack_id.hex,
             "replay_semantics_id": self.request.replay_semantics_id.hex,
-            "schema": self.SCHEMA,
+            "schema": PREDICT_JOB_SCHEMA_V2 if prefix_mode else self.SCHEMA,
         }
+        if prefix_mode:
+            document["schedule_gap_policy"] = self.request.schedule_gap_policy.value
+        return document
 
     def canonical_bytes(self) -> bytes:
         # Return the completed resolved predict job canonical bytes result without a
@@ -724,30 +735,34 @@ def _build_model_schedule_from_document(
 
 def _predict_from_document(document: dict[str, object]) -> ResolvedPredictJob:
     # Execute the predict from document workflow in explicit, reviewable steps.
+    prefix_mode = document.get("schema") == PREDICT_JOB_SCHEMA_V2
     _exact_keys(
         document,
-        {
-            "canonicality",
-            "compiler_version",
-            # Pass feature set ids explicitly so _exact_keys receives a reviewable
-            # canonicality and compiler version input in predict from document.
-            "feature_set_ids",
-            "inference_delay_boundaries",
-            "missing_policy",
-            "model_bundle_ids",
-            "model_schedule_id",
-            # Pass prediction name explicitly so _exact_keys receives a reviewable
-            # canonicality and compiler version input in predict from document.
-            "prediction_name",
-            "replay_layout_schema_id",
-            "replay_pack_id",
-            "replay_semantics_id",
-            "schema",
-            # Close the canonicality and compiler version payload only after all predict from
-            # document fields are present.
-        },
+        (
+            {
+                "canonicality",
+                "compiler_version",
+                # Pass feature set ids explicitly so _exact_keys receives a reviewable
+                # canonicality and compiler version input in predict from document.
+                "feature_set_ids",
+                "inference_delay_boundaries",
+                "missing_policy",
+                "model_bundle_ids",
+                "model_schedule_id",
+                # Pass prediction name explicitly so _exact_keys receives a reviewable
+                # canonicality and compiler version input in predict from document.
+                "prediction_name",
+                "replay_layout_schema_id",
+                "replay_pack_id",
+                "replay_semantics_id",
+                "schema",
+                # Close the canonicality and compiler version payload only after all predict from
+                # document fields are present.
+            }
+            | ({"schedule_gap_policy"} if prefix_mode else set())
+        ),
     )
-    _schema(document, PREDICT_JOB_SCHEMA)
+    _schema(document, PREDICT_JOB_SCHEMA_V2 if prefix_mode else PREDICT_JOB_SCHEMA)
     try:
         missing_policy = FrozenMissingPolicy(_string(document["missing_policy"], "missing_policy"))
     # Translate value error through the predict from document boundary without hiding
@@ -790,6 +805,11 @@ def _predict_from_document(document: dict[str, object]) -> ResolvedPredictJob:
                 # inputs are visible in predict from document.
             ),
             missing_policy=missing_policy,
+            schedule_gap_policy=(
+                InferenceScheduleGapPolicy.PREFIX_UNAVAILABLE
+                if prefix_mode and document["schedule_gap_policy"] == "PREFIX_UNAVAILABLE"
+                else InferenceScheduleGapPolicy.REJECT
+            ),
             canonicality=_canonicality(document["canonicality"]),
             compiler_version=_string(document["compiler_version"], "compiler_version"),
         )

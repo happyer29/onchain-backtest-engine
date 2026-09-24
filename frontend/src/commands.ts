@@ -30,7 +30,7 @@ export function physical(values: Values): Command {
 }
 
 export function firstSwapDraft(values: Values, seed?: bigint): Command {
-  return { ...texts(values, ['snapshot_id', 'pool_id', 'sold_asset_id', 'bought_asset_id', 'execution_mode', 'inference_mode', 'inference_missing_policy']),
+  return { ...texts(values, ['snapshot_id', 'pool_id', 'sold_asset_id', 'bought_asset_id', 'execution_mode', 'inference_mode', 'inference_missing_policy', 'inference_schedule_gap_policy']),
     ...integers(values, ['amount_in_atomic', 'minimum_amount_out_atomic', 'fee_bps', 'maximum_order_input_atomic', 'observation_slots', 'order_slots', 'inference_delay_boundaries']),
     // Optional exact dependencies retain explicit absence, with no latest/default resolution in UI.
     replay_pack_id: optional(values, 'replay_pack_id'), delivery_schedule_id: optional(values, 'delivery_schedule_id'),
@@ -98,5 +98,5 @@ export function mlCommand(kind: MlKind, values: Values, contract: Record<string,
     // Exact framework and preprocessing/calibration identities survive submission unchanged.
     ...texts(values, ['feature_schema_digest', 'preprocessing_digest', 'calibration_digest']), ridge_lambda: integer(values, 'ridge_lambda'), framework: contract.trainer_framework, canonicality: 'CANONICAL_EXACT' };
   if (kind === 'schedule') return { ...base, schedule: { entries: [{ ...integers(values, ['eligible_from', 'eligible_until', 'training_cutoff', 'model_available_boundary']), model_bundle_id: text(values, 'model_bundle_id'), availability_basis: 'modeled-training-completion-v1' }], fallback_model_bundle_id: null }, canonicality: 'CANONICAL_EXACT' };
-  return { ...base, ...texts(values, ['replay_pack_id', 'replay_semantics_id', 'replay_layout_schema_id', 'model_schedule_id', 'prediction_name', 'missing_policy']), feature_set_ids: ids(values, 'feature_set_ids'), model_bundle_ids: ids(values, 'model_bundle_ids'), inference_delay_boundaries: integer(values, 'inference_delay_boundaries'), canonicality: 'CANONICAL_EXACT' };
+  return { ...base, ...texts(values, ['replay_pack_id', 'replay_semantics_id', 'replay_layout_schema_id', 'model_schedule_id', 'prediction_name', 'missing_policy', 'schedule_gap_policy']), feature_set_ids: ids(values, 'feature_set_ids'), model_bundle_ids: ids(values, 'model_bundle_ids'), inference_delay_boundaries: integer(values, 'inference_delay_boundaries'), canonicality: 'CANONICAL_EXACT' };
 }

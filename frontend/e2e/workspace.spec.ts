@@ -1,6 +1,13 @@
 import { test, expect } from '@playwright/test';
 import { analyticsFixture, chartFixture, entryFixture, runId, summaryFixture } from '../src/test-fixtures';
 // Real-server tests cover security/packaging; isolated route fixtures cover adversarial result timing.
+test('prediction form offers the causal no-model prefix', async ({ page }) => {
+  await page.goto('/ml');
+  await page.getByRole('button', { name: 'Predictions', exact: true }).click();
+  await expect(page.getByText(/Training can use earlier ReplayPack rows/)).toContainText('Interior or trailing schedule gaps still fail.');
+  await expect(page.getByRole('combobox', { name: 'Rows before first model' })).toHaveValue('PREFIX_UNAVAILABLE');
+});
+
 test('real published FirstSwap result, shared UI, exact details and lineage', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
@@ -43,9 +50,8 @@ test('single-page launch controls, dark persistence and mobile navigation', asyn
   await expect(page.getByText(/Synthetic mode:/)).toBeVisible();
   await page.getByRole('button', { name: /Execution resources/ }).click();
   await expect(page.getByLabel('Run backend', { exact: true })).toHaveValue('reference-pumpfun-copy-buy-v1');
-  // Preferences are collapsed initially while attribution remains directly visible.
+  // Preferences are collapsed initially.
   await expect(page.getByLabel('Appearance')).toBeHidden();
-  await expect(page.getByRole('link', { name: 'happyer29', exact: true })).toBeInViewport();
   await page.getByRole('button', { name: 'Settings', exact: true }).press('Enter');
   await page.getByLabel('Appearance').selectOption('dark');
   // Keyboard dismissal returns focus without resetting the selected theme.
@@ -54,10 +60,9 @@ test('single-page launch controls, dark persistence and mobile navigation', asyn
   await expect(page.getByLabel('Appearance')).toBeHidden();
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-  // A short mobile menu keeps the author visible while its navigation can scroll.
+  // A short mobile menu keeps navigation scrollable.
   await page.setViewportSize({ width: 390, height: 667 });
   await page.getByRole('button', { name: 'Open menu' }).click();
-  await expect(page.getByRole('link', { name: 'happyer29', exact: true })).toBeInViewport();
   await page.getByRole('link', { name: 'Strategy results', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Strategy runs' })).toBeVisible();
   // Closing the mobile menu restores the normal page geometry.

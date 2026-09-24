@@ -122,11 +122,11 @@ changing or rebuilding the UI: `npm --prefix frontend ci`,
 ## Interface preview
 
 The screenshots below use the browser test fixtures, not a live portfolio or
-profitability claim. They show the shared interface in English with **Appearance → Dark** selected.
+profitability claim. They show the shared interface in English in the light theme.
 
-![Shared strategy results in the dark theme, including valuation and entry distributions](docs/assets/strategy-results.png)
+![Shared strategy results in the light theme, including valuation and entry distributions](docs/assets/strategy-results.png)
 
-![Close-up of a dark market-cap chart with distinct signal, BUY and SELL markers on illustrative UI data](docs/assets/trade-detail.png)
+![Close-up of a light market-cap chart with distinct signal, BUY and SELL markers on illustrative UI data](docs/assets/trade-detail.png)
 
 The chart close-up uses an illustrative UI fixture with changing values to
 show the curve and markers clearly; it is not a historical token or a trading result.
@@ -262,6 +262,7 @@ If this README and the deep dive disagree, the deep dive is authoritative.
 | Document | Read it when you need to... |
 |---|---|
 | [Getting Started](docs/getting-started.md) | Configure the source, prepare a snapshot, and run the first backtest |
+| [Web UI guide with screenshots](docs/ui-guide.md) | Follow the main interface workflows step by step |
 | [Configuration](docs/configuration.md) | Understand TOML, secret refs, transport, and resource limits |
 | [CLI reference](docs/cli-reference.md) | Find commands, exact IDs, and workflows |
 | [Project layout](docs/project-layout.md) | Understand the repository structure and local data root |
@@ -305,20 +306,20 @@ If the project is useful to you, you can support it with a donation:
 | Solana | `D7eLSxAPhJaVE9rjyFPeTK6xEsxis1RpQ5Q3FQRMUG1G` |
 | TRON | `TGJFm8HHspMBcJ2maog88cTjzVrqz3izsB` |
 
-See [SUPPORT.md](SUPPORT.md) for other ways to help.
+See [SUPPORT.md](docs/SUPPORT.md) for other ways to help.
 
 ## Contributing
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) before your first pull request. Report
-vulnerabilities through the private process in [SECURITY.md](SECURITY.md), and
-use [SUPPORT.md](SUPPORT.md) for operational questions. User-facing changes are
-recorded in [CHANGELOG.md](CHANGELOG.md).
+Read [CONTRIBUTING.md](.github/CONTRIBUTING.md) before your first pull request. Report
+vulnerabilities through the private process in [SECURITY.md](.github/SECURITY.md), and
+use [SUPPORT.md](docs/SUPPORT.md) for operational questions. User-facing changes are
+recorded in [CHANGELOG.md](docs/CHANGELOG.md).
 
 ## License
 
 This project is distributed under the MIT License. See [LICENSE](LICENSE) for the full
 text. Provenance of third-party test layouts is documented in
-[Third-Party Notices](THIRD_PARTY_NOTICES.md).
+[Third-Party Notices](docs/THIRD_PARTY_NOTICES.md).
 
 > [!WARNING]
 > This is research software, not financial advice. Verify the data,
@@ -327,4 +328,4 @@ text. Provenance of third-party test layouts is documented in
 
 ---
 
-**Language:** English · [Русский](README.ru.md)
+**Language:** English · [Русский](docs/README.ru.md) · [简体中文](docs/README.zh-CN.md)

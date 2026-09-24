@@ -67,12 +67,18 @@ class InferenceMissingPolicy(StrEnum):
     REJECT = "REJECT"
 
 
+class InferenceScheduleGapPolicy(StrEnum):
+    REJECT = "REJECT"
+    PREFIX_UNAVAILABLE = "PREFIX_UNAVAILABLE"
+
+
 EXACT_LINEAR_MODEL_KIND = "exact-rational-linear-v1"
 EXACT_PREDICTION_AVAILABILITY_POLICY = "max-feature-selected-model-fitted-inference-completion-v1"
 # Bind exact inference completion policy once as an explicit module-level contract.
 EXACT_INFERENCE_COMPLETION_POLICY = "max-input-availability-plus-delay-boundaries-v1"
 EXACT_LINEAR_ARITHMETIC_POLICY = "checked-python-integer-floor-int64-output-v1"
 EXACT_SCHEDULE_GAP_POLICY = "reject-uncovered-or-use-explicit-hashed-fallback-v1"
+EXACT_PREFIX_UNAVAILABLE_POLICY = "prefix-unavailable-interior-reject-v2"
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,10 +93,13 @@ class ExactInferencePolicy:
     prediction_name: str | None
     missing_policy: InferenceMissingPolicy
     inference_delay_boundaries: int
+    schedule_gap_policy: InferenceScheduleGapPolicy = InferenceScheduleGapPolicy.REJECT
 
     def __post_init__(self) -> None:
         # Execute the exact inference policy post init workflow in explicit, reviewable
         # steps.
+        if not isinstance(self.schedule_gap_policy, InferenceScheduleGapPolicy):
+            raise ValueError("unsupported inference schedule gap policy")
         if self.mode is InferenceMode.STATEFUL_SEQUENTIAL:
             raise ValueError("stateful inference is not implemented by the exact v1 policy")
         if isinstance(self.inference_delay_boundaries, bool) or not isinstance(
@@ -109,6 +118,7 @@ class ExactInferencePolicy:
                 self.prediction_name is not None
                 or self.inference_delay_boundaries != 0
                 or self.missing_policy is not InferenceMissingPolicy.REJECT
+                or self.schedule_gap_policy is not InferenceScheduleGapPolicy.REJECT
             ):
                 # Fail the exact inference policy post init path with ValueError for
                 # disabled inference must use the canonical no-prediction policy when
@@ -148,6 +158,7 @@ class ExactInferencePolicy:
         prediction_name: str,
         missing_policy: InferenceMissingPolicy,
         inference_delay_boundaries: int,
+        schedule_gap_policy: InferenceScheduleGapPolicy = InferenceScheduleGapPolicy.REJECT,
     ) -> ExactInferencePolicy:
         # Execute the exact inference policy frozen exact linear workflow in explicit,
         # reviewable steps.
@@ -156,6 +167,7 @@ class ExactInferencePolicy:
             prediction_name=prediction_name,
             missing_policy=missing_policy,
             inference_delay_boundaries=inference_delay_boundaries,
+            schedule_gap_policy=schedule_gap_policy,
             # Complete cls only after its frozen and inference mode inputs are visible in
             # exact inference policy frozen exact linear.
         )
@@ -168,6 +180,7 @@ class ExactInferencePolicy:
         prediction_name: str,
         missing_policy: InferenceMissingPolicy,
         inference_delay_boundaries: int,
+        schedule_gap_policy: InferenceScheduleGapPolicy = InferenceScheduleGapPolicy.REJECT,
     ) -> ExactInferencePolicy:
         # Execute the exact inference policy embedded exact linear workflow in explicit,
         # reviewable steps.
@@ -176,6 +189,7 @@ class ExactInferencePolicy:
             prediction_name=prediction_name,
             missing_policy=missing_policy,
             inference_delay_boundaries=inference_delay_boundaries,
+            schedule_gap_policy=schedule_gap_policy,
             # Complete cls only after its embedded batch and inference mode inputs are visible
             # in exact inference policy embedded exact linear.
         )
@@ -197,7 +211,11 @@ class ExactInferencePolicy:
             "prediction_name": self.prediction_name,
             # Include schedule gap policy in the completed exact inference policy document
             # result.
-            "schedule_gap_policy": EXACT_SCHEDULE_GAP_POLICY,
+            "schedule_gap_policy": (
+                EXACT_PREFIX_UNAVAILABLE_POLICY
+                if self.schedule_gap_policy is InferenceScheduleGapPolicy.PREFIX_UNAVAILABLE
+                else EXACT_SCHEDULE_GAP_POLICY
+            ),
         }
 
     @property
@@ -246,6 +264,11 @@ class ExactInferencePolicy:
                 prediction_name=prediction_name,
                 missing_policy=InferenceMissingPolicy(value["missing_policy"]),
                 inference_delay_boundaries=delay,
+                schedule_gap_policy=(
+                    InferenceScheduleGapPolicy.PREFIX_UNAVAILABLE
+                    if value["schedule_gap_policy"] == EXACT_PREFIX_UNAVAILABLE_POLICY
+                    else InferenceScheduleGapPolicy.REJECT
+                ),
                 # Complete cls only after its mode and missing policy inputs are visible in
                 # exact inference policy from document.
             )
@@ -757,6 +780,14 @@ class ModelSchedule:
         for boundary in boundaries:
             self.model_for(boundary)
 
+    def is_unavailable_prefix(self, decision_boundary: int) -> bool:
+        """Only an uncovered prefix, never an interior gap or fallback, may be unscored."""
+        return (
+            self.fallback_model_bundle_id is None
+            and bool(self.entries)
+            and 0 <= decision_boundary < self.entries[0].eligible_from
+        )
+
 
 # Keep the prediction availability contract and validation rules together.
 @dataclass(frozen=True, slots=True)
@@ -867,6 +898,7 @@ __all__ = [
     # Keep the exact linear model kind component named inside the all contract.
     "EXACT_LINEAR_MODEL_KIND",
     "EXACT_PREDICTION_AVAILABILITY_POLICY",
+    "EXACT_PREFIX_UNAVAILABLE_POLICY",
     "EXACT_SCHEDULE_GAP_POLICY",
     "ExactInferencePolicy",
     "FeatureSetManifest",
@@ -874,6 +906,7 @@ __all__ = [
     "FeatureSpec",
     "InferenceMissingPolicy",
     "InferenceMode",
+    "InferenceScheduleGapPolicy",
     "LabelSetManifest",
     "ModelBundleManifest",
     # Keep the model canonicality component named inside the all contract.

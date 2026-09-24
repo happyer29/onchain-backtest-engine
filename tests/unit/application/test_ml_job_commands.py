@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from dataclasses import replace
 
 import pytest
 
@@ -23,6 +24,7 @@ from backtest.application.ml_artifacts import (
 from backtest.application.ml_contracts import (
     # Include feature spec so the ml contracts dependency remains explicit.
     FeatureSpec,
+    InferenceScheduleGapPolicy,
     ModelCanonicality,
     ModelSchedule,
     ModelScheduleEntry,
@@ -272,6 +274,25 @@ def test_wrong_job_type_and_wrong_schema_fail_closed() -> None:
     document["schema"] = "backtest.build-features-job/v2"
     with pytest.raises(MlJobCommandError, match="unsupported"):
         resolved_build_features_job_from_bytes(canonical_json_bytes(document))
+
+
+def test_prefix_prediction_job_has_separate_canonical_command_version() -> None:
+    original = _cases()[5][1]
+    assert isinstance(original, ResolvedPredictJob)
+    prefix = ResolvedPredictJob(
+        replace(
+            original.request,
+            schedule_gap_policy=InferenceScheduleGapPolicy.PREFIX_UNAVAILABLE,
+        )
+    )
+    assert original.document()["schema"] == "backtest.predict-job/v1"
+    assert "schedule_gap_policy" not in original.document()
+    assert prefix.document()["schema"] == "backtest.predict-job/v2"
+    assert resolved_predict_job_from_bytes(prefix.canonical_bytes()) == prefix
+    forged = prefix.document()
+    forged["schedule_gap_policy"] = "REJECT"
+    with pytest.raises(MlJobCommandError):
+        resolved_predict_job_from_bytes(canonical_json_bytes(forged))
 
 
 def test_boolean_boundary_and_tolerance_prediction_are_rejected() -> None:

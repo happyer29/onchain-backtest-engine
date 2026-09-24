@@ -5,17 +5,24 @@ from __future__ import annotations
 from collections.abc import Iterator
 from contextlib import contextmanager
 
+# Filesystem commits are authoritative; SQLite canonical indexes are rebuildable projections.
 from backtest.adapters.artifacts.localfs.repository import LocalArtifactRepository
 from backtest.adapters.artifacts.localfs.scanner import LocalCommittedArtifactScanner
 from backtest.adapters.catalog.sqlite.artifact_catalog import SQLiteArtifactCatalog
 from backtest.adapters.catalog.sqlite.canonical_outputs import (
+    # Reconciliation repairs indexes without changing immutable artifact content.
     CanonicalOutputIndexError,
     SQLiteCanonicalOutputObserver,
 )
 from backtest.application.models import ArtifactKind, CommittedArtifact, JobRecord, JobType
+
+# Submit resolution and queue mutations remain application-owned contracts.
 from backtest.application.ports.job_resolution import PrepareDatasetJobResolver
 from backtest.application.ports.jobs import JobQueue
+from backtest.application.use_cases.research import ResearchUseCases
 from backtest.application.use_cases.submit_job import SubmitJob, SubmitJobRequest
+
+# The controller lock wraps reconciliation without weakening the global publication lock order.
 from backtest.runtime.file_locks import FileLock, LockMode
 
 
@@ -105,14 +112,19 @@ class ReconciledPrepareDatasetSubmitJob(SubmitJob):
         queue: JobQueue,
         delegate: PrepareDatasetJobResolver,
         reconciler: CanonicalShardIndexReconciler,
+        # All other job types keep the same exact-input checks in the shared submitter.
+        research: ResearchUseCases | None = None,
     ) -> None:
-        super().__init__(queue, delegate)
+        # Delegate every non-prepare workflow through the same exact-input resolver.
+        super().__init__(queue, delegate, research)
         self._reconciler = reconciler
 
+    # Only canonical dataset preparation requires shard-index reconciliation.
     def execute(self, request: SubmitJobRequest) -> JobRecord:
         if request.job_type is not JobType.PREPARE_DATASET:
             return super().execute(request)
         with self._reconciler.reconciled_submission():
+            # Hold reconciliation authority until the resolved job becomes durable.
             return super().execute(request)
 
 

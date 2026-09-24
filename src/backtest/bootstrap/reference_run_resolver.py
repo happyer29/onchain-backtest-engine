@@ -41,7 +41,11 @@ from backtest.application.code_bundles import (
 
 # Import delivery schedules at the visible module dependency boundary.
 from backtest.application.delivery_schedules import DeliveryBuildManifest
-from backtest.application.ml_contracts import ModelCanonicality, ModelUnavailableError
+from backtest.application.ml_contracts import (
+    InferenceScheduleGapPolicy,
+    ModelCanonicality,
+    ModelUnavailableError,
+)
 from backtest.application.run_drafts import (
     PumpfunCopyBuyRunDraft,
     PumpfunSnipingRunDraft,
@@ -386,6 +390,12 @@ class ReferenceRunSpecResolver:
                         "canonical run requires a CANONICAL_EXACT ModelSchedule"
                     )
                 for boundary in decision_boundaries:
+                    if (
+                        draft.inference_policy.schedule_gap_policy
+                        is InferenceScheduleGapPolicy.PREFIX_UNAVAILABLE
+                        and schedule.schedule.is_unavailable_prefix(boundary.boundary_ordinal)
+                    ):
+                        continue
                     schedule.model_for(boundary.boundary_ordinal)
             # Traverse draft.prediction_set_ids explicitly so each reference run spec
             # resolver require model schedule and predictions iteration remains traceable.

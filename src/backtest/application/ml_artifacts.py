@@ -20,6 +20,7 @@ from backtest.application.ml_contracts import (
     FeatureSpec,
     # Include inference mode so the ml contracts dependency remains explicit.
     InferenceMode,
+    InferenceScheduleGapPolicy,
     ModelCanonicality,
     ModelSchedule,
     ModelScheduleEntry,
@@ -101,6 +102,7 @@ class MlArtifactSchema(StrEnum):
     # Declare model schedule explicitly in the ml artifact schema contract.
     MODEL_SCHEDULE = "model-schedule/v1"
     PREDICTION_SET = "prediction-set/v1"
+    PREDICTION_SET_V2 = "prediction-set/v2"
 
 
 # Keep the frozen missing policy contract and validation rules together.
@@ -495,6 +497,10 @@ class PredictionSetBuildManifest(MlBuildManifest):
     EXPECTED_SCHEMA = MlArtifactSchema.PREDICTION_SET
 
 
+class PredictionSetV2BuildManifest(MlBuildManifest):
+    EXPECTED_SCHEMA = MlArtifactSchema.PREDICTION_SET_V2
+
+
 # Bind build by schema once as an explicit module-level contract.
 _BUILD_BY_SCHEMA: dict[MlArtifactSchema, type[MlBuildManifest]] = {
     MlArtifactSchema.FEATURE_SET: FeatureSetBuildManifest,
@@ -504,6 +510,7 @@ _BUILD_BY_SCHEMA: dict[MlArtifactSchema, type[MlBuildManifest]] = {
     # Keep the ml artifact schema component named inside the build by schema contract.
     MlArtifactSchema.MODEL_SCHEDULE: ModelScheduleBuildManifest,
     MlArtifactSchema.PREDICTION_SET: PredictionSetBuildManifest,
+    MlArtifactSchema.PREDICTION_SET_V2: PredictionSetV2BuildManifest,
 }
 
 
@@ -619,6 +626,10 @@ class ModelScheduleArtifactManifest(MlArtifactManifest):
 # Keep the prediction set artifact manifest contract and validation rules together.
 class PredictionSetArtifactManifest(MlArtifactManifest):
     EXPECTED_SCHEMA = MlArtifactSchema.PREDICTION_SET
+
+
+class PredictionSetV2ArtifactManifest(MlArtifactManifest):
+    EXPECTED_SCHEMA = MlArtifactSchema.PREDICTION_SET_V2
 
 
 # Keep the feature overlay row contract and validation rules together.
@@ -751,6 +762,17 @@ class FrozenPredictionRow:
             raise MlArtifactContractError("prediction inference availability operands differ")
 
 
+@dataclass(frozen=True, slots=True)
+class UnavailablePredictionRow:
+    replay_row_id: int
+    effective_boundary_ordinal: int
+    feature_available_boundary: int
+
+    def __post_init__(self) -> None:
+        for field in ("replay_row_id", "effective_boundary_ordinal", "feature_available_boundary"):
+            _integer(getattr(self, field), field)
+
+
 # Keep the build feature set request contract and validation rules together.
 @dataclass(frozen=True, slots=True)
 class BuildFeatureSetRequest:
@@ -881,14 +903,17 @@ class BuildPredictionSetRequest:
     inference_policy_digest: ContentDigest
     causal_availability_policy: str
     canonicality: ModelCanonicality
-    rows: Iterable[FrozenPredictionRow]
+    rows: Iterable[FrozenPredictionRow | UnavailablePredictionRow]
     compiler_version: str
+    schedule_gap_policy: InferenceScheduleGapPolicy = InferenceScheduleGapPolicy.REJECT
 
     # Define build prediction set request post init as one focused operation with an
     # explicit boundary.
     def __post_init__(self) -> None:
         # Execute the build prediction set request post init workflow in explicit,
         # reviewable steps.
+        if not isinstance(self.schedule_gap_policy, InferenceScheduleGapPolicy):
+            raise MlArtifactContractError("unsupported prediction schedule gap policy")
         _ordered_ids(self.feature_set_ids, "prediction feature inputs", allow_empty=False)
         _ordered_ids(self.model_bundle_ids, "prediction model inputs", allow_empty=False)
         _token(self.prediction_name, "prediction_name")
@@ -944,10 +969,13 @@ class BuildFrozenPredictionsRequest:
     missing_policy: FrozenMissingPolicy
     canonicality: ModelCanonicality
     compiler_version: str
+    schedule_gap_policy: InferenceScheduleGapPolicy = InferenceScheduleGapPolicy.REJECT
 
     def __post_init__(self) -> None:
         # Execute the build frozen predictions request post init workflow in explicit,
         # reviewable steps.
+        if not isinstance(self.schedule_gap_policy, InferenceScheduleGapPolicy):
+            raise MlArtifactContractError("unsupported frozen schedule gap policy")
         _ordered_ids(self.feature_set_ids, "frozen prediction feature inputs", allow_empty=False)
         _ordered_ids(self.model_bundle_ids, "frozen prediction model inputs", allow_empty=False)
         _token(self.prediction_name, "prediction_name")
@@ -1355,6 +1383,8 @@ __all__ = [
     "ModelScheduleBuildManifest",
     "PredictionSetArtifactManifest",
     "PredictionSetBuildManifest",
+    "PredictionSetV2ArtifactManifest",
+    "PredictionSetV2BuildManifest",
     "PublishModelBundleRequest",
     "PublishModelScheduleRequest",
     # Keep the published feature set component named inside the all contract.
@@ -1367,6 +1397,7 @@ __all__ = [
     "PublishedPredictionSet",
     "PublishedUniverse",
     "TrainExactLinearModelRequest",
+    "UnavailablePredictionRow",
     "UniverseArtifactManifest",
     "UniverseBuildManifest",
     # Keep the universe membership row component named inside the all contract.

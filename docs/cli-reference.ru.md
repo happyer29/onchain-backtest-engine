@@ -193,6 +193,23 @@ launch-classification, bundled-buy classification, curve transition, fee roundin
 доверяет `bundled_buys_count`. Любой unknown/conflict/gap приводит к typed
 отказу до planner/engine mutation.
 
+## Исследование кошельков
+
+Research — отдельный потребитель наблюдений. Команды принимают typed arguments
+и используют общий application resolver; редактора SQL/JSON-кода нет.
+
+| Команда | Вход | Результат |
+|---|---|---|
+| `research prepare FROM_BLOCK TO_BLOCK` | Полуоткрытый диапазон блоков, local config и capability mapping | Неизменяемый ResearchSnapshot |
+| `research analyze SNAPSHOT_ID` | Exact snapshot, включительное окно времени, порог общих токенов, необязательный отбор подписантов | ResearchResult с activity/pairs/evidence |
+| `research show ARTIFACT_ID` | Точный ID исследовательского артефакта | Ограниченная проверенная сводка |
+| `research rows ARTIFACT_ID TABLE` | Фиксированная таблица, scoped cursor, размер страницы и пара для evidence | Ограниченные строки с точными целыми строковыми значениями |
+
+Подготовка и анализ используют существующий exclusive direct controller и
+isolated-child path. При работающем API-контроллере ставь задачи через формы
+`/research`. Анализ читает только committed local observations. Примеры, лимиты
+и интерпретация описаны в [инструкции](wallet-research.ru.md).
+
 ## Replay и run resolution
 
 | Команда | Вход | Результат |

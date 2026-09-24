@@ -283,6 +283,9 @@ def _execution_policies(
     )
     return {
         JobType.PREPARE_DATASET: build,
+        # Research shares measured builder admission and the existing recovery policy.
+        JobType.PREPARE_RESEARCH: build,
+        JobType.ANALYZE_WALLETS: build,
         JobType.COMPILE_REPLAY: build,
         # Include job type in the completed execution policies result.
         JobType.COMPILE_DELIVERY_SCHEDULE: build,

@@ -8,6 +8,9 @@ from backtest.interfaces.api.app import ControlUseCases, create_app
 
 # Route registration is declarative; this export never invokes a use case or lifespan.
 services = object.__new__(ControlUseCases)
+# Research router registers typed commands without invoking a submission during export.
+object.__setattr__(services, "research", None)
+object.__setattr__(services, "submit_job", None)
 app = create_app(services, control_plane_id=ContentDigest("0" * 64))
 output = Path(__file__).parents[1] / "src/generated/openapi.json"
 output.write_text(json.dumps(app.openapi(), ensure_ascii=False), encoding="utf-8")
