@@ -14,7 +14,7 @@ Status: accepted as the permanent detailed architecture description
 - Sections 9–17: data preparation, local storage, and Parquet.
 - Sections 18–24: ReplayPack, engine, strategies, protocols, features, and ML.
 - Sections 25–31: performance, disk, failures, and security.
-- Sections 32–38: tests, CLI, roadmap, growth triggers, and Definition of Done.
+- Sections 32–34 and 37–38: tests, CLI, rejected alternatives, and Definition of Done.
 
 ## 1. The decision in one paragraph
 
@@ -102,8 +102,9 @@ The first version does not build:
 - mandatory always-running daemons for the normal CLI mode.
 
 The Control API and Web UI start only through `backtest serve`. Normal CLI
-commands may still exit after completing their work. Heavy external services
-are added only after the measurable triggers in section 36.
+commands may still exit after completing their work. The current architecture
+uses local storage and a single controller; heavy external services are outside
+its scope.
 
 ## 3. System context
 
@@ -259,15 +260,6 @@ flowchart LR
   SQL/network calls.
 
 ## 3.4 Current project state
-
-The separate §34.3 static demo is implemented with 60 synthetic wallets,
-423/426 research pairs and two reference Copy Buy outcomes. Development tooling
-uses existing use cases with network access disabled and exports 933 read-only
-API response variants (about 4.3 MB). The independent React build checks response
-lengths/hashes, rejects commands and uses project-relative assets/hash routes.
-Whole-graph, evidence, trade-history, lineage and failure paths pass local browser
-checks. A manual Pages workflow is prepared; this status does not assert hosting
-or publication and does not extend live-source admission.
 
 The implementation provides a production-oriented reference vertical slice of
 the architecture and network-aware Pump.fun Sniping on verified local
@@ -4832,228 +4824,6 @@ permissions; preparing or testing the demo must not push code, trigger deploymen
 or alter repository hosting settings. The existing operational host and security
 contracts remain unchanged.
 
-## 35. Phased implementation
-
-### Phase 0 — Python foundation
-
-- create `pyproject.toml` and a lockfile;
-- pin supported Python/dependency versions;
-- create the `src/` layout, CLI, configuration, and test harness;
-- define application ports and separate composition roots for the CLI, serve,
-  and job child;
-- add lint/type/test commands;
-- add the configured data root/staging/trash to `.gitignore` before the first
-  extraction;
-- do not make Docker a requirement.
-
-Exit: the empty CLI and tests work identically on a local PC/server.
-
-### Phase 1 — Small vertical slice
-
-- one ClickHouse adapter;
-- blocks + token creation + one swap stream;
-- one protocol projector;
-- 1 day / bounded network-aware block range;
-- Parquet snapshot + local commit marker;
-- Python reference scheduler;
-- `SwapExactInIntent`;
-- double-entry ledger;
-- one simple strategy;
-- minimal immutable bundle/config IDs for protocol, strategy, engine,
-  scheduler, execution, risk, latency/clock, universe, and valuation/price
-  source;
-- minimal `runtime_lock_id`;
-- minimal typed ResolvedRunSpec and atomically committed RunManifest;
-- golden E2E hash.
-
-Exit: a repeated run without the source produces the same hash.
-
-### Phase 2 — Reliable local data layer
-
-- SQLite catalog and rebuild;
-- job/attempt/idempotency schema, state machine, and `controller.lock`;
-- incremental shards/frontier;
-- retries/revisions/schema drift;
-- dry-run budgets and disk watermarks;
-- GC/pins/trash;
-- external backup/restore drill;
-- 7-day snapshot.
-
-Exit: kill/disk-full tests do not publish partial data.
-
-### Phase 3 — ReplayPack and speed
-
-- ReplayPack compiler;
-- Arrow IPC/NumPy mmap reader;
-- dictionary IDs/offsets;
-- Parquet/ReplayPack equivalence;
-- DeliverySchedule/two-way merge;
-- performance harness;
-- tuned 16/32 GB profiles.
-
-Exit: ReplayPack accelerates repeated runs and produces the same audit hash.
-
-### Phase 4 — Strategies and parameter sweeps
-
-- packaging/registry for already immutable strategy bundles;
-- extended resolver bundle/config aliases and sweep manifests;
-- process supervisor/admission control;
-- read-only shared mmap;
-- 1/2/4-local-process benchmark;
-- result comparison/reporting.
-
-Exit: parallel results match serial results and do not cause swap/OOM.
-
-### Phase 5 — Control API and Web UI
-
-- versioned Control API over the existing application use cases;
-- durable submit/cancel/retry and restart reconciliation;
-- one local supervisor process and idempotent job submission;
-- SSE/polling progress without per-event messages;
-- thin static Web UI for jobs, runs, results, lineage, and resource status;
-- localhost/security defaults, controller lock, and browser/API tests;
-- measurement of idle/active RSS and comparison of Direct CLI with a
-  UI-queued run.
-
-Exit: CLI and API create the same ResolvedJobSpec and canonical result; restart
-does not lose queued jobs, UI disconnect does not affect a run, and API/UI
-overhead fits within 16/32 GB.
-
-### Phase 6 — Features and ML
-
-- FeatureSpec and point-in-time overlays;
-- label/universe separation;
-- TrainingJobSpec/ModelBundle;
-- walk-forward schedule;
-- frozen predictions;
-- one small embedded model;
-- typed Web UI forms/status for feature, training, and prediction jobs;
-- causality/determinism tests.
-
-Exit: future features/models do not change prior decisions.
-
-### Phase 7 — Profiler-guided optimization
-
-- select measured hotspots;
-- accelerate only pure reducers/math;
-- retain the reference backend;
-- golden equivalence for the optimized backend;
-- 30-day capacity run.
-
-Exit: acceleration is proven by end-to-end wall time, not only by a
-microbenchmark.
-
-### Phase 8 — Network-aware Pump.fun Sniping
-
-The order within the vertical slice MUST be followed:
-
-1. Adopt the network/position/source/strategy/result contracts in the deep dive
-   and synchronized guardrails.
-2. Introduce `NetworkId`, `BlockRange`, `ChainPosition`, and
-   `block32-transaction32-v1`; migrate FirstSwap and cleanly reject legacy
-   slot-only artifacts.
-3. Implement the four Pump capabilities, cross-stream evidence gates, compact
-   transaction clock, decision range, causal non-Mayhem universe/exclusion
-   audit, and right settlement tail.
-4. Implement the reference strategy, Pump/Solana plugins, shared wallet,
-   fees/rent/cashback, slippage, PnL, and external result tables.
-5. Add resolver, CLI/API/UI contracts, and the real browser flow.
-6. Profile first, and only then add a dedicated optimized mmap backend with
-   full three-way equivalence.
-
-Software gate: hermetic exact source artifacts pass the section 33 checks;
-reference Parquet, reference ReplayPack, and optimized ReplayPack have
-byte-identical results; strict resolver/CLI/API/UI/result contracts are
-available. Such a test run may publish `successful-run/v3`, but it is not
-evidence about the live source.
-
-Production release exit: bounded live-source evidence proves exact transaction
-clock/protocol fidelity, the real browser flow passes, and representative
-one-day external-data performance satisfies the 2x/RSS/no-swap gate. Every cut
-without such source evidence remains typed fail closed and publishes no
-SuccessfulRun; having an admitted cut does not by itself complete the
-production release.
-
-### Current phase status
-
-Functional vertical slices for Phases 0–6 and the software portion of Phase 8
-are implemented for the reference stack: prepare/replay/engine/sweeps, durable
-direct/API child execution, operator lifecycle, frozen/embedded exact ML, and
-hermetic Pump.fun Sniping are wired end to end. Deployment-dependent phase
-exits require separate evidence.
-
-- Native Linux x86_64 and macOS arm64 are execution profiles. Windows 11
-  x86_64 uses the WSL2/Ubuntu profile and PowerShell bootstrap, with repository
-  and `data_root` inside the WSL Linux filesystem. Native Win32 and DrvFS data
-  roots are unsupported; the profile does not replace host-specific checks.
-- The source schema break is implemented as `bounded-source-evidence/v2` →
-  `source-inspection/v5` → `backtest.dataset-plan/v4`/DatasetSpec v5. Fixed Pump
-  queries, live normalizer/projector, <=4096-block internal sharding, aggregate
-  receipts, and preparation binding are implemented. Legacy versions receive
-  `REPREPARE_REQUIRED`.
-- Live admission is cut-scoped. Complete source and settlement proofs are
-  required before downstream publication. Missing transitions produce
-  `CURVE_TRANSITION_MISMATCH`; partial checks or manual `PROVEN` cannot admit
-  a rejected cut. Fee components remain derived-not-observed: the normalizer
-  derives the 95/30 split from the exact curve SOL leg and binds its profile.
-- The bundle policy classifies a bundled buy only as a successful `BUY` with
-  the same signature/mint after create in the same transaction. A successful
-  same-transaction `SELL` applies before the decision but is not a bundled
-  buy; `bundled_buys_count` remains non-binding.
-- Source transport uses verified TLS/VPN/SSH or the explicit
-  `allow_insecure_remote_http` opt-in with a warning and accepted deployment
-  risk. Secrets remain in the external environment/provider; transport and
-  secret handling do not replace source evidence.
-- The 16/32 GB resource profiles enforce hard admission. The artifact-bound
-  benchmark harness supports 1/7/30 capacity, batch/readahead/process, ML, and
-  Direct/control measurements. Its presence does not replace representative
-  measurements of cold/warm cache, exact source periods, model peaks, or
-  control-plane overhead on the intended deployment.
-- Different-device backup and restore are implemented. Deployment durability
-  requires an encrypted target on another physical device/host and a recorded
-  restore drill. If a durable Git remote does not preserve code inputs, a
-  separate durable code/config/schema/lockfile archive is required.
-- Packaged UI/static assets and the shared loopback API implement submission,
-  progress, result/lineage queries, and the shared Strategy results dashboard. Browser
-  and subprocess lifecycle checks do not increase source fidelity.
-- Phase 7 contains a bounded FirstSwap optimized backend, restricted to its
-  exact allowlist. It is not a general engine replacement or a source SLA.
-- Phase 8 includes the network foundation, source/schema break, settlement
-  validator, reference and dedicated optimized engines, strict draft v3/account
-  profile v2, per-mint mode-specific ATA, one-time wallet UVA, correlated
-  ledger v2, summary v3/roundtrip v4, resolver, external results, CLI/API/UI.
-  Both execution modes share the account reducer and have hermetic three-way
-  exact equivalence coverage. Draft v2 requires re-resolution; committed
-  summary v2/round-trip v3 retain their original readable meaning. Live cuts
-  without exact evidence remain fail closed. Cold-cache, 7/30-day, and
-  deployment checks remain separate production gates.
-
-Non-Mayhem policy v2, dust normalizer v2, sentinel exclusion, and deterministic
-`terminal buy_v2 -> derived completion -> migration` normalization are
-implemented and enter source/dataset identities. These capabilities cannot
-turn a partial source audit into valid evidence, and older policy/source/
-account artifacts are not reinterpreted.
-
-Missing external evidence remains `TBD`/fail-closed wherever it affects
-admission, fidelity, or performance claims.
-
-## 36. When to add heavy infrastructure
-
-| Technology | Trigger |
-|---|---|
-| Object storage | A versioned off-site archive is required, or local NVMe no longer holds retained data |
-| PostgreSQL + external queue | HA/failover, multiple controller writers, or multi-user scheduling is required |
-| Local ClickHouse | Repeated hot scans cover hundreds of GB and DuckDB/Parquet p95 does not meet the SLA |
-| External orchestrator | Recurring DAGs/backfills and an operator SLA are required |
-| Online feature store | A live low-latency inference SLA appears |
-
-Another practical signal for moving storage out is that pinned artifacts
-consistently occupy 60–70% of NVMe and local retention/backup policies no
-longer help.
-
-These components MUST NOT be added “for the future” before a trigger is
-reached.
-
 ## 37. Rejected alternatives and anti-patterns
 
 | Alternative | Why not now |
@@ -5256,7 +5026,7 @@ The final formulation:
 
 This target architecture has **no PostgreSQL, S3/MinIO, local ClickHouse,
 external/distributed queue, Kafka, or Kubernetes**. All computation remains on
-one host; heavy components appear only after a measurable trigger.
+one host.
 
 ## Technical references
 

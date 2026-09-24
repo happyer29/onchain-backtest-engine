@@ -25,7 +25,7 @@
 - Разделы 9–17: подготовка данных, локальное хранение и Parquet.
 - Разделы 18–24: ReplayPack, engine, strategies, protocols, features и ML.
 - Разделы 25–31: производительность, диск, failures и security.
-- Разделы 32–38: тесты, CLI, roadmap, triggers роста и Definition of Done.
+- Разделы 32–34 и 37–38: тесты, CLI, отклонённые альтернативы и Definition of Done.
 
 ## 1. Решение в одном абзаце
 
@@ -111,8 +111,9 @@ gate.
 - обязательные постоянно работающие daemons для обычного CLI-режима.
 
 Control API и Web UI запускаются только командой `backtest serve`. Обычные
-CLI-команды по-прежнему могут завершать процесс после выполнения. Тяжёлые
-внешние сервисы добавляются только по измеримым triggers из раздела 36.
+CLI-команды по-прежнему могут завершать процесс после выполнения. Текущая
+архитектура использует локальное хранилище и один контроллер; тяжёлые внешние
+сервисы не входят в её границы.
 
 ## 3. Контекст системы
 
@@ -257,15 +258,6 @@ flowchart LR
 - Во время backtest движок не знает об индексере и не выполняет SQL/network calls.
 
 ### 3.4 Текущее состояние проекта
-
-Отдельное статическое демо §34.3 реализовано: 60 тестовых кошельков,
-423/426 пар и два эталонных результата Copy Buy. Инструмент разработки вызывает
-существующие use cases с запрещённой сетью и выгружает 933 варианта ответов API
-(около 4,3 МБ). Отдельная React-сборка проверяет размеры/хеши, отклоняет команды
-и использует относительные ресурсы/hash-маршруты. Полный граф, покупки, история
-сделок, происхождение данных и ошибки проверены локально в браузере. Ручной
-Pages workflow подготовлен; это не означает публикацию сайта или расширение
-допуска реальных источников.
 
 Реализация включает production-oriented reference vertical slice архитектуры
 и network-aware Pump.fun Sniping на verified local artifacts. Live data
@@ -4376,218 +4368,6 @@ max_request_mb = 2
 Нормативные подробности — в английском deep dive §34.3.
 
 
-## 35. Поэтапная реализация
-
-### Phase 0 — Python foundation
-
-- создать `pyproject.toml` и lockfile;
-- зафиксировать supported Python/dependency versions;
-- создать `src/` layout, CLI, config и test harness;
-- определить application ports и отдельные composition roots для CLI, serve и job child;
-- добавить lint/type/test commands;
-- добавить configured data root/staging/trash в `.gitignore` до первой extraction;
-- не ставить Docker как requirement.
-
-Exit: empty CLI и tests одинаково работают на local PC/server.
-
-### Phase 1 — Маленький vertical slice
-
-- один ClickHouse adapter;
-- blocks + token creation + один swap stream;
-- один protocol projector;
-- 1 day / bounded network-aware block range;
-- Parquet snapshot + local commit marker;
-- Python reference scheduler;
-- `SwapExactInIntent`;
-- double-entry ledger;
-- одна simple strategy;
-- minimal immutable bundle/config IDs для protocol, strategy, engine, scheduler, execution,
-  risk, latency/clock, universe и valuation/price source;
-- minimal `runtime_lock_id`;
-- minimal typed ResolvedRunSpec и atomically committed RunManifest;
-- golden E2E hash.
-
-Exit: repeat run без source даёт тот же hash.
-
-### Phase 2 — Надёжный local data layer
-
-- SQLite catalog и rebuild;
-- job/attempt/idempotency schema, state machine и `controller.lock`;
-- incremental shards/frontier;
-- retries/revisions/schema drift;
-- dry-run budgets и disk watermarks;
-- GC/pins/trash;
-- external backup/restore drill;
-- 7-day snapshot.
-
-Exit: kill/disk-full tests не публикуют partial data.
-
-### Phase 3 — ReplayPack и speed
-
-- ReplayPack compiler;
-- Arrow IPC/NumPy mmap reader;
-- dictionary IDs/offsets;
-- Parquet/ReplayPack equivalence;
-- DeliverySchedule/two-way merge;
-- performance harness;
-- tuned 16/32 GB profiles.
-
-Exit: ReplayPack ускоряет repeated runs и даёт тот же audit hash.
-
-### Phase 4 — Strategies и parameter sweeps
-
-- packaging/registry для уже immutable strategy bundles;
-- расширенный resolver bundle/config aliases и sweep manifests;
-- process supervisor/admission control;
-- read-only shared mmap;
-- 1/2/4-local-process benchmark;
-- result comparison/reporting.
-
-Exit: parallel results совпадают с serial и не вызывают swap/OOM.
-
-### Phase 5 — Control API и Web UI
-
-- versioned Control API поверх существующих application use cases;
-- durable submit/cancel/retry и restart reconciliation;
-- один local supervisor process и idempotent job submission;
-- SSE/polling progress без per-event messages;
-- thin static Web UI для jobs, runs, results, lineage и resource status;
-- localhost/security defaults, controller lock и browser/API tests;
-- измерение idle/active RSS и сравнение Direct CLI versus UI-queued run.
-
-Exit: CLI и API создают один ResolvedJobSpec и canonical result; restart не теряет
-queued jobs, UI disconnect не влияет на run, а API/UI overhead вписывается в 16/32 GB.
-
-### Phase 6 — Features и ML
-
-- FeatureSpec и point-in-time overlays;
-- labels/universe separation;
-- TrainingJobSpec/ModelBundle;
-- walk-forward schedule;
-- frozen predictions;
-- одна embedded small model;
-- typed Web UI forms/status для feature, training и prediction jobs;
-- causality/determinism tests.
-
-Exit: future features/models не меняют prior decisions.
-
-### Phase 7 — Оптимизация по profiler
-
-- выбрать measured hotspots;
-- ускорить только pure reducers/math;
-- сохранить reference backend;
-- golden equivalence для optimized backend;
-- 30-day capacity run.
-
-Exit: acceleration доказана end-to-end wall time, а не microbenchmark alone.
-
-### Phase 8 — Network-aware Pump.fun Sniping
-
-Порядок внутри vertical slice обязателен:
-
-1. Принять network/position/source/strategy/result contracts в deep dive и
-   синхронизированных guardrails.
-2. Ввести `NetworkId`, `BlockRange`, `ChainPosition` и
-   `block32-transaction32-v1`; перенести FirstSwap и clean-reject legacy
-   slot-only artifacts.
-3. Реализовать четыре Pump capabilities, cross-stream evidence gates, compact
-   transaction clock, decision range, causal non-Mayhem universe/exclusion
-   audit и right settlement tail.
-4. Реализовать reference strategy, Pump/Solana plugins, shared wallet,
-   fees/rent/cashback, slippage, PnL и external result tables.
-5. Добавить resolver, CLI/API/UI contracts и real browser flow.
-6. Профилировать и только затем добавить dedicated optimized mmap backend с
-   full three-way equivalence.
-
-Software gate: hermetic exact source artifacts проходят §33 checks; reference
-Parquet, reference ReplayPack и optimized ReplayPack имеют byte-identical
-result; strict resolver/CLI/API/UI/result contracts доступны. Такой test run
-может публиковать `successful-run/v3`, но не является evidence о live source.
-
-Production release exit: bounded live source evidence доказывает exact transaction
-clock/protocol fidelity, настоящий browser flow проходит, а representative
-one-day external-data performance выполняет 2x/RSS/no-swap gate. Каждый cut без
-такого source evidence остаётся typed fail closed и не публикует SuccessfulRun;
-наличие admitted cut само по себе не закрывает production release.
-
-### Current phase status
-
-Functional vertical slices Phases 0–6 и software portion Phase 8 реализованы
-для reference stack: prepare/replay/engine/sweeps, durable direct/API child
-execution, operator lifecycle, frozen/embedded exact ML и hermetic Pump.fun
-Sniping связаны end to end. Deployment-dependent phase exits требуют
-отдельных доказательств.
-
-- Native Linux x86_64 и macOS arm64 являются execution profiles. Windows 11
-  x86_64 использует WSL2/Ubuntu profile и PowerShell bootstrap; repository и
-  `data_root` находятся внутри WSL Linux filesystem. Native Win32 и DrvFS data
-  roots не поддерживаются; profile не заменяет host-specific checks.
-- Source schema break реализован как `bounded-source-evidence/v2` →
-  `source-inspection/v5` → `backtest.dataset-plan/v4`/DatasetSpec v5. Fixed Pump
-  queries, live normalizer/projector, <=4096-block internal sharding, aggregate
-  receipts и preparation binding реализованы. Legacy versions получают
-  `REPREPARE_REQUIRED`.
-- Live admission является cut-scoped. До downstream publication нужны complete
-  source/settlement proofs. Missing transitions дают
-  `CURVE_TRANSITION_MISMATCH`; partial checks и ручной `PROVEN` не допускают
-  rejected cut. Fee components остаются derived-not-observed: normalizer
-  выводит 95/30 split из exact curve SOL leg и связывает его profile.
-- Bundle policy считает bundled buy только успешный `BUY` той же
-  signature/mint после create в той же transaction. Successful
-  same-transaction `SELL` применяется до decision, но не является bundled
-  buy; `bundled_buys_count` остаётся non-binding.
-- Source transport использует verified TLS/VPN/SSH либо явный
-  `allow_insecure_remote_http` opt-in с warning и принятым deployment risk.
-  Secrets остаются во внешнем environment/provider; transport и secret
-  handling не заменяют source evidence.
-- 16/32 GB resource profiles обеспечивают hard admission. Artifact-bound
-  benchmark harness поддерживает 1/7/30 capacity, batch/readahead/process, ML
-  и Direct/control measurements. Его наличие не заменяет representative
-  measurements cold/warm cache, exact source periods, model peaks и
-  control-plane overhead на целевом deployment.
-- Different-device backup и restore реализованы. Deployment durability
-  требует encrypted target на другом physical device/host и recorded restore
-  drill. Если durable Git remote не сохраняет code inputs, нужен отдельный
-  durable code/config/schema/lockfile archive.
-- Packaged UI/static assets и общий loopback API реализуют submission,
-  progress, result/lineage queries и общий React Strategy results dashboard. Browser и
-  subprocess lifecycle checks не повышают source fidelity.
-- Phase 7 содержит bounded FirstSwap optimized backend, ограниченный exact
-  allowlist. Это не general engine replacement и не source SLA.
-- Phase 8 включает network foundation, source/schema break, settlement
-  validator, reference и dedicated optimized engines, strict draft v3/account
-  profile v2, per-mint mode-specific ATA, one-time wallet UVA, correlated
-  ledger v2, summary v3/roundtrip v4, resolver, external results и CLI/API/UI.
-  Оба execution mode используют общий account reducer и имеют hermetic
-  three-way exact equivalence coverage. Draft v2 требует re-resolution;
-  committed summary v2/round-trip v3 сохраняют исходный читаемый смысл.
-  Live cuts без exact evidence остаются fail closed. Cold-cache, 7/30-day и
-  deployment checks остаются отдельными production gates.
-
-Non-Mayhem policy v2, dust normalizer v2, sentinel exclusion и deterministic
-`terminal buy_v2 -> derived completion -> migration` normalization реализованы
-и входят в source/dataset identities. Эти возможности не превращают partial
-source audit в valid evidence; старые policy/source/account artifacts не
-переосмысляются.
-
-Отсутствующее external evidence остаётся `TBD`/fail-closed везде, где влияет
-на admission, fidelity или performance claims.
-
-## 36. Когда добавлять тяжёлую инфраструктуру
-
-| Технология | Trigger |
-|---|---|
-| Object storage | Нужен versioned off-site archive или local NVMe больше не вмещает retained data |
-| PostgreSQL + external queue | Нужны HA/failover, несколько controller writers или multi-user scheduling |
-| Local ClickHouse | Repeated hot scans hundreds of GB, DuckDB/Parquet p95 не достигает SLA |
-| External orchestrator | Recurring DAG/backfills и operator SLA |
-| Online feature store | Появился live low-latency inference SLA |
-
-Ещё один practical signal для выноса storage: pinned artifacts стабильно занимают
-60–70% NVMe и локальные retention/backup policies больше не помогают.
-
-До trigger ни один из этих components не добавляется «на будущее».
-
 ## 37. Отклонённые альтернативы и anti-patterns
 
 | Альтернатива | Почему не сейчас |
@@ -4769,8 +4549,7 @@ source audit в valid evidence; старые policy/source/account artifacts н�
 > управляет теми же use cases через localhost Control API и durable local SQLite queue.
 
 В этой целевой архитектуре **нет PostgreSQL, S3/MinIO, local ClickHouse,
-external/distributed queue, Kafka и Kubernetes**. Все вычисления остаются на одном host;
-тяжёлые компоненты появляются только после измеримого trigger.
+external/distributed queue, Kafka и Kubernetes**. Все вычисления остаются на одном host.
 
 ## Технические ссылки
 
