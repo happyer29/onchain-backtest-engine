@@ -150,9 +150,9 @@ for Russian, or **Appearance** to switch between Warm sunset and Dark.
 Choose **Launch strategy** for Sniping, Copy Buy or FirstSwap. Expand the
 sections for wallet/account profiles, fees, reproducibility and resources.
 
-![Copy Buy launch form in English and the dark theme with expandable parameter sections](assets/launch-strategy.png)
+![Copy Buy launch form in English and the light theme with expandable parameter sections](assets/launch-strategy.png)
 
-This screenshot uses an isolated browser fixture with **Appearance → Dark** selected. Its defaults illustrate the
+This screenshot uses an isolated browser fixture with the light appearance selected. Its defaults illustrate the
 form and do not supply source evidence or recommend trading parameters.
 For a page-by-page explanation of data preparation, jobs, results, ML, research,
 artifacts, and resources, continue with the [Web UI guide](ui-guide.md).
