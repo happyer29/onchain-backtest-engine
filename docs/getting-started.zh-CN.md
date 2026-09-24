@@ -21,6 +21,9 @@ cp configs/local-16gb.toml configs/local.toml
 backtest serve --config configs/local.toml
 ```
 
+数据准备、策略、任务队列、结果、ML 和研究页面的详细说明见
+[Web UI 图文指南](ui-guide.zh-CN.md)。
+
 启动前请检查 `configs/local.toml` 中的数据目录、控制端口和资源预算。
 不要提交本地配置或凭据。Web UI 通过本机 `127.0.0.1` 访问；没有配置真实
 数据源时仍可查看界面，但不能执行真实数据准备。

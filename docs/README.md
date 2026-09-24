@@ -6,17 +6,18 @@
 
 1. [Getting Started](getting-started.md) — installation on Linux, macOS, or
    Windows through WSL2, local configuration, Web UI, and the first backtest.
-2. [Configuration](configuration.md) — TOML settings, secret references,
+2. [Web UI guide](ui-guide.md) — a screenshot-led tour of data preparation,
+   strategy runs, jobs, results, ML, research, artifacts, and resources.
+3. [Configuration](configuration.md) — TOML settings, secret references,
    capability declarations, and projection mappings.
-3. [CLI and workflows](cli-reference.md) — commands, input JSON, and direct or
+4. [CLI and workflows](cli-reference.md) — commands, input JSON, and direct or
    queued execution.
-4. [Project layout](project-layout.md) — packages, tests, and local artifacts.
-5. [Performance measurement](performance-baseline.md) — benchmark commands,
+5. [Project layout](project-layout.md) — packages, tests, and local artifacts.
+6. [Performance measurement](performance-baseline.md) — benchmark commands,
    comparison methodology, and admission criteria.
-6. [Wallet research](wallet-research.md) — observed activity, shared purchases,
+7. [Wallet research](wallet-research.md) — observed activity, shared purchases,
    exact trade evidence and the boundary between a hypothesis and a strategy.
-
-7. [Synthetic ML baseline](ml-baseline.md) — one logistic model, four simple
+8. [Synthetic ML baseline](ml-baseline.md) — one logistic model, four simple
    causal features, a temporal holdout and explicit missing-label accounting.
 
 ## Architecture and contributions

@@ -80,6 +80,7 @@ inspect-source → plan-dataset → prepare-dataset → compile-replay (необ
 ## Документация и участие
 
 - [Оглавление документации](index.ru.md)
+- [Web UI с пошаговыми скриншотами](ui-guide.ru.md)
 - [Демо интерфейса](demo.ru.md)
 - [Участие в разработке](../.github/CONTRIBUTING.ru.md)
 - [Безопасность](../.github/SECURITY.ru.md)

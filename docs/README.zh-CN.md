@@ -71,6 +71,7 @@ inspect-source → plan-dataset → prepare-dataset → compile-replay（可选�
 ## 文档与贡献
 
 - [中文文档索引](index.zh-CN.md)
+- [Web UI 图文指南](ui-guide.zh-CN.md)
 - [静态演示](demo.md)（英文）
 - [贡献指南](../.github/CONTRIBUTING.md)（英文）
 - [安全政策](../.github/SECURITY.md)（英文）

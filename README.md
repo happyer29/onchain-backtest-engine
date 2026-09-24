@@ -80,6 +80,7 @@ for the exact contracts.
 ## Documentation and contribution
 
 - [Documentation index](docs/README.md)
+- [Web UI guide with screenshots](docs/ui-guide.md)
 - [Static interface demo](docs/demo.md)
 - [Contributing](.github/CONTRIBUTING.md)
 - [Security policy](.github/SECURITY.md)

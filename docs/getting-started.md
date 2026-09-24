@@ -154,6 +154,8 @@ sections for wallet/account profiles, fees, reproducibility and resources.
 
 This screenshot uses an isolated browser fixture with **Appearance → Dark** selected. Its defaults illustrate the
 form and do not supply source evidence or recommend trading parameters.
+For a page-by-page explanation of data preparation, jobs, results, ML, research,
+artifacts, and resources, continue with the [Web UI guide](ui-guide.md).
 
 To run exact ML on one ReplayPack in the Web UI, open **Models and features**
 and publish the FeatureSet, Universe, LabelSet, trained model and ModelSchedule
