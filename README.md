@@ -10,6 +10,7 @@
   </p>
   <p><strong>Reproducible on-chain backtests from verified local artifacts, with no SQL or network access in the event loop.</strong></p>
   <p>
+    <a href="https://happyer29.github.io/onchain-backtest-engine/copy-buy/">Copy Buy browser tour</a> ·
     <a href="#quick-start">Quick start</a> ·
     <a href="#features">Features</a> ·
     <a href="#how-it-works">Architecture</a> ·

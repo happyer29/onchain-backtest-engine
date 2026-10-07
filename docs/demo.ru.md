@@ -8,9 +8,40 @@
 был сохранён русский язык.
 Подготовка отделена от публикации: push сам по себе не публикует сайт.
 
-Адрес публикации — [GitHub Pages](https://happyer29.github.io/onchain-backtest-engine/).
-Постоянная отметка показывает, какой набор открыт. Новая версия появляется по
-этому адресу после успешного завершения deployment.
+Исторический профиль сохраняет [корневой адрес GitHub Pages](https://happyer29.github.io/onchain-backtest-engine/).
+Синтетический [сценарий Copy Buy](https://happyer29.github.io/onchain-backtest-engine/copy-buy/)
+имеет отдельный путь. У каждого профиля собственные отметка набора, манифест и файлы ответов.
+
+## Начать с одного сценария Copy Buy
+
+Начни с
+[Copy Buy в браузере](https://happyer29.github.io/onchain-backtest-engine/copy-buy/).
+На [исторической главной](https://happyer29.github.io/onchain-backtest-engine/#/)
+также есть блок **Start here: one Copy Buy example**. Если исторический набор содержит только
+другие стратегии, кнопка **Open Copy Buy walkthrough (synthetic)** ведёт в
+[отдельный сгенерированный пример](https://happyer29.github.io/onchain-backtest-engine/copy-buy/).
+Исторические результаты Sniping не выдаются за Copy Buy. В примере:
+
+1. **Select a wallet / signal.** В примере уже выбран синтетический кошелёк
+   сигнала. В каждой сделке можно посмотреть кошелёк, давший сигнал.
+2. **Configure Copy Buy.** В примере правила фиксированы. Чтобы изучить форму,
+   вернись в исторический профиль и открой **Launch strategy →
+   Pump.fun Copy Buy**, чтобы изучить настройки. Это предпросмотр формы, а не
+   сохранённая конфигурация результата по ссылке; её изменения не меняют результат.
+3. **Open the backtest.** В примере нажми **Open strict replay result**. Маршрут выбирает
+   точный опубликованный результат `PUMPFUN_COPY_BUY` в режиме
+   `EXOGENOUS_REPLAY`, не определяя стратегию по названию или порядку списка.
+4. **Inspect the trade.** Открой **Trades**, затем токен или его кнопку
+   **Details**. Разбери **Signal → decision → fill**, котировки и причины ошибок.
+   Через **Verification → Open manifest and lineage** проверь происхождение
+   результата.
+
+Это просмотр завершённых расчётов. Исторические наблюдения реальны, ордера
+стратегии смоделированы. Синтетический профиль использует сгенерированные входы:
+исполненная покупка и исчерпанные попытки продажи — предусмотренные исходы теста.
+Его отдельный граф из 60 кошельков не выбирал сигнал для Copy Buy.
+
+Статический сайт не запускает стратегии и не отправляет ордера на рынок.
 
 ## Исторические результаты версии 0.2
 
@@ -105,6 +136,10 @@ npm --prefix frontend run demo:serve
 - `frontend/demo-data`: манифест и JSON-ответы с адресацией по содержимому.
 - `frontend/demo-dist`: готовый сайт, локальный worker графа, лицензии,
   `.nojekyll`, данные и перечень файлов `distribution.json` с SHA-256.
+- `frontend/demo-synthetic-dist`: отдельно проверенная синтетическая сборка,
+  сохранённая на время подготовки исторической.
+- `frontend/pages-dist`: исторический корень и синтетический раздел `copy-buy/`
+  с общим перечнем файлов обоих профилей.
 - `frontend/demo-test-results`: результаты браузерных проверок.
 
 Начальный пример содержит 933 варианта запросов и около 4,3 МБ ответов.
@@ -117,7 +152,8 @@ npm --prefix frontend run demo:serve
 
 Манифест фиксирует рецепт и точные ID примеров. После повторной генерации
 собирай весь сайт заново: файлы разных сборок нельзя смешивать. Старые ID могут
-стать недоступны. Для размещения подходит только `demo-dist`. SQLite, Parquet,
+стать недоступны. Один профиль размещается из `demo-dist`; сайт с двумя
+профилями — из проверенной композиции `pages-dist`, описанной ниже. SQLite, Parquet,
 исполняемые манифесты и конфигурация источника туда не входят. Данные демо нельзя
 импортировать в рабочий движок как снимки или результаты запусков.
 
@@ -164,6 +200,47 @@ npm --prefix frontend run demo:build
 перечень ответов и схему представлений. CI скачивает подготовленный архив с
 правами чтения репозитория: к индексеру он не подключается и его секретов не получает.
 
+## Собрать исторический корень и раздел Copy Buy
+
+Начни со свежей рабочей копии с зависимостями из инструкции выше, GitHub CLI
+(`gh`) и браузером Playwright из раздела [«Проверить»](#проверить).
+Генерируемые пути `frontend/demo-synthetic-dist` и `frontend/pages-dist` должны
+отсутствовать; сохрани или перенеси предыдущие результаты перед запуском.
+Команды сначала проверяют синтетический профиль по вложенному адресу, затем
+собирают исторический профиль в корне. Публикацию они не выполняют.
+
+```bash
+node --test frontend/scripts/compose-pages.node-test.mjs
+npm --prefix frontend run demo:prepare
+npm --prefix frontend run demo:build
+BACKTEST_DEMO_BASE_PATH=/onchain-backtest-engine/copy-buy/ npm --prefix frontend run demo:test
+mv frontend/demo-dist frontend/demo-synthetic-dist
+
+history_archive_dir="$(mktemp -d)"
+gh release download pages-data-20260901-2h-preview \
+  --repo happyer29/onchain-backtest-engine \
+  --pattern pages-history-data.tar.gz --dir "$history_archive_dir"
+uv run python frontend/scripts/import-history.py \
+  --archive "$history_archive_dir/pages-history-data.tar.gz" \
+  --sha256 3c718c2c2e21e2fc6213a5dd09c4fefb86221c81fb65eff4f7999aa455055502
+npm --prefix frontend run demo:build
+npm --prefix frontend run demo:test
+
+node frontend/scripts/compose-pages.mjs \
+  frontend/demo-dist frontend/demo-synthetic-dist frontend/pages-dist
+BACKTEST_DEMO_DISTRIBUTION=pages-dist npm --prefix frontend run demo:serve
+```
+
+Исторический корень откроется по `http://127.0.0.1:18744/onchain-backtest-engine/`,
+а Copy Buy — по `http://127.0.0.1:18744/onchain-backtest-engine/copy-buy/`.
+Закреплённый release содержит только данные для просмотра. Компоновщик повторно
+проверяет обе закрытые сборки, требует исторический корень и синтетический
+дочерний профиль, отклоняет лишние файлы, символические ссылки, повреждения и
+несовпадение отметок данных. Он сохраняет отдельные манифесты и закреплённые
+в каждой сборке хеши; ответы не объединяются, рабочий data root не копируется.
+Внешний перечень `backtest.pages-distribution/v1` учитывает каждый выдаваемый
+файл, включая исходный `distribution.json` дочернего профиля.
+
 ## Проверить
 
 ```bash
@@ -202,11 +279,18 @@ npm --prefix frontend run demo:test
    ветку или ревизию.
 3. Выбери **dataset: synthetic** для тестовых примеров либо **dataset: historical**
    и укажи **data_release_tag** и **data_sha256** для импорта release asset
-   `pages-history-data.tar.gz`. По умолчанию выбран synthetic.
+   `pages-history-data.tar.gz`. Historical сохраняет историю в корне и добавляет
+   синтетический Copy Buy в `copy-buy/`. По умолчанию выбран synthetic: этот
+   режим публикует только синтетический корень. Для обновления составного сайта
+   выбирай historical. Текущая историческая выборка закреплена тегом
+   `pages-data-20260901-2h-preview` и SHA-256
+   `3c718c2c2e21e2fc6213a5dd09c4fefb86221c81fb65eff4f7999aa455055502`.
 4. С выключенным **publish** выполняются только проверки, с включённым — ещё
    и публикация проверенной сборки. В обоих случаях выполняются транспортные
-   и браузерные тесты. Задание развёртывания
-   получает только разрешения Pages/OIDC; загружается лишь `frontend/demo-dist`.
+   и браузерные тесты. Historical проверяет оба профиля отдельно перед
+   компоновкой. Workflow загружает `frontend/pages-dist` в режиме historical
+   или `frontend/demo-dist` в режиме synthetic. Задание развёртывания получает
+   только разрешения Pages/OIDC.
 5. Открой адрес из результата deployment. Локально подготовленная ссылка
    не означает, что сайт уже опубликован на GitHub Pages.
 

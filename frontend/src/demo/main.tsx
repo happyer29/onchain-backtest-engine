@@ -11,6 +11,7 @@ import { summary } from '../research/contracts';
 import { ResearchMethod } from '../research/method';
 import { demoClient } from './transport';
 import type { DemoCatalog, HistoricalCatalog, SyntheticCatalog } from './client';
+import { CopyBuyGuide, ResultGuide, useDemoCopy } from './guide';
 import { StaticPreviewProvider } from '../preview';
 import '../styles.css';
 import './style.css';
@@ -106,9 +107,10 @@ function HistoricalOverview({ catalog }: { catalog: HistoricalCatalog }) {
   </>;
 }
 function SyntheticOverview({ catalog }: { catalog: SyntheticCatalog }) {
-  return <><PageTitle eyebrow={t('Prepared examples')} title={t('Explore the demo')} /><p className="intro-text">{t('Inspect wallet connections and trace simulated trade outcomes. Every example uses generated test inputs, calculated by the project’s existing Python code.')}</p><Card><h2>{t('Wallet groups and shared purchases')}</h2><p>{t('{0} wallets · {1} pairs in the Non-Mayhem example', [catalog.wallets, catalog.research[0].counts.pairs])}</p><p>{t('Open groups, follow a wallet across groups, filter weaker links and inspect the purchases behind a pair.')}</p><Button asChild tone="primary"><Link to="/research">{t('Open wallet graph')}</Link></Button></Card><div className="section-intro"><h2>{t('Two execution outcomes')}</h2></div><RunCards catalog={catalog} /><Card><h3>{t('About the examples')}</h3><p>{t('The research fixture includes later repeat purchases, Mayhem tokens and missing creation data. Strategy examples show the same small Copy Buy scenario under two execution modes.')}</p><p>{t('Preparing data and running strategies require the local application. This site only displays exported results.')}</p></Card></>;
+  const { text } = useDemoCopy();
+  return <><PageTitle eyebrow={t('Prepared examples')} title={t('Explore the demo')} /><p className="intro-text">{t('Inspect wallet connections and trace simulated trade outcomes. Every example uses generated test inputs, calculated by the project’s existing Python code.')}</p><CopyBuyGuide catalog={catalog} /><div className="section-intro"><h2>{text.comparison}</h2></div><RunCards catalog={catalog} /><Card><h2>{text.researchTitle}</h2><p>{t('{0} wallets · {1} pairs in the Non-Mayhem example', [catalog.wallets, catalog.research[0].counts.pairs])}</p><p>{t('Open groups, follow a wallet across groups, filter weaker links and inspect the purchases behind a pair.')}</p><p className="subtle">{text.researchBoundary}</p><Button asChild><Link to="/research">{t('Open wallet graph')}</Link></Button></Card><Card><h3>{t('About the examples')}</h3><p>{t('The research fixture includes later repeat purchases, Mayhem tokens and missing creation data. Strategy examples show the same small Copy Buy scenario under two execution modes.')}</p><p>{t('Preparing data and running strategies require the local application. This site only displays exported results.')}</p></Card></>;
 }
-function Overview() { useLocale(); return <Ready>{catalog => catalog.synthetic ? <SyntheticOverview catalog={catalog} /> : <><WorkspaceOverview /><Card><h2>Published historical dataset</h2><p>Explore two hours of OnchainDivers observations and the prepared strategy variants.</p><Button asChild><Link to="/dataset">View dataset and backtests</Link></Button></Card></>}</Ready>; }
+function Overview() { useLocale(); return <Ready>{catalog => catalog.synthetic ? <SyntheticOverview catalog={catalog} /> : <><CopyBuyGuide catalog={catalog} /><WorkspaceOverview /><Card><h2>Published historical dataset</h2><p>Explore two hours of OnchainDivers observations and the prepared strategy variants.</p><Button asChild><Link to="/dataset">View dataset and backtests</Link></Button></Card></>}</Ready>; }
 function Dataset() { return <Ready>{catalog => catalog.synthetic ? <SyntheticOverview catalog={catalog} /> : <HistoricalOverview catalog={catalog} />}</Ready>; }
 function Research() {
   useLocale(); const [params, setParams] = useSearchParams();
@@ -125,7 +127,7 @@ function Runs() {
 }
 function Run() {
   const { runId = '' } = useParams(); useLocale();
-  return <Ready>{catalog => catalog.runs.some(run => run.id === runId) ? <StrategyResults key={runId} runId={runId} demo={catalog.synthetic ? true : 'historical'} /> : <Failure message={t('This item is not included in the demo.')} />}</Ready>;
+  return <Ready>{catalog => { const run = catalog.runs.find(run => run.id === runId); return run ? <><ResultGuide mode={run.mode} synthetic={catalog.synthetic} /><StrategyResults key={runId} runId={runId} demo={catalog.synthetic ? true : 'historical'} /></> : <Failure message={t('This item is not included in the demo.')} />; }}</Ready>;
 }
 function Provenance() {
   const text = useText(), catalog = useCatalog().data, { artifactId = '' } = useParams();

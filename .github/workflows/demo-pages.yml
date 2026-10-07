@@ -10,7 +10,7 @@ on:
         required: true
         default: false
       dataset:
-        description: Synthetic examples or previously exported indexer results
+        description: Synthetic root, or historical root plus a separate Copy Buy demo
         type: choice
         required: true
         default: synthetic
@@ -36,7 +36,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -54,9 +54,24 @@ jobs:
       - run: npm ci --prefix frontend
       - name: Verify the historical archive import boundary
         run: uv run pytest -q tests/architecture/test_static_history_import.py
+      - name: Verify closed-distribution composition and frontend transport
+        run: |
+          node --test frontend/scripts/compose-pages.node-test.mjs
+          npm --prefix frontend test
+      - name: Install test browser
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
       - name: Generate only synthetic examples, with network connections disabled
-        if: inputs.dataset == 'synthetic'
         run: npm --prefix frontend run demo:prepare
+      - name: Build the independent synthetic distribution
+        run: npm --prefix frontend run demo:build
+      - name: Verify synthetic results at their intended public path
+        env:
+          BACKTEST_DEMO_BASE_PATH: ${{ inputs.dataset == 'historical' && '/onchain-backtest-engine/copy-buy/' || '/onchain-backtest-engine/' }}
+        run: npm --prefix frontend run demo:test
+      - name: Keep the verified Copy Buy distribution separate
+        if: inputs.dataset == 'historical'
+        run: mv frontend/demo-dist frontend/demo-synthetic-dist
       - name: Download the explicitly pinned historical presentation export
         if: inputs.dataset == 'historical'
         env:
@@ -69,15 +84,15 @@ jobs:
           [[ "$DATA_SHA256" =~ ^[0-9a-f]{64}$ ]] || { echo 'A lowercase SHA-256 is required for historical data'; exit 1; }
           gh release download "$DATA_RELEASE_TAG" --pattern pages-history-data.tar.gz --dir "$RUNNER_TEMP/history-data"
           uv run python frontend/scripts/import-history.py --archive "$RUNNER_TEMP/history-data/pages-history-data.tar.gz" --sha256 "$DATA_SHA256"
-      - name: Verify transport and build a closed static distribution
-        run: |
-          npm --prefix frontend test
-          npm --prefix frontend run demo:build
-      - name: Install test browser
-        working-directory: frontend
-        run: npx playwright install --with-deps chromium
-      - name: Verify subpath routing, prepared results and integrity failures
+      - name: Build the independent historical distribution
+        if: inputs.dataset == 'historical'
+        run: npm --prefix frontend run demo:build
+      - name: Verify historical results at the project root
+        if: inputs.dataset == 'historical'
         run: npm --prefix frontend run demo:test
+      - name: Compose the verified historical root and synthetic Copy Buy child
+        if: inputs.dataset == 'historical'
+        run: node frontend/scripts/compose-pages.mjs frontend/demo-dist frontend/demo-synthetic-dist frontend/pages-dist
       - name: Configure existing Pages site
         if: inputs.publish
         uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
@@ -85,7 +100,7 @@ jobs:
         if: inputs.publish
         uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4.0.0
         with:
-          path: frontend/demo-dist
+          path: ${{ inputs.dataset == 'historical' && 'frontend/pages-dist' || 'frontend/demo-dist' }}
 
   deploy:
     if: inputs.publish

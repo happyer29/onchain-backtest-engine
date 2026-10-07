@@ -3,6 +3,36 @@ import {test,expect} from '@playwright/test';
 const catalog=JSON.parse(readFileSync('demo-data/manifest.json','utf8'));
 const url=(route:string)=>`./#${route}`;
 
+test('the opening guide leads to strict Copy Buy and inspectable attempts without execution', async ({ page, baseURL }) => {
+  const strict = catalog.runs.find((run: { mode: string; summary: { family: string } }) => run.mode === 'EXOGENOUS_REPLAY' && run.summary.family === 'PUMPFUN_COPY_BUY');
+  const requests: { url: string; method: string }[] = [];
+  page.on('request', request => requests.push({ url: request.url(), method: request.method() }));
+  await page.goto('./');
+  await expect(page.getByRole('heading', { name: 'Start here: one Copy Buy example' })).toBeVisible();
+  await expect(page.locator('.demo-guide-steps > li')).toHaveCount(4);
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: 'demo-test-results/copy-buy-guide-mobile.png', fullPage: true });
+  if (!strict && !catalog.synthetic) {
+    await expect(page.getByRole('link', { name: 'Open Copy Buy walkthrough (synthetic)', exact: true })).toHaveAttribute('href', './copy-buy/');
+    await expect(page.getByRole('link', { name: 'Open strict replay result', exact: true })).toHaveCount(0);
+    expect(requests.every(request => request.method === 'GET' && request.url.startsWith(baseURL!))).toBe(true);
+    return;
+  }
+  expect(strict, 'A prepared strict Copy Buy result is present').toBeTruthy();
+  await page.getByRole('link', { name: 'Open strict replay result', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp('/runs/' + strict.id)); await page.reload();
+  await expect(page.getByText('Next: Trades → token or Details', { exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'Trades', exact: true }).click();
+  await page.getByRole('button', { name: /^Details / }).first().click();
+  await expect(page.getByRole('dialog').getByRole('heading', { name: 'Signal → decision → fill', exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.getByRole('link', { name: 'Back to the four-step guide', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Start here: one Copy Buy example' })).toBeVisible();
+  expect(requests.every(request => request.method === 'GET' && request.url.startsWith(baseURL!))).toBe(true);
+  expect(requests.some(request => new URL(request.url).pathname.includes('/api/'))).toBe(false);
+});
+
 test.describe('synthetic corpus', () => {
   test.skip(!catalog.synthetic, 'The current distribution contains historical data.');
 

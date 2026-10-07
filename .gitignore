@@ -91,6 +91,9 @@ TODO.md
 # Static exports and local preview output contain generated presentation data.
 /frontend/demo-data/
 /frontend/demo-dist/
+/frontend/pages-dist/
+/frontend/demo-synthetic-dist/
+/frontend/.pages-compose-*/
 /frontend/.demo-export-*/
 /frontend/.history-export-*/
 /frontend/demo-test-results/
