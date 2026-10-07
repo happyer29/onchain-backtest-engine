@@ -14,6 +14,12 @@ Notable user-facing changes are recorded here. The format follows
 - Offline allowlisted result export and digest-pinned release-asset import for
   manual Pages publication, without source credentials or a public execution API.
 
+### Fixed
+
+- Sniping entries, analytics and chart markers preserve pre-submit funding
+  rejections from the stored round-trip status instead of showing unlanded quotes
+  as fills. Original execution artifacts and financial results remain unchanged.
+
 ## [0.2.0] — release candidate
 
 ### Added

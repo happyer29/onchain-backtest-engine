@@ -172,7 +172,8 @@ test.describe('historical corpus', () => {
     await page.getByRole('button', { name: 'Открыть меню' }).click();
     await page.locator('.sidebar').getByRole('link', { name: 'Результаты стратегии', exact: true }).click();
     await expect(page.getByRole('link', { name: 'Открыть бэктест', exact: true })).toHaveCount(catalog.runs.length);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await expect(page.locator('.sidebar')).not.toBeInViewport();
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: 'demo-test-results/history-mobile.png', fullPage: true });
   });
 

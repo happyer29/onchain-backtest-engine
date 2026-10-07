@@ -23,7 +23,12 @@ from backtest.application.ports.run_results import (
     VerifiedRunResultReader,
 )
 from backtest.application.run_results import FirstSwapSummaryMetadata
-from backtest.application.strategy_result_projection import exact, project_entry, project_summary
+from backtest.application.strategy_result_projection import (
+    exact,
+    project_entry,
+    project_summary,
+    sniping_leg_outcome,
+)
 
 # Queries own orchestration and presentation; no adapter or filesystem imports enter this layer.
 from backtest.application.strategy_results import (
@@ -190,16 +195,9 @@ def _verify_sniping_chart(chart: StrategyMarketChart, position: RoundTripRecord)
     for marker, (number, leg) in zip(chart.markers[1:], legs, strict=True):
         coordinate = replace(leg.landing_position or leg.decision_position, event_index=None)
         # Landing evidence determines failure stage; an expected coordinate is insufficient.
-        status = (
-            "FILLED"
-            if leg.failure_code is None
-            else "FAILED"
-            if leg.landing_position
-            # A pre-submit failure is drawn at its actual decision boundary.
-            else "REJECTED"
-        )
+        status, failure_code = sniping_leg_outcome(position, leg)
         # Match every semantic marker operand, including attempts with identical boundaries.
-        expected = (number, leg.side.value, status, leg.failure_code, coordinate)
+        expected = (number, leg.side.value, status, failure_code, coordinate)
         actual = (
             marker.attempt,
             marker.kind,
