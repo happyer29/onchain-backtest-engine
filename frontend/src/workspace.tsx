@@ -11,6 +11,7 @@ import { DataTable, type TableColumn } from './table';
 import { Fact, FactTree } from './results';
 import { digestSchema } from './result-contracts';
 import comparisonMetrics from './comparison-metrics.json';
+import { useStaticPreview } from './preview';
 
 // Lineage is an optional heavy view; operational pages load only their own bounded data.
 const LineageGraph = lazy(() => import('./lineage').then(module => ({ default: module.LineageGraph })));
@@ -34,12 +35,14 @@ export function useVisible() {
 
 // Only the current server page participates in adaptive polling and completion observation.
 function useJobs(cursor: string | null, state: string) {
+  const preview = useStaticPreview();
   const visible = useVisible();
   const previous = useRef(new Map<string, string>());
-  const query = useQuery<Schema<'JobListResponse'>>({ queryKey: ['jobs', cursor, state], enabled: visible, refetchIntervalInBackground: false,
-    refetchInterval: query => !visible ? false : query.state.data?.items.some(job => active.has(job.state)) ? 2000 : 12000,
+  const query = useQuery<Schema<'JobListResponse'>>({ queryKey: ['jobs', cursor, state], enabled: visible && !preview, refetchIntervalInBackground: false,
+    refetchInterval: query => !visible || preview ? false : query.state.data?.items.some(job => active.has(job.state)) ? 2000 : 12000,
     queryFn: ({ signal }) => api<Schema<'JobListResponse'>>(`/api/v1/jobs?${new URLSearchParams({ limit: '20', ...(cursor ? { cursor } : {}), ...(state ? { state } : {}) })}`, { signal }) });
   useEffect(() => {
+    if (preview) return;
     // Runs refresh only on an observed run-producing success, not on every jobs poll.
     for (const job of query.data?.items ?? []) {
       const before = previous.current.get(job.job_id);
@@ -49,7 +52,7 @@ function useJobs(cursor: string | null, state: string) {
     }
     // Retain one page of prior states, not a growing history of operational jobs.
     previous.current = new Map(query.data?.items.map(job => [job.job_id, job.state]) ?? []);
-  }, [query.data]);
+  }, [query.data, preview]);
   return query;
 }
 
@@ -78,6 +81,7 @@ export function Overview() {
 // Selection is independent from the paged queue; its overlay can follow a job leaving the filter.
 export function JobsPanel({ compact = false, researchOnly = false }: { compact?: boolean; researchOnly?: boolean }) {
   useLocale();
+  const preview = useStaticPreview();
   const paging = useCursor();
   const [state, setState] = useState('');
   const [selected, setSelected] = useState<Schema<'JobResponse'> | null>(null);
@@ -89,7 +93,7 @@ export function JobsPanel({ compact = false, researchOnly = false }: { compact?:
   const retryKeys = useRef(new Map<string, string>());
   const acting = useRef(false);
   async function action(job: Schema<'JobResponse'>, action: 'cancel' | 'retry') {
-    if (acting.current) return;
+    if (preview || acting.current) return;
     acting.current = true;
     setBusy(job.job_id); setFailure('');
     // Synchronous admission closes the double-click gap before React renders disabled controls.
@@ -109,13 +113,13 @@ export function JobsPanel({ compact = false, researchOnly = false }: { compact?:
     { id: 'submitted', title: t("Created"), value: row => BigInt(row.submitted_at_ns), render: row => nanosecondTime(row.submitted_at_ns) },
     { id: 'updated', title: t("Updated"), value: row => BigInt(row.updated_at_ns), render: row => nanosecondTime(row.updated_at_ns) },
     // Mutations always go through durable API operations and their observed server state.
-    { id: 'actions', title: '', render: row => <div className="row-actions">{row.state === 'SUCCEEDED' && ['PREPARE_RESEARCH','ANALYZE_WALLETS'].includes(row.job_type) && <Button asChild><Link to={`/research?job=${encodeURIComponent(row.job_id)}`}>{t('Open research output')}</Link></Button>}<Button onClick={() => setSelected(row)}>{t("Events")}</Button>{active.has(row.state) ? <Button tone="danger" disabled={busy === row.job_id} onClick={() => void action(row, 'cancel')}>{t("Cancel")}</Button> : ['FAILED', 'CANCELLED', 'INTERRUPTED'].includes(row.state) && <Button disabled={busy === row.job_id} onClick={() => void action(row, 'retry')}>{t("Retry")}</Button>}</div> },
+    { id: 'actions', title: '', render: row => <div className="row-actions">{row.state === 'SUCCEEDED' && ['PREPARE_RESEARCH','ANALYZE_WALLETS'].includes(row.job_type) && <Button asChild><Link to={`/research?job=${encodeURIComponent(row.job_id)}`}>{t('Open research output')}</Link></Button>}<Button onClick={() => setSelected(row)}>{t("Events")}</Button>{active.has(row.state) ? <Button tone="danger" disabled={preview || busy === row.job_id} onClick={() => void action(row, 'cancel')}>{t("Cancel")}</Button> : ['FAILED', 'CANCELLED', 'INTERRUPTED'].includes(row.state) && <Button disabled={preview || busy === row.job_id} onClick={() => void action(row, 'retry')}>{t("Retry")}</Button>}</div> },
   ];
   // Compact overview and full queue share the same response and action behavior.
-  return <>{!compact && !researchOnly && <PageTitle eyebrow={t("Execution")} title={t("Job queue")}><Button onClick={() => void query.refetch()}><RefreshCw size={15} /> {t("Refresh")}</Button></PageTitle>}
-    {failure && <Failure message={failure} />}{query.isError && <Failure message={errorText(query.error)} retry={() => void query.refetch()} />}
-    <Card>{researchOnly && <p className="subtle">{t("Research tasks on the current queue page. Use the arrows to inspect earlier tasks.")}</p>}{!compact && <div className="table-toolbar"><label>{t("State")} <select value={state} onChange={event => { setState(event.target.value); paging.reset(); }}><option value="">{t("All states")}</option>{['QUEUED', 'STARTING', 'RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELLED', 'INTERRUPTED'].map(state => <option key={state}>{state}</option>)}</select></label><small>{t("Updates automatically · paused in hidden tabs")}</small></div>}
-      {query.isPending ? <Loading /> : <DataTable rows={(query.data?.items ?? []).filter(job => !researchOnly || ['PREPARE_RESEARCH','ANALYZE_WALLETS'].includes(job.job_type))} columns={columns} name={t("Job queue")} searchText={compact ? undefined : row => `${row.job_id} ${row.job_type} ${row.state}`} />}
+  return <>{!compact && !researchOnly && <PageTitle eyebrow={t("Execution")} title={t("Job queue")}><Button disabled={preview} onClick={() => void query.refetch()}><RefreshCw size={15} /> {t("Refresh")}</Button></PageTitle>}
+    {preview && <p className="notice" role="note">{t("No execution host is connected. This preview has no live job queue.")}</p>}{failure && <Failure message={failure} />}{query.isError && <Failure message={errorText(query.error)} retry={() => void query.refetch()} />}
+    <Card>{researchOnly && <p className="subtle">{t("Research tasks on the current queue page. Use the arrows to inspect earlier tasks.")}</p>}{!compact && <div className="table-toolbar"><label>{t("State")} <select value={state} onChange={event => { setState(event.target.value); paging.reset(); }}><option value="">{t("All states")}</option>{['QUEUED', 'STARTING', 'RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELLED', 'INTERRUPTED'].map(state => <option key={state}>{state}</option>)}</select></label><small>{t(preview ? "Queue controls preview · execution disabled" : "Updates automatically · paused in hidden tabs")}</small></div>}
+      {!preview && query.isPending ? <Loading /> : <DataTable rows={(preview ? [] : query.data?.items ?? []).filter(job => !researchOnly || ['PREPARE_RESEARCH','ANALYZE_WALLETS'].includes(job.job_type))} columns={columns} name={t("Job queue")} searchText={compact ? undefined : row => `${row.job_id} ${row.job_type} ${row.state}`} />}
       {!compact && <Pager index={paging.page.index} busy={query.isFetching} count={query.data?.items.length ?? 0} previous={paging.page.trail.length ? paging.previous : undefined} next={query.data?.next_cursor ? () => paging.next(query.data!.next_cursor!) : undefined} />}
     </Card>{selected && <JobEvents key={selected.job_id} job={selected} onClose={() => setSelected(null)} />}
   </>;
@@ -124,11 +128,12 @@ export function JobsPanel({ compact = false, researchOnly = false }: { compact?:
 // Each event page observes its own durable status so terminal jobs stop polling independently.
 export function JobEvents({ job, onClose }: { job: Schema<'JobResponse'>; onClose: () => void }) {
   useLocale();
+  const preview = useStaticPreview();
   const [after, setAfter] = useState('0');
   const visible = useVisible();
   // Read durable state before events, so a terminal observation includes its committed transition.
-  const query = useQuery<{ job: Schema<'JobResponse'>; events: Schema<'JobEventListResponse'> }>({ queryKey: ['job-events', job.job_id, after], enabled: visible,
-    refetchInterval: query => visible && active.has(query.state.data?.job.state ?? job.state) && (query.state.data?.events.items.length ?? 0) < 50 ? 2000 : false,
+  const query = useQuery<{ job: Schema<'JobResponse'>; events: Schema<'JobEventListResponse'> }>({ queryKey: ['job-events', job.job_id, after], enabled: visible && !preview,
+    refetchInterval: query => !preview && visible && active.has(query.state.data?.job.state ?? job.state) && (query.state.data?.events.items.length ?? 0) < 50 ? 2000 : false,
     queryFn: async ({ signal }) => {
       const current = await api<Schema<'JobResponse'>>(`/api/v1/jobs/${job.job_id}`, { signal });
       const events = await api<Schema<'JobEventListResponse'>>(`/api/v1/jobs/${job.job_id}/events?after_event_id=${after}&limit=50`, { signal });
@@ -136,8 +141,8 @@ export function JobEvents({ job, onClose }: { job: Schema<'JobResponse'>; onClos
     } });
   // The selected list row can be stale or leave its filter; live state owns the overlay status.
   const events = query.data?.events;
-  return <Overlay title={job.job_type} onClose={onClose}><Card><div className="card-heading"><code>{job.job_id}</code><Badge>{query.data?.job.state ?? job.state}</Badge></div>{query.isError && <Failure message={errorText(query.error)} retry={() => void query.refetch()} />}{query.isPending ? <Loading /> : <div className="event-list">{events?.items.map(event => <div key={event.event_id}><CheckCircle2 size={16} /><div><strong>{event.event_type}</strong><small>{nanosecondTime(event.created_at_ns)}</small>{event.progress && <><p>{event.progress.stage} · {event.progress.completed_units ?? '—'} / {event.progress.total_units ?? '—'}</p>{event.progress.total_units && <progress value={Number(event.progress.completed_units ?? 0)} max={Number(event.progress.total_units)} aria-label={event.progress.stage} />}</>}</div><code>v{event.state_version}</code></div>)}</div>}
-    <div className="actions"><Button disabled={after === '0'} onClick={() => setAfter('0')}>{t("First page")}</Button><Button disabled={events?.items.length !== 50 || query.isFetching} onClick={() => setAfter(String(events!.items.at(-1)!.event_id))}>{t("Next events")}</Button><Button onClick={() => void query.refetch()}>{t("Refresh")}</Button></div>
+  return <Overlay title={job.job_type} onClose={onClose}><Card><div className="card-heading"><code>{job.job_id}</code><Badge>{query.data?.job.state ?? job.state}</Badge></div>{query.isError && <Failure message={errorText(query.error)} retry={() => void query.refetch()} />}{preview ? <p className="notice">{t("No execution host is connected. This preview has no live job queue.")}</p> : query.isPending ? <Loading /> : <div className="event-list">{events?.items.map(event => <div key={event.event_id}><CheckCircle2 size={16} /><div><strong>{event.event_type}</strong><small>{nanosecondTime(event.created_at_ns)}</small>{event.progress && <><p>{event.progress.stage} · {event.progress.completed_units ?? '—'} / {event.progress.total_units ?? '—'}</p>{event.progress.total_units && <progress value={Number(event.progress.completed_units ?? 0)} max={Number(event.progress.total_units)} aria-label={event.progress.stage} />}</>}</div><code>v{event.state_version}</code></div>)}</div>}
+    <div className="actions"><Button disabled={preview || after === '0'} onClick={() => setAfter('0')}>{t("First page")}</Button><Button disabled={preview || events?.items.length !== 50 || query.isFetching} onClick={() => setAfter(String(events!.items.at(-1)!.event_id))}>{t("Next events")}</Button><Button disabled={preview} onClick={() => void query.refetch()}>{t("Refresh")}</Button></div>
   </Card></Overlay>;
 }
 
@@ -172,16 +177,17 @@ export function RunsPanel({ compact = false }: { compact?: boolean }) {
 // Resource measurements update slowly and pause while hidden; they are not semantic run inputs.
 export function Resources({ compact = false }: { compact?: boolean }) {
   useLocale();
+  const preview = useStaticPreview();
   const visible = useVisible();
-  const query = useQuery({ queryKey: ['resources'], enabled: visible, refetchInterval: visible ? 20000 : false,
+  const query = useQuery({ queryKey: ['resources'], enabled: visible && !preview, refetchInterval: visible && !preview ? 20000 : false,
     queryFn: ({ signal }) => api<Schema<'SystemResourcesResponse'>>('/api/v1/system/resources', { signal }) });
   const data = query.data;
   // Host capacity is a presentation measurement; financial amounts use separate exact formatting.
   const gib = (value: number) => `${(value / 1024 ** 3).toFixed(1)} GiB`;
-  return <>{!compact && <PageTitle eyebrow={t("Local execution")} title={t("Resources and limits")}><Button onClick={() => void query.refetch()}><RefreshCw size={15} /> {t("Refresh")}</Button></PageTitle>}
-    {query.isError && <Failure message={errorText(query.error)} retry={() => void query.refetch()} />}{query.isPending && <Loading />}
-    {data && <div className="resource-grid"><ResourceCard icon={<Cpu size={19} />} title={t("Memory")} value={gib(data.physical_memory_available_bytes)} detail={t("available of {0}", [gib(data.physical_memory_total_bytes)])} used={data.physical_memory_total_bytes - data.physical_memory_available_bytes} total={data.physical_memory_total_bytes} /><ResourceCard icon={<HardDrive size={19} />} title={t("Free disk space")} value={gib(data.disk_free_bytes)} detail={t("of {0}", [gib(data.disk_total_bytes)])} used={data.disk_total_bytes - data.disk_free_bytes} total={data.disk_total_bytes} /><ResourceCard icon={<Workflow size={19} />} title={t("Concurrent runs")} value={String(data.configured_max_parallel_runs)} detail={t("Process budget {0}", [gib(data.configured_aggregate_child_memory_bytes)])} /><ResourceCard icon={<Database size={19} />} title={t("Temporary storage")} value={gib(data.temporary_used_bytes)} detail={t("limit {0}", [gib(data.configured_tmp_quota_bytes)])} used={data.temporary_used_bytes} total={data.configured_tmp_quota_bytes} /></div>}
-    {data && !compact && <Card><h3>{t("Measurements and admission settings")}</h3><FactTree value={data} /></Card>}
+  return <>{!compact && <PageTitle eyebrow={t("Local execution")} title={t("Resources and limits")}><Button disabled={preview} onClick={() => void query.refetch()}><RefreshCw size={15} /> {t("Refresh")}</Button></PageTitle>}
+    {preview ? <><p className="notice" role="note">{t("No execution host is connected. Memory, storage and process limits are available in a running local workspace.")}</p><div className="resource-grid">{([[Cpu, "Memory"], [HardDrive, "Free disk space"], [Workflow, "Concurrent runs"], [Database, "Temporary storage"]] as const).map(([Icon, title]) => <ResourceCard key={title} icon={<Icon size={19} />} title={t(title)} value="—" detail={t("Unavailable in the published preview")} />)}</div></> : <>{query.isError && <Failure message={errorText(query.error)} retry={() => void query.refetch()} />}{query.isPending && <Loading />}</>}
+    {!preview && data && <div className="resource-grid"><ResourceCard icon={<Cpu size={19} />} title={t("Memory")} value={gib(data.physical_memory_available_bytes)} detail={t("available of {0}", [gib(data.physical_memory_total_bytes)])} used={data.physical_memory_total_bytes - data.physical_memory_available_bytes} total={data.physical_memory_total_bytes} /><ResourceCard icon={<HardDrive size={19} />} title={t("Free disk space")} value={gib(data.disk_free_bytes)} detail={t("of {0}", [gib(data.disk_total_bytes)])} used={data.disk_total_bytes - data.disk_free_bytes} total={data.disk_total_bytes} /><ResourceCard icon={<Workflow size={19} />} title={t("Concurrent runs")} value={String(data.configured_max_parallel_runs)} detail={t("Process budget {0}", [gib(data.configured_aggregate_child_memory_bytes)])} /><ResourceCard icon={<Database size={19} />} title={t("Temporary storage")} value={gib(data.temporary_used_bytes)} detail={t("limit {0}", [gib(data.configured_tmp_quota_bytes)])} used={data.temporary_used_bytes} total={data.configured_tmp_quota_bytes} /></div>}
+    {!preview && data && !compact && <Card><h3>{t("Measurements and admission settings")}</h3><FactTree value={data} /></Card>}
   </>;
 }
 // Native progress supplies accessible bounded capacity visualization without inline styles.
@@ -192,6 +198,30 @@ function ResourceCard({ icon, title, value, detail, used, total }: { icon: React
 
 // Exact artifact IDs resolve only metadata and verified lineage through the API.
 export function Artifacts({ artifactId }: { artifactId?: string }) {
+  return useStaticPreview() ? <PreviewArtifact key={artifactId} artifactId={artifactId} /> : <OperationalArtifact key={artifactId} artifactId={artifactId} />;
+}
+
+// The public preview exposes only the existing bounded lineage descriptors.
+// Canonical manifests can contain executable/source operands and stay on the host.
+function PreviewArtifact({ artifactId }: { artifactId?: string }) {
+  useLocale();
+  const navigate = useNavigate();
+  const [input, setInput] = useState(artifactId ?? '');
+  const [view, setView] = useState<'metadata' | 'lineage'>('metadata');
+  const valid = !!artifactId && digestSchema.safeParse(artifactId).success;
+  const lineage = useQuery({ queryKey: ['lineage', artifactId], enabled: valid,
+    queryFn: ({ signal }) => api<Schema<'ArtifactLineageResponse'>>(`/api/v1/lineage/${artifactId}`, { signal }) });
+  const descriptor = lineage.data?.artifacts.find(item => item.artifact_id === artifactId);
+  return <><PageTitle eyebrow={t('Provenance and integrity')} title={t('Artifacts and lineage')} /><Card><form className="artifact-form" onSubmit={event => { event.preventDefault(); if (digestSchema.safeParse(input.trim()).success) navigate(`/artifacts/${input.trim()}`); }}><label>Artifact ID<input value={input} onChange={event => setInput(event.target.value)} required minLength={64} maxLength={64} pattern="[0-9a-f]{64}" placeholder={t('Exact SHA-256 ID')} /></label><Button tone="primary" type="submit">{t('Open')}</Button></form></Card>
+    <p className="notice">{t('Explore the published artifact metadata and dependency graph.')}</p>
+    {artifactId && !valid && <Failure message={t('Invalid artifact ID.')} />}{valid && <><div className="actions"><Button tone={view === 'metadata' ? 'primary' : 'default'} onClick={() => setView('metadata')}>{t('Metadata')}</Button><Button tone={view === 'lineage' ? 'primary' : 'default'} onClick={() => setView('lineage')}>Lineage</Button></div>
+      {lineage.isError && <Failure message={errorText(lineage.error)} retry={() => void lineage.refetch()} />}{lineage.isPending && <Loading />}
+      {view === 'metadata' && descriptor && <Card><div className="card-heading"><h3>{t('Verified metadata')}</h3><Badge tone="positive">Verified</Badge></div><FactTree value={descriptor} /></Card>}
+      {view === 'lineage' && lineage.data && <Suspense fallback={<Loading />}><LineageGraph data={lineage.data} /></Suspense>}
+    </>}{!artifactId && <Card><Empty title={t('Open an artifact by ID')} detail={t('Verified metadata and the dependency graph are available here.')} /></Card>}</>;
+}
+
+function OperationalArtifact({ artifactId }: { artifactId?: string }) {
   useLocale();
   const navigate = useNavigate();
   const [input, setInput] = useState(artifactId ?? '');

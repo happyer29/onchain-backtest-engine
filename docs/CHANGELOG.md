@@ -13,6 +13,9 @@ Notable user-facing changes are recorded here. The format follows
   execution-model labels and offline lineage.
 - Offline allowlisted result export and digest-pinned release-asset import for
   manual Pages publication, without source credentials or a public execution API.
+- Every product page is available in the historical Pages preview, with editable
+  settings, navigation and saved results; execution actions are disabled. The
+  published interface and prepared run names are entirely in English.
 
 ### Fixed
 

@@ -4,7 +4,7 @@ import { getLocale, setLocale, t, useLocale } from './i18n';
 import { atomic, percent } from './format';
 
 // Each test restores presentation state; no command or financial value is localized in storage.
-afterEach(() => { vi.restoreAllMocks(); setLocale('en'); localStorage.clear(); });
+afterEach(() => { vi.restoreAllMocks(); delete document.documentElement.dataset.fixedLocale; setLocale('en'); localStorage.clear(); });
 it('keeps exact integer digits while formatting each supported language', () => {
   expect(atomic('9007199254740993001', 9, 9)).toBe('9,007,199,254.740993001');
   setLocale('ru');
@@ -38,4 +38,15 @@ it('synchronizes a closed locale choice and does not swallow unexpected errors',
   // Programming failures remain visible rather than pretending to save a preference.
   vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('unexpected'); });
   expect(() => setLocale('ru')).toThrow('unexpected');
+});
+
+it('keeps a fixed-English publication English after stored or cross-tab language changes', () => {
+  localStorage.setItem('backtest.ui.language', 'ru');
+  document.documentElement.dataset.fixedLocale = 'en';
+  expect(setLocale('ru')).toBe(true);
+  window.dispatchEvent(new StorageEvent('storage', { key: 'backtest.ui.language', newValue: 'ru' }));
+  expect(getLocale()).toBe('en');
+  expect(document.documentElement.lang).toBe('en');
+  expect(t('Overview')).toBe('Overview');
+  expect(localStorage.getItem('backtest.ui.language')).toBe('ru');
 });

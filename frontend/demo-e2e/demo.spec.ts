@@ -50,14 +50,6 @@ test('both real reference outcomes retain trade history, synthetic labels and of
   }
 });
 
-test('Russian preferences persist and mobile navigation stays within the static site',async({page})=>{
-  await page.goto('./');await page.getByRole('button',{name:'Settings',exact:true}).click();await page.getByLabel('Language').selectOption('ru');await page.getByLabel('Оформление').selectOption('dark');await page.reload();
-  await expect(page.getByRole('heading',{name:'Изучите демо'})).toBeVisible();await expect(page.locator('html')).toHaveAttribute('data-theme','dark');
-  await page.setViewportSize({width:390,height:844});await page.getByRole('button',{name:'Открыть меню'}).click();await page.getByRole('link',{name:'Ончейн-исследования',exact:true}).click();await expect(page.getByTestId('graph-counts')).toBeVisible();
-  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-  await page.screenshot({path:'demo-test-results/demo-mobile.png',fullPage:true});
-});
-
 test('unknown pages and unavailable execution never start an API request',async({page})=>{
   const requests:string[]=[];page.on('request',request=>requests.push(request.url()));
   await page.goto(url('/launch'));await expect(page.getByRole('heading',{name:'Unavailable in the demo'})).toBeVisible();
@@ -89,21 +81,21 @@ test.describe('historical corpus', () => {
     const requests: string[] = [], errors: string[] = [];
     page.on('request', request => requests.push(request.url())); page.on('pageerror', error => errors.push(error.message));
     await page.addInitScript(() => window.addEventListener('securitypolicyviolation', event => document.documentElement.setAttribute('data-csp-error', event.violatedDirective)));
-    await page.goto('./'); await page.reload();
+    await page.goto(url('/dataset')); await page.reload();
     await expect(page.getByRole('heading', { name: 'Two hours of on-chain history' })).toBeVisible();
     await expect(page.getByText('Real history · simulated strategies', { exact: true })).toBeVisible();
     await expect(page.getByText('2 hours · 7,200 seconds', { exact: true })).toBeVisible();
     await expect(page.locator('time').first()).toHaveAttribute('datetime', catalog.source.start_utc);
     await expect(page.locator('time').last()).toHaveAttribute('datetime', catalog.source.end_utc);
     await expect(page.getByRole('link', { name: 'Explore backtest', exact: true })).toHaveCount(catalog.runs.length);
-    await expect(page.getByRole('link', { name: 'On-chain research', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'On-chain research', exact: true })).toBeVisible();
     await page.screenshot({ path: 'demo-test-results/history-overview.png', fullPage: true });
     await page.getByRole('link', { name: 'Skip to content' }).focus(); await page.keyboard.press('Enter'); await expect(page.locator('#main')).toBeFocused();
     await page.getByText('Snapshot identities', { exact: true }).click();
     await page.getByRole('link', { name: catalog.source.snapshot_ids[0], exact: true }).click();
+    await page.getByRole('button', { name: 'Lineage', exact: true }).click();
     await expect(page.locator('.react-flow__node').first()).toBeVisible();
-    await page.goto(url('/launch')); await expect(page.getByRole('heading', { name: 'Unavailable on this static site' })).toBeVisible();
-    await page.goto(url('/research')); await expect(page.getByRole('heading', { name: 'Unavailable on this static site' })).toBeVisible();
+    await page.goto(url('/missing-page')); await expect(page.getByRole('heading', { name: 'Unavailable on this static site' })).toBeVisible();
     expect(requests.every(request => request.startsWith(baseURL!))).toBe(true);
     expect(requests.some(request => new URL(request).pathname.includes('/api/'))).toBe(false);
     await expect(page.locator('html')).not.toHaveAttribute('data-csp-error'); expect(errors).toEqual([]);
@@ -155,26 +147,78 @@ test.describe('historical corpus', () => {
     if ((analytics.record.status ?? 200) === 200) expect(BigInt(count)).toBe(BigInt(analytics.body.entry_count));
     await page.getByRole('tab', { name: 'Verification', exact: true }).click();
     await page.getByRole('link', { name: 'Open manifest and lineage', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Offline provenance', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Artifacts and lineage', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Lineage', exact: true }).click();
     await expect(page.locator('.react-flow__node').first()).toBeVisible();
     await expect(page.getByRole('alert')).toHaveCount(0);
     expect(requests.every(request => request.startsWith(baseURL!))).toBe(true);
     expect(requests.some(request => new URL(request).pathname.includes('/api/'))).toBe(false); expect(errors).toEqual([]);
   });
 
-  test('historical labels and preferences persist in Russian on mobile', async ({ page }) => {
-    await page.goto('./'); await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    await page.getByLabel('Language').selectOption('ru'); await page.getByLabel('Оформление').selectOption('dark'); await page.reload();
-    await expect(page.getByRole('heading', { name: 'Два часа ончейн-истории' })).toBeVisible();
-    await expect(page.getByText('Реальная история · симуляция стратегий', { exact: true })).toBeVisible();
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.getByRole('button', { name: 'Открыть меню' }).click();
-    await page.locator('.sidebar').getByRole('link', { name: 'Результаты стратегии', exact: true }).click();
-    await expect(page.getByRole('link', { name: 'Открыть бэктест', exact: true })).toHaveCount(catalog.runs.length);
-    await expect(page.locator('.sidebar')).not.toBeInViewport();
-    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await page.screenshot({ path: 'demo-test-results/history-mobile.png', fullPage: true });
+  test('every product page opens and form previews remain interactive without execution', async ({ page, baseURL }) => {
+    test.setTimeout(120000);
+    const requests: { url: string; method: string }[] = [], errors: string[] = [];
+    page.on('request', request => requests.push({ url: request.url(), method: request.method() }));
+    page.on('pageerror', error => errors.push(error.message));
+    await page.goto('./');
+    const navigation = [
+      ['Overview', 'Work overview'], ['Strategy results', 'Strategy runs'],
+      ['Launch strategy', 'Launch strategy'], ['Job queue', 'Job queue'],
+      ['Prepare data', 'Prepare data'], ['Models and features', 'Models and features'],
+      ['On-chain research', 'On-chain research'], ['Artifacts and lineage', 'Artifacts and lineage'],
+      ['Resources', 'Resources and limits'], ['Published dataset', 'Two hours of on-chain history'],
+    ];
+    for (const [link, title] of navigation) {
+      await page.locator('.sidebar').getByRole('link', { name: link, exact: true }).click();
+      await expect(page.getByRole('heading', { name: title, level: 1, exact: true })).toBeVisible();
+      await page.reload();
+      await expect(page.getByRole('heading', { name: title, level: 1, exact: true })).toBeVisible();
+      await expect(page.getByRole('alert')).toHaveCount(0);
+      expect(await page.locator('body').innerText(), link).not.toMatch(/[\u0400-\u04ff]/);
+      const slug = link.toLowerCase().replaceAll(' ', '-');
+      await page.screenshot({ path: `demo-test-results/pages-${slug}-desktop.png`, fullPage: true });
+      await page.setViewportSize({ width: 390, height: 844 });
+      await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), { message: `Mobile overflow on ${link}` }).toBe(true);
+      await page.screenshot({ path: `demo-test-results/pages-${slug}-mobile.png`, fullPage: true });
+      await page.setViewportSize({ width: 1440, height: 1050 });
+    }
+    await page.goto(url('/launch'));
+    for (const family of ['Pump.fun Sniping', 'Pump.fun Copy Buy', 'FirstSwap']) {
+      const selector = page.getByRole('button', { name: new RegExp('^' + family.replace('.', '\\.')) });
+      await selector.click(); await expect(selector).toHaveAttribute('aria-pressed', 'true');
+      const input = page.locator('form input:visible').first();
+      await expect(input).toBeEditable(); await input.fill('a'.repeat(64)); await expect(input).toHaveValue('a'.repeat(64));
+      await expect(page.getByRole('button', { name: 'Run strategy', exact: true })).toBeDisabled();
+      if (family === 'FirstSwap') await expect(page.getByRole('button', { name: 'Launch seed series', exact: true })).toBeDisabled();
+      await expect(page.getByText('Form preview · execution disabled', { exact: true })).toBeVisible();
+    }
+    await page.goto(url('/data'));
+    await expect(page.locator('form input:visible').first()).toBeEditable();
+    for (const name of ['Inspect source', 'Build plan']) await expect(page.getByRole('button', { name, exact: true })).toBeDisabled();
+    await page.goto(url('/ml'));
+    for (const stage of ['Features', 'Universe', 'Labels', 'Training', 'Model schedule', 'Predictions']) {
+      await page.getByRole('group', { name: 'ML stage', exact: true }).getByRole('button', { name: stage, exact: true }).click();
+      await expect(page.getByRole('button', { name: 'Launch: ' + stage, exact: true })).toBeDisabled();
+      await expect(page.locator('form input:visible').first()).toBeEditable();
+    }
+    await page.goto(url('/research'));
+    await page.getByLabel('Window, seconds', { exact: true }).fill('120');
+    await expect(page.getByLabel('Window, seconds', { exact: true })).toHaveValue('120');
+    await page.getByRole('combobox', { name: /^Token mode/ }).selectOption('ALL');
+    for (const name of ['Prepare snapshot', 'Run analysis']) await expect(page.getByRole('button', { name, exact: true })).toBeDisabled();
+    await expect(page.getByRole('heading', { name: 'No wallet research results published', exact: true })).toBeVisible();
+    await page.goto(url('/jobs')); await page.getByRole('combobox', { name: /^State/ }).selectOption('SUCCEEDED');
+    await expect(page.getByRole('combobox', { name: /^State/ })).toHaveValue('SUCCEEDED');
+    await expect(page.getByText('No execution host is connected. This preview has no live job queue.', { exact: true })).toBeVisible();
+    await page.goto(url('/artifacts')); await page.getByLabel('Artifact ID', { exact: true }).fill(catalog.runs[0].id);
+    await page.getByRole('button', { name: 'Open', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Metadata', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Lineage', exact: true }).click();
+    await expect(page.locator('.react-flow__node').first()).toBeVisible();
+    expect(requests.every(request => request.url.startsWith(baseURL!))).toBe(true);
+    expect(requests.every(request => request.method === 'GET')).toBe(true);
+    expect(requests.some(request => new URL(request.url).pathname.includes('/api/'))).toBe(false);
+    expect(errors).toEqual([]);
   });
 
   test('historical corrupt files and unknown results fail visibly without API fallback', async ({ page }) => {
@@ -188,4 +232,28 @@ test.describe('historical corpus', () => {
     await expect(page.getByRole('alert').first()).toContainText('unavailable');
     expect(requests.some(request => new URL(request).pathname.includes('/api/'))).toBe(false);
   });
+});
+
+
+test('published pages stay English despite saved Russian preferences and keep theme/mobile navigation', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('backtest.ui.language', 'ru'));
+  await page.goto('./');
+  await expect(page.getByRole('heading', { name: catalog.synthetic ? 'Explore the demo' : 'Work overview', exact: true })).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(page.getByLabel('Language', { exact: true })).toHaveCount(0);
+  await page.getByLabel('Appearance').selectOption('dark'); await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+  await page.evaluate(() => window.dispatchEvent(new StorageEvent('storage', { key: 'backtest.ui.language', newValue: 'ru' })));
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+  expect(await page.locator('body').innerText()).not.toMatch(/[\u0400-\u04ff]/);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: 'Open menu' }).click();
+  await page.locator('.sidebar').getByRole('link', { name: catalog.synthetic ? 'On-chain research' : 'Strategy results', exact: true }).click();
+  if (catalog.synthetic) await expect(page.getByTestId('graph-counts')).toBeVisible();
+  else await expect(page.getByRole('link', { name: 'Explore backtest', exact: true })).toHaveCount(catalog.runs.length);
+  await expect(page.locator('.sidebar')).not.toBeInViewport();
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: 'demo-test-results/english-mobile.png', fullPage: true });
 });

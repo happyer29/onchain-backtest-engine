@@ -44,7 +44,9 @@ query contract.
 **[Open the version 0.2 web demo](https://happyer29.github.io/onchain-backtest-engine/)**
 to explore prepared Sniping results on real OnchainDivers history for
 1 September 2026, 00:00–02:00 UTC. Trades, analytics, market charts and lineage
-are available on GitHub Pages; new backtests run in the local application.
+are available on GitHub Pages. Every product page is available in English for
+interactive preview, with execution buttons disabled; new backtests run in the
+local application.
 See [the static publication guide](docs/demo.md) for the dataset and build contract.
 
 > [!IMPORTANT]

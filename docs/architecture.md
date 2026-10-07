@@ -1613,7 +1613,10 @@ SSE/API overhead, and comparison of Direct CLI with an API-queued run.
 The approved static profile (§34.3) reuses React views over bounded, hashed API
 exports calculated offline: synthetic examples or selected version 0.2 results
 from a real two-hour indexer window. Persistent labels distinguish data origin
-and execution models. It cannot execute commands, access a live source or replace
+and execution models. The historical profile exposes all product pages and editable form
+previews with execution controls disabled. The static profile stays in English
+regardless of stored language preferences; theme controls remain available.
+It cannot execute commands, access a live source or replace
 operational API failures with samples. Historical CI imports a digest-pinned
 presentation archive without source credentials or raw datasets. Its separate
 build and manual Pages publication do not change the single-host runtime.

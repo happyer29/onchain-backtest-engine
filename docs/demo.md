@@ -3,8 +3,10 @@
 The static build shows the version 0.2 React interface with results calculated
 before publication. It supports two distinct datasets: generated test examples
 and selected results from a real two-hour indexer window. GitHub Pages serves
-the interface and presentation JSON without a Python server. Preparation and
-publication are separate actions; a push does not publish the site.
+the interface and presentation JSON without a Python server. The static interface
+is English-only, including when the local application previously saved a Russian
+language preference. Preparation and publication are separate actions; a push
+does not publish the site.
 
 The deployment target is [GitHub Pages](https://happyer29.github.io/onchain-backtest-engine/).
 The banner identifies the loaded dataset; a workflow deployment must finish
@@ -18,6 +20,13 @@ block interval `[443282098, 443304776)`. Preparation includes an additional
 4,096-block settlement tail so positions opened near the decision-window end
 can settle. The tail is not an additional entry window.
 
+The main navigation includes Overview, Strategy results, Launch strategy, Job
+queue, Prepare data, Models and features, On-chain research, Artifacts and
+lineage, and Resources. Published dataset (`#/dataset`) contains the published
+window and prepared backtests. Form fields, strategy selection, ML stages and
+local display controls can be explored; execution and preparation buttons are
+disabled. Queue and resource pages explain why live data is unavailable.
+
 The site lets you choose prepared strategy variants, compare their execution
 modes and summary metrics, browse paginated trades, inspect available market
 charts, and follow artifact lineage. Real source observations do not make modeled fills real
@@ -28,8 +37,9 @@ truncate a chart. Other chart failures stop export.
 
 This is a presentation export of completed runs. The full raw indexer dataset,
 Parquet snapshots and Python execution engine are not downloaded by the browser.
-New runs, edited strategy settings and arbitrary source windows require the
-local application. The static site has no operational API or job queue.
+Changes to preview fields stay in the browser and do not modify the published
+results. New runs, data preparation and applying edited settings require the
+local application. The static site has no operational API or running job queue.
 
 Historical exports use `backtest.static-history/v1`, recipe
 `indexer-two-hour-results/v1`, `synthetic: false` and version `0.2.0`. The manifest
@@ -58,8 +68,8 @@ visible. It is not market research or evidence of strategy profitability.
 
 The selector opens results computed during preparation; display filters change
 only visible links. Source acquisition, arbitrary dates/windows, preparation,
-strategy execution, job queues and live updates require the local application.
-The static site has no operational API and cannot create a job.
+strategy execution, working job queues and live updates require the local
+application. The static site has no operational API and cannot create a job.
 
 ## Prepare synthetic examples and open locally
 
@@ -131,6 +141,20 @@ available chart responses (including typed chart errors) and bounded lineage.
 All source artifacts stay local. An export failure leaves the previous public
 corpus in place. Rebuild the site whenever its data changes.
 
+To add the public workspace contracts and selected run inventory to an existing
+historical corpus, reuse its verified result responses instead of recalculating
+charts. Pin the existing manifest digest and keep the exact source/run selection:
+
+```bash
+.venv/bin/python frontend/scripts/export-history.py \
+  --data-root /path/to/isolated-data-root --selection /path/to/selection.json \
+  --refresh-workspace --manifest-sha256 <existing-manifest-sha256>
+```
+
+This checks every existing response, re-verifies the committed artifact closure
+and summaries, and adds only the public strategy/ML contracts and selected run
+list. It exports no job queue, host measurements or executable manifests.
+
 For CI, archive the **contents** of `frontend/demo-data` as
 `pages-history-data.tar.gz` and attach it to a GitHub release. The archive root
 contains only `manifest.json`, `manifest.sha256` and `responses/<sha256>.json`.
@@ -167,9 +191,10 @@ An installed Chrome can be selected with `BACKTEST_BROWSER_CHANNEL=chrome`.
 Tests serve the distribution under `/onchain-backtest-engine/` on loopback port
 18745 (`BACKTEST_DEMO_TEST_PORT` overrides it). They cover whole-result graph
 loading, group/wallet navigation, pair evidence, mode changes, both strategy
-outcomes, market history, lineage, direct reload, keyboard navigation, Russian,
-theme persistence, mobile layout and missing/corrupt files. Transport tests
-reject mutations and unknown requests without contacting an API.
+outcomes, market history, lineage, direct reload, keyboard navigation, every
+product page, editable previews with disabled submissions, fixed English despite
+saved Russian preferences, theme persistence, mobile layout and missing/corrupt
+files. Transport tests reject mutations and unknown requests without contacting an API.
 
 The normal `npm --prefix frontend run build` still builds the operational UI
 into the Python package. It neither reads demo data nor includes a fixture

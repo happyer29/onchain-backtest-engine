@@ -1,6 +1,6 @@
 {
-  "_forms-nU5phHCY.js": {
-    "file": "assets/forms-nU5phHCY.js",
+  "_forms-Cf3A2RVz.js": {
+    "file": "assets/forms-Cf3A2RVz.js",
     "name": "forms",
     "imports": [
       "index.html",
@@ -13,7 +13,7 @@
     "name": "value"
   },
   "index.html": {
-    "file": "assets/index-DcG1HNZJ.js",
+    "file": "assets/index-DrNw0Qas.js",
     "name": "index",
     "src": "index.html",
     "isEntry": true,
@@ -21,14 +21,14 @@
       "src/research/page.tsx",
       "src/workspace.tsx",
       "src/results.tsx",
-      "_forms-nU5phHCY.js"
+      "_forms-Cf3A2RVz.js"
     ],
     "css": [
       "assets/index-0r2SrNFn.css"
     ]
   },
   "src/charts.tsx": {
-    "file": "assets/charts-DH-2sm0U.js",
+    "file": "assets/charts-jIjQpeSM.js",
     "name": "charts",
     "src": "src/charts.tsx",
     "isDynamicEntry": true,
@@ -39,7 +39,7 @@
     ]
   },
   "src/lineage.tsx": {
-    "file": "assets/lineage-DJFMyvz7.js",
+    "file": "assets/lineage-DMRpEviO.js",
     "name": "lineage",
     "src": "src/lineage.tsx",
     "isDynamicEntry": true,
@@ -53,7 +53,7 @@
     ]
   },
   "src/research/graph.tsx": {
-    "file": "assets/graph-WawD4gaE.js",
+    "file": "assets/graph-4F_7IHQ2.js",
     "name": "graph",
     "src": "src/research/graph.tsx",
     "isDynamicEntry": true,
@@ -65,13 +65,13 @@
     ]
   },
   "src/research/page.tsx": {
-    "file": "assets/page-BqBRw7sh.js",
+    "file": "assets/page-DrD0Vpog.js",
     "name": "page",
     "src": "src/research/page.tsx",
     "isDynamicEntry": true,
     "imports": [
       "index.html",
-      "_forms-nU5phHCY.js",
+      "_forms-Cf3A2RVz.js",
       "src/results.tsx",
       "src/workspace.tsx"
     ],
@@ -80,7 +80,7 @@
     ]
   },
   "src/results.tsx": {
-    "file": "assets/results-DgGsZFaL.js",
+    "file": "assets/results-CMKiprHD.js",
     "name": "results",
     "src": "src/results.tsx",
     "isDynamicEntry": true,
@@ -92,7 +92,7 @@
     ]
   },
   "src/workspace.tsx": {
-    "file": "assets/workspace-DGZuEgVw.js",
+    "file": "assets/workspace-Bunuk3sB.js",
     "name": "workspace",
     "src": "src/workspace.tsx",
     "isDynamicEntry": true,

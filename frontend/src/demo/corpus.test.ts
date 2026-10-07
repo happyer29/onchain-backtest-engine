@@ -2,7 +2,8 @@ import { webcrypto } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { decode } from '../api';
+import { decode, type Schema } from '../api';
+import { validateRunContract } from '../forms';
 import { parseAnalytics, parseChart, parseDashboard, parsePage, parseSummary, type Cursor } from '../result-contracts';
 import { createDemoClient, routeKey } from './client';
 
@@ -90,6 +91,36 @@ describe.skipIf(schema === null || schema === 'backtest.static-demo/v1')('prepar
         expect(total?.availability).toBe('AVAILABLE');
         expect(total?.value).toBe(String(count));
       }
+      // Preview forms use the same versioned contracts as the operational application.
+      const runContracts = await parsed('/api/v1/run-contracts', raw => raw as Schema<'RunContractListResponse'>);
+      for (const family of ['sniping', 'copy'] as const) expect(() => validateRunContract(runContracts, family)).not.toThrow();
+      const ml = await parsed('/api/v1/ml/reference-contract', raw => raw as Schema<'ReferenceMlContractResponse'>);
+      expect(ml.compiler_version).not.toBe('');
+      expect(ml.supported_feature_names.length).toBeGreaterThan(0);
+      expect(new Set(ml.supported_feature_names).size).toBe(ml.supported_feature_names.length);
+      for (const [key, value] of Object.entries(ml)) if (key.endsWith('_id') || key.endsWith('_digest')) expect(value, key).toMatch(/^[0-9a-f]{64}$/);
+      // The workspace list includes only selected completed runs, across all bounded pages.
+      const listedRuns = new Set<string>(), runCursors = new Set<string>();
+      let runCursor: string | null = null;
+      do {
+        const query = new URLSearchParams({ limit: '10' });
+        if (runCursor !== null) query.set('cursor', runCursor);
+        const route = '/api/v1/runs?' + query.toString();
+        expect(runCursors.has(route)).toBe(false); runCursors.add(route);
+        const list = await parsed(route, raw => raw as Schema<'RunListResponse'>);
+        expect(list.items.length).toBeLessThanOrEqual(10);
+        for (const run of list.items) {
+          expect(listedRuns.has(run.run_artifact_id)).toBe(false);
+          listedRuns.add(run.run_artifact_id);
+          expect(catalog.runs.some(selected => selected.id === run.run_artifact_id)).toBe(true);
+          expect(run.canonical_result_hash).toMatch(/^[0-9a-f]{64}$/);
+          expect(Number.isFinite(Date.parse(run.completed_at))).toBe(true);
+        }
+        runCursor = list.next_cursor ?? null;
+        expect(runCursors.size).toBeLessThanOrEqual(2);
+      } while (runCursor !== null);
+      expect([...listedRuns].sort()).toEqual(catalog.runs.map(run => run.id).sort());
+      expect(catalog.runs.every(run => !/[\u0400-\u04ff]/.test(run.title))).toBe(true);
       // All remaining published requests must be complete, clickable lineage exports.
       for (const route of Object.keys(catalog.responses)) {
         if (visited.has(route)) continue;

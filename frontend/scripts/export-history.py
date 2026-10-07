@@ -31,6 +31,7 @@ IDENTITY = re.compile(r"[0-9a-f]{64}")
 PRIVATE = re.compile(
     r"/Users/|/private/|/tmp/|\.env\b|secret_ref|password|127\.0\.0\.1|localhost", re.I
 )
+WORKSPACE_ROUTES = ("/api/v1/run-contracts", "/api/v1/ml/reference-contract")
 
 
 def canonical(value):
@@ -89,11 +90,88 @@ def read_selection(path):
     return value
 
 
+def read_existing(output, selection, expected_digest):
+    """Reuse only a pinned, complete corpus for the exact verified selection."""
+    if not IDENTITY.fullmatch(expected_digest or ""):
+        raise ValueError("Workspace refresh requires the existing manifest SHA-256")
+    if output.is_symlink() or (output / "responses").is_symlink():
+        raise ValueError("Historical corpus paths cannot be symbolic links")
+    raw = (output / "manifest.json").read_bytes()
+    if len(raw) > 4 * 1024**2 or hashlib.sha256(raw).hexdigest() != expected_digest:
+        raise ValueError("Existing historical manifest SHA-256 does not match")
+    if (output / "manifest.sha256").read_text().strip() != expected_digest:
+        raise ValueError("Existing historical manifest sidecar does not match")
+    value = json.loads(raw)
+    if (
+        set(value)
+        != {
+            "schema",
+            "recipe",
+            "synthetic",
+            "version",
+            "source",
+            "runs",
+            "response_bytes",
+            "responses",
+        }
+        or PRIVATE.search(raw.decode())
+        or value.get("schema") != SCHEMA
+        or value.get("recipe") != "indexer-two-hour-results/v1"
+        or value.get("synthetic") is not False
+        or value.get("version") != "0.2.0"
+        or value.get("source") != selection["source"]
+        or [{"id": run["id"], "title": run["title"]} for run in value["runs"]] != selection["runs"]
+    ):
+        raise ValueError("Existing historical corpus does not match the selection")
+    records = value["responses"]
+    if not isinstance(records, dict) or not 1 <= len(records) <= MAX_RECORDS:
+        raise ValueError("Invalid historical response count")
+    total, files = 0, set()
+    for route, record in records.items():
+        parsed = urlsplit(route)
+        query = urlencode(sorted(parse_qsl(parsed.query, keep_blank_values=True)))
+        if (
+            not route.startswith("/api/v1/")
+            or re.search(r"[#\\\s]", route)
+            or ".." in route
+            or route != parsed.path + ("?" + query if query else "")
+            or set(record)
+            not in ({"file", "bytes", "sha256"}, {"file", "bytes", "sha256", "status"})
+            or record.get("status", 200) not in (200, 400, 404, 409, 422, 503)
+            or not IDENTITY.fullmatch(record["sha256"])
+            or record["file"] != f"responses/{record['sha256']}.json"
+            or not 0 < record["bytes"] <= MAX_RESPONSE
+        ):
+            raise ValueError("Invalid historical response record")
+        path = output / record["file"]
+        if path.is_symlink() or not path.is_file() or path.stat().st_size != record["bytes"]:
+            raise ValueError("Historical response size or path does not match")
+        contents = path.read_bytes()
+        if hashlib.sha256(contents).hexdigest() != record["sha256"]:
+            raise ValueError("Historical response SHA-256 does not match")
+        if PRIVATE.search(contents.decode()):
+            raise ValueError("Historical response contains local metadata")
+        total += len(contents)
+        files.add(record["file"])
+    if total != value["response_bytes"] or total > MAX_TOTAL:
+        raise ValueError("Historical response bytes do not reconcile")
+    if {str(path.relative_to(output)) for path in output.rglob("*") if path.is_file()} != files | {
+        "manifest.json",
+        "manifest.sha256",
+    }:
+        raise ValueError("Historical corpus contains unexpected files")
+    return value
+
+
 class Exporter:
-    def __init__(self, client, output):
+    def __init__(self, client, output, existing=None):
         self.client, self.output = client, output
-        self.records, self.total, self.chart_errors = {}, 0, 0
-        (output / "responses").mkdir()
+        self.records = {} if existing is None else dict(existing["responses"])
+        self.total = 0 if existing is None else existing["response_bytes"]
+        self.chart_errors = sum(
+            record.get("status", 200) != 200 for record in self.records.values()
+        )
+        (output / "responses").mkdir(exist_ok=True)
 
     def get(self, path, *, chart=False):
         parsed = urlsplit(path)
@@ -177,8 +255,33 @@ class Exporter:
         print(f"Exported {run['title']}: {count} entries", flush=True)
         return {**run, "mode": summary["execution_mode"], "summary": summary}
 
+    def workspace(self, selection):
+        """Only public product contracts and the explicitly selected run inventory."""
+        for route in WORKSPACE_ROUTES:
+            self.get(route)
+        expected = {run["id"] for run in selection["runs"]}
+        cursor, seen, cursors = None, set(), set()
+        while True:
+            query = {"limit": "10"}
+            if cursor:
+                query["cursor"] = cursor
+            page = self.get("/api/v1/runs?" + urlencode(query))
+            for run in page["items"]:
+                identity = run["run_artifact_id"]
+                if identity not in expected or identity in seen:
+                    raise ValueError("Run inventory contains an unselected or repeated run")
+                seen.add(identity)
+            cursor = page["next_cursor"]
+            if cursor is None:
+                break
+            if not page["items"] or cursor in cursors or len(cursors) >= 2:
+                raise ValueError("Run inventory pagination exceeds the selected bounds")
+            cursors.add(cursor)
+        if seen != expected:
+            raise ValueError("Run inventory is missing selected runs")
 
-def generate(data_root, selection, output):
+
+def generate(data_root, selection, output, existing=None):
     # Source defaults are inert. Neither a source config nor a secret is loaded.
     container = build_runtime_container(
         Settings(paths=PathSettings(data_root)), profile="static-history"
@@ -223,8 +326,16 @@ def generate(data_root, selection, output):
             raise ValueError("Verified snapshot does not match the selected decision interval")
     app = create_app(container.control, control_plane_id=ContentDigest("d" * 64))
     with TestClient(app, base_url="http://127.0.0.1") as client:
-        export = Exporter(client, output)
-        runs = [export.run(run) for run in selection["runs"]]
+        export = Exporter(client, output, existing)
+        if existing is None:
+            runs = [export.run(run) for run in selection["runs"]]
+        else:
+            runs = existing["runs"]
+            for run in runs:
+                summary = export.get(f"/api/v1/run-artifacts/{run['id']}/strategy-summary")
+                if summary != run["summary"] or summary["execution_mode"] != run["mode"]:
+                    raise ValueError("Verified run no longer matches its published summary")
+        export.workspace(selection)
         pending, done = {run["id"] for run in runs}, set()
         while pending:
             identity = pending.pop()
@@ -262,14 +373,27 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data-root", type=Path, required=True)
     parser.add_argument("--selection", type=Path, required=True)
+    parser.add_argument(
+        "--refresh-workspace",
+        action="store_true",
+        help="Add safe workspace metadata while retaining all verified result response bytes",
+    )
+    parser.add_argument("--manifest-sha256", help="Required existing digest for workspace refresh")
     args = parser.parse_args()
     selection = read_selection(args.selection)
     output = ROOT / "frontend/demo-data"
+    existing = None
+    if args.refresh_workspace:
+        existing = read_existing(output, selection, args.manifest_sha256)
+    elif args.manifest_sha256:
+        parser.error("--manifest-sha256 is only used with --refresh-workspace")
     with tempfile.TemporaryDirectory(prefix=".history-export-", dir=output.parent) as staging:
+        if existing is not None:
+            shutil.copytree(output / "responses", Path(staging) / "responses")
         with patch(
             "socket.socket.connect", side_effect=RuntimeError("Historical export is offline")
         ):
-            generate(args.data_root.resolve(), selection, Path(staging))
+            generate(args.data_root.resolve(), selection, Path(staging), existing)
         if output.exists():
             previous = json.loads((output / "manifest.json").read_text())
             if previous["schema"] not in (SCHEMA, "backtest.static-demo/v1"):

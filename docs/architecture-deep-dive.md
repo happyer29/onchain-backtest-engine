@@ -4781,8 +4781,8 @@ profiles.
 
 The user-approved GitHub Pages distribution is a separate build-time frontend
 profile, not an operational deployment or a second Control API. It reuses the
-React research, graph, results and chart components. It supports both synthetic
-test examples and, following the user's explicit publication request, version
+React workspace, forms, research, graph, results and chart components. It supports
+both synthetic test examples and, following the user's explicit publication request, version
 0.2 results calculated from a real two-hour indexer window. A discriminated
 manifest and persistent labels distinguish these profiles; all results are
 prepared offline and execution-model labels remain visible. Real observations
@@ -4796,8 +4796,9 @@ inputs/results, declared snapshots and decision intervals, and obtains their
 presentation responses through the existing in-process API. Its network access
 is blocked and it loads no source configuration or secrets. It neither acquires
 source data nor executes strategies. Only allowlisted read-only API presentation
-responses are exported. Production source configuration,
-credentials, environment values, operational data roots, SQLite, Parquet, raw
+responses are exported, including versioned form contracts, selected run summaries
+and verified artifact metadata needed by the preview pages. Production source
+configuration, credentials, environment values, operational data roots, SQLite, Parquet, raw
 tracebacks, absolute paths and executable manifests are never copied. Export
 failure cannot produce a completed demo bundle. The export manifest declares
 its profile/recipe, exact result IDs, response paths, lengths and SHA-256 hashes;
@@ -4830,7 +4831,14 @@ manifest and one bounded response per request, not an unbounded response cache.
 Graph completeness, cancellation, layout budgets and exact integer handling stay
 unchanged. Display filters and navigation work on the prepared result; no browser
 strategy execution, recipe resolution, source acquisition or synthetic job-success
-responses are introduced. Execution routes are unavailable in the demo.
+responses are introduced. The historical profile exposes all product pages as
+interactive previews: form fields, tabs and local display controls remain usable, while command
+submission, source inspection, resolution, preparation, execution and queue
+mutations are disabled. Queue and resource pages explicitly describe their
+unavailable live state instead of presenting fabricated jobs or host measurements.
+The static profile is English-only, including when a remembered or cross-tab
+Russian preference exists; theme selection remains available. The operational
+application retains its normal English/Russian choice.
 
 The ordinary packaged UI remains bound to the same-origin Control API and never
 falls back to fixtures when it fails. The demo has a distinct entry/build output,
@@ -4839,7 +4847,8 @@ on a static host. It bundles its worker, fonts/styles and libraries locally, use
 a restrictive static-page CSP, and contains no service worker, analytics beacon,
 external data fetch or credential. Tests must cover the ordinary UI as well as
 static-only loading under a repository path, direct reload, exact evidence,
-filters, language/theme, missing/corrupt data and rejected mutations.
+filters, English-only presentation, theme persistence, every preview route,
+missing/corrupt data and rejected mutations.
 
 Publication is separate from preparation. A checked-in manual deployment recipe
 may publish only the verified demo output directory, with least-privilege Pages
