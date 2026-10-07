@@ -1,11 +1,44 @@
-# Static demo
+# Static results on GitHub Pages
 
-The demo shows the existing React interface using generated test inputs. It is
-ready for static hosting, including GitHub Pages, without a Python server at
-runtime. Preparation and publication are separate actions; the repository does
-not publish the demo on push.
+The static build shows the version 0.2 React interface with results calculated
+before publication. It supports two distinct datasets: generated test examples
+and selected results from a real two-hour indexer window. GitHub Pages serves
+the interface and presentation JSON without a Python server. Preparation and
+publication are separate actions; a push does not publish the site.
 
-## What to explore
+The deployment target is [GitHub Pages](https://happyer29.github.io/onchain-backtest-engine/).
+The banner identifies the loaded dataset; a workflow deployment must finish
+successfully before that URL serves a new revision.
+
+## Historical version 0.2 results
+
+The historical profile uses OnchainDivers observations for the decision window
+**1 September 2026, 00:00–02:00 UTC** (03:00–05:00 Moscow), with the half-open
+block interval `[443282098, 443304776)`. Preparation includes an additional
+4,096-block settlement tail so positions opened near the decision-window end
+can settle. The tail is not an additional entry window.
+
+The site lets you choose prepared strategy variants, compare their execution
+modes and summary metrics, browse paginated trades, inspect available market
+charts, and follow artifact lineage. Real source observations do not make modeled fills real
+transactions: strict replay and virtual settlement retain their execution-model
+labels. An unavailable chart or one that exceeds the engine's existing query
+budget displays its original typed error; publication does not fabricate or
+truncate a chart. Other chart failures stop export.
+
+This is a presentation export of completed runs. The full raw indexer dataset,
+Parquet snapshots and Python execution engine are not downloaded by the browser.
+New runs, edited strategy settings and arbitrary source windows require the
+local application. The static site has no operational API or job queue.
+
+Historical exports use `backtest.static-history/v1`, recipe
+`indexer-two-hour-results/v1`, `synthetic: false` and version `0.2.0`. The manifest
+records the UTC window, block interval, verified snapshot IDs and exact selected
+run IDs. Limits are 16 runs, 8,192 response records, 2 MiB per response, 256 MiB of
+response bytes and a 4 MiB manifest. The build and browser verify all hashes and
+reject unsupported requests instead of falling back to a live service.
+
+## Synthetic examples
 
 | Example | What it shows |
 |---|---|
@@ -28,7 +61,7 @@ only visible links. Source acquisition, arbitrary dates/windows, preparation,
 strategy execution, job queues and live updates require the local application.
 The static site has no operational API and cannot create a job.
 
-## Prepare and open locally
+## Prepare synthetic examples and open locally
 
 Use Python 3.13, uv and Node.js 22.12+ (Node 24 in CI). From the repository root:
 
@@ -50,7 +83,8 @@ with `file://` is unsupported; the browser needs HTTP/HTTPS and Web Crypto.
 cases in a fresh temporary root with network connections blocked. It obtains
 presentation DTOs from the real API in process. It never reads the operational
 data root or `configs/local.toml`. No ClickHouse credentials or `.env` are needed.
-Do not replace the generator with a copy of your local artifacts.
+Use the separate historical exporter below for real completed results; do not
+copy operational artifacts into the public directory.
 
 The generated, gitignored directories are:
 
@@ -73,6 +107,50 @@ IDs from an earlier build need not remain valid after regeneration. Only
 `demo-dist` is suitable for hosting. SQLite, Parquet, executable manifests and
 source configuration are not part of it. Demo exports cannot be imported into
 the operational engine as snapshots or runs.
+
+## Export completed historical runs
+
+Prepare the snapshot and run the strategies in an isolated local data root with
+the normal version 0.2 application. Create a local `selection.json` containing
+only `source` and `runs`: `source` has `name: "OnchainDivers"`, `start_utc`,
+`end_utc`, `duration_seconds: 7200`, decimal-string `from_block_ordinal` and
+`to_block_ordinal`, and `snapshot_ids`; each run has only its artifact `id` and
+public `title`. The exporter checks these IDs against committed artifacts and
+the snapshots' verified decision intervals.
+
+```bash
+.venv/bin/python frontend/scripts/export-history.py \
+  --data-root /path/to/isolated-data-root --selection /path/to/selection.json
+npm --prefix frontend run demo:build
+npm --prefix frontend run demo:test
+```
+
+Export runs without network connections and reads no source configuration or
+credentials. It writes only allowlisted presentation DTOs, complete trade pages,
+available chart responses (including typed chart errors) and bounded lineage.
+All source artifacts stay local. An export failure leaves the previous public
+corpus in place. Rebuild the site whenever its data changes.
+
+For CI, archive the **contents** of `frontend/demo-data` as
+`pages-history-data.tar.gz` and attach it to a GitHub release. The archive root
+contains only `manifest.json`, `manifest.sha256` and `responses/<sha256>.json`.
+Record the archive's SHA-256 separately; it pins the bytes even if a release asset
+is replaced. A local import uses the same verifier as the publication workflow:
+
+```bash
+.venv/bin/python frontend/scripts/import-history.py \
+  --archive /path/to/pages-history-data.tar.gz --sha256 <archive-sha256>
+npm --prefix frontend run demo:build
+```
+
+Import rejects unexpected paths, links, duplicate files, excessive expansion and
+incorrect archive or manifest hashes before replacing a recognized demo corpus.
+Archive limits are 128 MiB compressed, 260 MiB of file contents and 280 MiB of
+decompressed tar data, including headers. The larger historical allowance covers
+complete per-trade charts; it does not raise the 2 MiB per-response browser bound.
+The build then verifies the complete response inventory and presentation schema.
+CI downloads the prepared archive with read-only repository access; it never
+connects to the indexer or receives its credentials.
 
 ## Verify
 
@@ -97,7 +175,7 @@ The normal `npm --prefix frontend run build` still builds the operational UI
 into the Python package. It neither reads demo data nor includes a fixture
 fallback. Both profiles are checked by CI; all repository gates still apply.
 
-## Publish later, explicitly
+## Publish explicitly
 
 Publication requires a separate decision. Nothing in the commands above pushes
 code, changes repository settings or deploys a site.
@@ -108,10 +186,13 @@ When publication is authorized and the code is on GitHub:
 2. Ensure `demo-pages.yml` exists on the default branch so **Run workflow** is
    available. Select the desired branch/revision under **Actions → Static demo /
    GitHub Pages**.
-3. Run with **publish** unchecked first. This generates fixtures, builds and
-   runs the tests without uploading or deploying a site.
-4. Run with **publish** checked to publish that verified build. The deployment
-   job receives only Pages/OIDC permissions and uploads only `frontend/demo-dist`.
+3. Choose **dataset: synthetic** to generate test examples, or
+   **dataset: historical** with **data_release_tag** and **data_sha256** to import
+   the release asset `pages-history-data.tar.gz`. Synthetic remains the default.
+4. Run with **publish** unchecked to verify without deploying, or checked to
+   publish the verified build. Both routes run transport and browser tests.
+   The deployment job receives only Pages/OIDC permissions and uploads only
+   `frontend/demo-dist`.
 5. Open the URL in the deployment result. Do not interpret a prepared local
    link as an already published GitHub Pages URL.
 

@@ -1,3 +1,8 @@
 .demo-banner { display:flex; gap:12px; align-items:center; flex-wrap:wrap; padding:14px 42px; border-bottom:1px solid var(--border); color:var(--text); background:var(--accent-soft); font-size:12px; }
 .demo-banner strong { color:var(--accent); white-space:nowrap; } .demo-cards { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; } .demo-cards .card { margin:0; } .demo-cards p { min-height:3em; }
 @media(max-width:700px) { .demo-cards { grid-template-columns:1fr; } .demo-banner { padding:14px 18px; } }
+.demo-run-id { display:block; margin:0 0 18px; color:var(--muted); overflow-wrap:anywhere; }
+.demo-facts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:24px; margin:24px 0; }
+.demo-facts > div { min-width:0; } .demo-facts dt { font-size:12px; color:var(--muted); margin-bottom:8px; } .demo-facts dd { margin:0; font-size:15px; line-height:1.6; overflow-wrap:anywhere; }
+.demo-snapshots summary { cursor:pointer; } .demo-snapshots ul { padding-left:20px; } .demo-snapshots li { margin:12px 0; overflow-wrap:anywhere; }
+@media(max-width:700px) { .demo-facts { grid-template-columns:1fr; gap:18px; } }

@@ -6,6 +6,14 @@ Notable user-facing changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- A GitHub Pages viewer for complete, precomputed version 0.2 backtests on a
+  verified two-hour OnchainDivers window, with paginated trades, market charts,
+  execution-model labels and offline lineage.
+- Offline allowlisted result export and digest-pinned release-asset import for
+  manual Pages publication, without source credentials or a public execution API.
+
 ## [0.2.0] — release candidate
 
 ### Added

@@ -4779,27 +4779,50 @@ profiles.
 
 ### 34.3 Static demonstration distribution
 
-The user-approved GitHub Pages demonstration is a separate build-time frontend
+The user-approved GitHub Pages distribution is a separate build-time frontend
 profile, not an operational deployment or a second Control API. It reuses the
-React research, graph, results and chart components. A persistent banner and
-result labels identify all inputs as synthetic test fixtures and all calculations
-as prepared offline. It makes no claim about real wallet behaviour or profitability.
+React research, graph, results and chart components. It supports both synthetic
+test examples and, following the user's explicit publication request, version
+0.2 results calculated from a real two-hour indexer window. A discriminated
+manifest and persistent labels distinguish these profiles; all results are
+prepared offline and execution-model labels remain visible. Real observations
+do not make modeled trades real transactions or establish future profitability.
 
-Development-only tooling constructs bounded synthetic observations and runs the
-existing preparation, research and reference execution use cases in a fresh
-temporary data root. Only allowlisted read-only API presentation responses are
-exported after committed-input/result verification. Production source configuration,
+For the synthetic profile, development-only tooling constructs bounded
+observations and runs the existing preparation, research and reference execution use cases in a fresh
+temporary data root. The historical exporter instead reads an explicit allowlist
+of completed run IDs from an isolated operational root, verifies their committed
+inputs/results, declared snapshots and decision intervals, and obtains their
+presentation responses through the existing in-process API. Its network access
+is blocked and it loads no source configuration or secrets. It neither acquires
+source data nor executes strategies. Only allowlisted read-only API presentation
+responses are exported. Production source configuration,
 credentials, environment values, operational data roots, SQLite, Parquet, raw
 tracebacks, absolute paths and executable manifests are never copied. Export
 failure cannot produce a completed demo bundle. The export manifest declares
-its fixture recipe, exact example IDs, response paths, lengths and SHA-256 hashes;
+its profile/recipe, exact result IDs, response paths, lengths and SHA-256 hashes;
 these hashes verify transport integrity, not real-source fidelity. No demo bytes
 may be imported as a production snapshot, run or evidence receipt.
 
-The closed corpus admits at most 100 wallets, 5,000 observations, 1,000 pairs per
-research result, two strategy results, 2,048 response records, 2 MiB per response
-and 16 MiB of response bytes. These limits are independent of operational quotas.
+The synthetic corpus (`backtest.static-demo/v1`, `synthetic: true`) admits at most
+100 wallets, 5,000 observations, 1,000 pairs per research result, two strategy
+results, 2,048 response records, 2 MiB per response
+and 16 MiB of response bytes, with a 1 MiB manifest. The historical corpus
+(`backtest.static-history/v1`, recipe `indexer-two-hour-results/v1`,
+`synthetic: false`, version `0.2.0`) admits 1–16 completed runs, 8,192 response
+records, 2 MiB per response, 256 MiB of response bytes and a 4 MiB manifest. The
+historical byte allowance accommodates complete per-trade chart exports without
+raising the per-request decoding bound or adding a response cache. It
+declares the indexer name, exact two-hour UTC window, decimal-string block
+interval and verified snapshot IDs. Its source preparation may include a
+settlement tail outside the decision window; it does not extend entry eligibility.
+These limits are independent of operational quotas.
 All requested pages and pair evidence must be exported completely within them.
+Historical chart endpoints may preserve the original bounded public API errors
+`MARKET_CHART_UNAVAILABLE` (404) and `MARKET_CHART_LIMIT_EXCEEDED` (422); the UI
+displays that failure and does not imply the chart was computed successfully.
+Other failed requests, incomplete pages or integrity failures stop export. The historical profile does
+not expose synthetic research fixtures as real research.
 The browser uses an explicit demo-only GET transport, validates manifest paths,
 response length/digest and bounded decoding, and rejects unsupported IDs, query
 combinations or methods without a network/API fallback. It retains a bounded
@@ -4821,8 +4844,16 @@ filters, language/theme, missing/corrupt data and rejected mutations.
 Publication is separate from preparation. A checked-in manual deployment recipe
 may publish only the verified demo output directory, with least-privilege Pages
 permissions; preparing or testing the demo must not push code, trigger deployment
-or alter repository hosting settings. The existing operational host and security
-contracts remain unchanged.
+or alter repository hosting settings. Its default remains synthetic data with
+publication disabled. Historical publication requires an explicit release tag
+and archive SHA-256. CI downloads only the presentation archive with repository
+read permission, verifies the pinned digest and bounded archive paths before
+import, then builds and tests the static distribution. Archives admit at most
+128 MiB compressed, 260 MiB of file contents and 280 MiB of decompressed tar data.
+No indexer credentials
+are sent to CI or the browser. Raw datasets and canonical artifacts remain local;
+the site is a result viewer, not a raw snapshot download. The existing operational
+host and security contracts remain unchanged.
 
 ## 37. Rejected alternatives and anti-patterns
 

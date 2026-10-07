@@ -5,10 +5,26 @@ on:
   workflow_dispatch:
     inputs:
       publish:
-        description: Publish the verified synthetic demo to GitHub Pages
+        description: Publish the verified static site to GitHub Pages
         type: boolean
         required: true
         default: false
+      dataset:
+        description: Synthetic examples or previously exported indexer results
+        type: choice
+        required: true
+        default: synthetic
+        options:
+          - synthetic
+          - historical
+      data_release_tag:
+        description: Historical data release tag (asset pages-history-data.tar.gz)
+        type: string
+        required: false
+      data_sha256:
+        description: SHA-256 of the historical data archive (required for historical)
+        type: string
+        required: false
 
 permissions:
   contents: read
@@ -36,8 +52,23 @@ jobs:
           node-version: "24"
           package-manager-cache: false
       - run: npm ci --prefix frontend
+      - name: Verify the historical archive import boundary
+        run: uv run pytest -q tests/architecture/test_static_history_import.py
       - name: Generate only synthetic examples, with network connections disabled
+        if: inputs.dataset == 'synthetic'
         run: npm --prefix frontend run demo:prepare
+      - name: Download the explicitly pinned historical presentation export
+        if: inputs.dataset == 'historical'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          DATA_RELEASE_TAG: ${{ inputs.data_release_tag }}
+          DATA_SHA256: ${{ inputs.data_sha256 }}
+        run: |
+          [[ "$DATA_RELEASE_TAG" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]] || { echo 'Invalid historical release tag'; exit 1; }
+          [[ "$DATA_SHA256" =~ ^[0-9a-f]{64}$ ]] || { echo 'A lowercase SHA-256 is required for historical data'; exit 1; }
+          gh release download "$DATA_RELEASE_TAG" --pattern pages-history-data.tar.gz --dir "$RUNNER_TEMP/history-data"
+          uv run python frontend/scripts/import-history.py --archive "$RUNNER_TEMP/history-data/pages-history-data.tar.gz" --sha256 "$DATA_SHA256"
       - name: Verify transport and build a closed static distribution
         run: |
           npm --prefix frontend test
@@ -45,7 +76,7 @@ jobs:
       - name: Install test browser
         working-directory: frontend
         run: npx playwright install --with-deps chromium
-      - name: Verify subpath routing, complete graphs, trades and integrity failures
+      - name: Verify subpath routing, prepared results and integrity failures
         run: npm --prefix frontend run demo:test
       - name: Configure existing Pages site
         if: inputs.publish
@@ -68,6 +99,6 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Publish verified test examples
+      - name: Publish verified static results
         id: deployment
         uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5
