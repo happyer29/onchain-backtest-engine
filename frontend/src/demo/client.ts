@@ -7,7 +7,14 @@ const responseRecord = z.object({
   bytes: z.number().int().positive().max(2 * 1024 ** 2),
   sha256: id,
 }).strict();
-const catalogSchema = z.object({
+const historicalResponseRecord = responseRecord.extend({
+  status: z.union([z.literal(200), z.literal(400), z.literal(404), z.literal(409), z.literal(422), z.literal(503)]).optional(),
+});
+const runRecord = z.object({
+  id, mode: z.enum(['EXOGENOUS_REPLAY', 'EXOGENOUS_VIRTUAL_SETTLEMENT']),
+  title: z.string().min(1).max(100), summary: z.unknown(),
+}).strict();
+const syntheticCatalogSchema = z.object({
   schema: z.literal('backtest.static-demo/v1'),
   recipe: z.literal('synthetic-wallet-groups-and-copy-outcomes/v1'),
   synthetic: z.literal(true),
@@ -16,14 +23,29 @@ const catalogSchema = z.object({
   research: z.array(z.object({
     id, mode: z.enum(['NON_MAYHEM', 'ALL']), counts: z.record(decimal),
   }).strict()).length(2),
-  runs: z.array(z.object({
-    id, mode: z.enum(['EXOGENOUS_REPLAY', 'EXOGENOUS_VIRTUAL_SETTLEMENT']),
-    title: z.string().max(100), summary: z.unknown(),
-  }).strict()).length(2),
+  runs: z.array(runRecord).length(2),
   response_bytes: z.number().int().positive().max(16 * 1024 ** 2),
   responses: z.record(responseRecord),
 }).strict();
+const utc = z.string().datetime({ offset: true }).refine(value => /(?:Z|\+00:00)$/.test(value), 'Expected UTC.');
+const historicalCatalogSchema = z.object({
+  schema: z.literal('backtest.static-history/v1'),
+  recipe: z.literal('indexer-two-hour-results/v1'),
+  synthetic: z.literal(false),
+  version: z.literal('0.2.0'),
+  source: z.object({
+    name: z.literal('OnchainDivers'), start_utc: utc, end_utc: utc,
+    duration_seconds: z.literal(7200), from_block_ordinal: decimal, to_block_ordinal: decimal,
+    snapshot_ids: z.array(id).min(1).max(16),
+  }).strict(),
+  runs: z.array(runRecord).min(1).max(16),
+  response_bytes: z.number().int().positive().max(256 * 1024 ** 2),
+  responses: z.record(historicalResponseRecord),
+}).strict();
+const catalogSchema = z.discriminatedUnion('synthetic', [syntheticCatalogSchema, historicalCatalogSchema]);
 export type DemoCatalog = z.infer<typeof catalogSchema>;
+export type SyntheticCatalog = z.infer<typeof syntheticCatalogSchema>;
+export type HistoricalCatalog = z.infer<typeof historicalCatalogSchema>;
 const failure = (code: string, status: number) => new Response(JSON.stringify({
   code,
   message: code === 'DEMO_READ_ONLY'
@@ -78,18 +100,29 @@ export function createDemoClient(base: URL, manifestDigest: string, fetcher: typ
     if (!catalogPromise) catalogPromise = (async () => {
       const bytes = await bounded(await fetcher(new URL('manifest.json', base), {
         credentials: 'omit', signal: AbortSignal.timeout(15000),
-      }), 1024 ** 2);
+      }), 4 * 1024 ** 2);
       await verify(bytes, manifestDigest);
       const value = catalogSchema.parse(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)));
       const entries = Object.entries(value.responses);
-      if (entries.length > 2048 || entries.reduce((sum, [, record]) => sum + record.bytes, 0) !== value.response_bytes) {
+      if (entries.length > (value.synthetic ? 2048 : 8192) || entries.reduce((sum, [, record]) => sum + record.bytes, 0) !== value.response_bytes) {
         throw new Error('Invalid demo corpus bounds.');
       }
       for (const [key, record] of entries) {
         if (routeKey(key) !== key || record.file !== `responses/${record.sha256}.json`) throw new Error('Invalid demo response mapping.');
       }
-      for (const example of value.research) {
-        if (BigInt(example.counts.pairs) > 1000n) throw new Error('Demo graph exceeds its bounds.');
+      if (new Set(value.runs.map(run => run.id)).size !== value.runs.length) throw new Error('Duplicate result identity.');
+      if (value.synthetic) {
+        if (bytes.length > 1024 ** 2) throw new Error('Demo manifest exceeds its size limit.');
+        for (const example of value.research) {
+          if (BigInt(example.counts.pairs) > 1000n) throw new Error('Demo graph exceeds its bounds.');
+        }
+      } else {
+        const source = value.source;
+        if (Date.parse(source.end_utc) - Date.parse(source.start_utc) !== source.duration_seconds * 1000 ||
+          BigInt(source.from_block_ordinal) >= BigInt(source.to_block_ordinal) ||
+          new Set(source.snapshot_ids).size !== source.snapshot_ids.length) {
+          throw new Error('Invalid historical source window.');
+        }
       }
       return value;
     })().catch(error => { catalogPromise = null; throw error; });
@@ -111,7 +144,7 @@ export function createDemoClient(base: URL, manifestDigest: string, fetcher: typ
     if (bytes.length !== record.bytes) throw new Error('Demo response length does not match its manifest.');
     await verify(bytes, record.sha256);
     signal.throwIfAborted();
-    return new Response(bytes, { headers: { 'Content-Type': 'application/json' } });
+    return new Response(bytes, { status: 'status' in record ? record.status ?? 200 : 200, headers: { 'Content-Type': 'application/json' } });
   };
   return { catalog, request };
 }

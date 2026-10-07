@@ -90,6 +90,7 @@ jobs:
 
       - name: Verify independent static demo
         run: |
+          node --test frontend/scripts/compose-pages.node-test.mjs
           npm --prefix frontend run demo:prepare
           npm --prefix frontend run demo:build
           npm --prefix frontend run demo:test

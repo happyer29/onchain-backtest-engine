@@ -4,7 +4,8 @@ import messages from './messages.ru.json';
 // Language is local presentation state; it never enters a command, identity or query key.
 export type Locale = 'en' | 'ru';
 const key = 'backtest.ui.language';
-let locale: Locale = document.documentElement.lang === 'ru' ? 'ru' : 'en';
+export const isLocaleFixed = () => document.documentElement.dataset.fixedLocale === 'en';
+let locale: Locale = !isLocaleFixed() && document.documentElement.lang === 'ru' ? 'ru' : 'en';
 let persistent = true;
 const listeners = new Set<() => void>();
 
@@ -23,7 +24,7 @@ export function useLocale() { return useSyncExternalStore(subscribe, getLocale);
 
 // Only explicit Russian opts out of English, including invalid or removed stored preferences.
 function apply(value: string | null) {
-  locale = value === 'ru' ? 'ru' : 'en';
+  locale = !isLocaleFixed() && value === 'ru' ? 'ru' : 'en';
   document.documentElement.lang = locale;
   for (const listener of listeners) listener();
 }
@@ -34,6 +35,8 @@ window.addEventListener('storage', event => {
 
 // A denied write affects persistence only. Unexpected programming errors are not swallowed.
 export function setLocale(value: Locale) {
+  // The public static preview stays English without overwriting a local-app preference.
+  if (isLocaleFixed()) { apply('en'); return true; }
   try { localStorage.setItem(key, value); persistent = true; }
   catch (error) {
     // Browser privacy/quota failures leave a usable in-tab choice.

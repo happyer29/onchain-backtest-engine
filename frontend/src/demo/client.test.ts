@@ -56,3 +56,64 @@ describe('closed demo transport',()=>{
     const controller=new AbortController(),pending=client.request(route,{signal:controller.signal});await Promise.resolve();controller.abort();await expect(pending).rejects.toThrow();
   });
 });
+
+const historicalRoute = '/api/v1/run-artifacts/' + 'd'.repeat(64) + '/strategy-summary';
+function historicalFixture(change: (value: Record<string, any>) => void = () => {}, responseBody = body) {
+  const record = { file: `responses/${digest(responseBody)}.json`, sha256: digest(responseBody), bytes: Buffer.byteLength(responseBody) };
+  const manifest = {
+    schema: 'backtest.static-history/v1', recipe: 'indexer-two-hour-results/v1', synthetic: false, version: '0.2.0',
+    source: { name: 'OnchainDivers', start_utc: '2026-09-09T12:00:00Z', end_utc: '2026-09-09T14:00:00Z', duration_seconds: 7200, from_block_ordinal: '9007199254740993000', to_block_ordinal: '9007199254740994000', snapshot_ids: ['a'.repeat(64)] },
+    runs: [{ id: 'd'.repeat(64), mode: 'EXOGENOUS_REPLAY', title: 'Historical Sniping', summary: {} }],
+    response_bytes: record.bytes, responses: { [historicalRoute]: record },
+  };
+  change(manifest); const raw = JSON.stringify(manifest);
+  const fetcher = vi.fn<typeof fetch>(async input => new Response(String(input).endsWith('manifest.json') ? raw : responseBody));
+  return { client: createDemoClient(base, digest(raw), fetcher), fetcher };
+}
+describe('closed historical transport', () => {
+  it('admits a verified two-hour historical catalog without synthetic research', async () => {
+    const { client, fetcher } = historicalFixture();
+    const catalog = await client.catalog();
+    expect(catalog.synthetic).toBe(false);
+    if (catalog.synthetic) throw new Error('Expected historical catalog');
+    expect(catalog.source.duration_seconds).toBe(7200);
+    expect(catalog.source.from_block_ordinal).toBe('9007199254740993000');
+    expect(catalog).not.toHaveProperty('research');
+    expect(await (await client.request(historicalRoute)).json()).toEqual(JSON.parse(body));
+    expect(fetcher.mock.calls.every(([, init]) => init?.credentials === 'omit')).toBe(true);
+  });
+  it.each([400, 404, 409, 422, 503])('preserves verified API error status %s without falling back', async status => {
+    const error = { code: 'CHART_UNAVAILABLE', message: 'Historical chart exceeds its query limit.' };
+    const { client, fetcher } = historicalFixture(m => { m.responses[historicalRoute].status = status; }, JSON.stringify(error));
+    const response = await client.request(historicalRoute);
+    expect(response.status).toBe(status); expect(await response.json()).toEqual(error);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+  it('still rejects execution before reading historical files', async () => {
+    const { client, fetcher } = historicalFixture();
+    expect((await client.request('/api/v1/jobs', { method: 'POST', body: '{}' })).status).toBe(405);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+  it.each([
+    (m: Record<string, any>) => m.source.end_utc = '2026-09-09T14:00:01Z',
+    (m: Record<string, any>) => m.source.start_utc = '2026-09-09T15:00:00+03:00',
+    (m: Record<string, any>) => m.source.duration_seconds = 3600,
+    (m: Record<string, any>) => m.source.to_block_ordinal = m.source.from_block_ordinal,
+    (m: Record<string, any>) => m.source.snapshot_ids.push(m.source.snapshot_ids[0]),
+    (m: Record<string, any>) => m.runs.push(m.runs[0]),
+    (m: Record<string, any>) => m.runs = [],
+    (m: Record<string, any>) => m.runs = Array.from({ length: 17 }, (_, i) => ({ ...m.runs[0], id: i.toString(16).padStart(64, '0') })),
+    (m: Record<string, any>) => m.recipe = 'synthetic-wallet-groups-and-copy-outcomes/v1',
+    (m: Record<string, any>) => m.synthetic = true,
+    (m: Record<string, any>) => m.response_bytes = 256 * 1024 ** 2 + 1,
+    (m: Record<string, any>) => m.responses[historicalRoute].status = 302,
+    (m: Record<string, any>) => m.source.password = 'unexportable',
+  ])('rejects inconsistent historical source and result metadata', async change => {
+    const { client, fetcher } = historicalFixture(change);
+    await expect(client.catalog()).rejects.toThrow(); expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+  it('does not extend the synthetic contract to recorded error responses', async () => {
+    const { client } = fixture(m => { m.responses[route].status = 503; });
+    await expect(client.catalog()).rejects.toThrow();
+  });
+});

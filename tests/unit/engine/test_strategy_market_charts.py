@@ -9,9 +9,12 @@ import test_sniping_engine as base
 
 from backtest.adapters.results.market_charts import LocalCopyMarketChartReader, _markers
 from backtest.application.market_charts import CopyMarketChart, StrategyMarketChart
+from backtest.application.strategy_result_projection import project_entry
 from backtest.application.use_cases.query_strategy_results import _verify_sniping_chart
 from backtest.domain.identifiers import AccountId, ArtifactId, SnapshotId
+from backtest.domain.roundtrips import RoundTripStatus
 from backtest.plugins.protocols.pumpfun.market_charts import pump_strategy_market_cap_state
+from backtest.plugins.protocols.pumpfun.model import PumpMode
 
 
 def _chart(record, events):
@@ -76,3 +79,37 @@ def test_sniping_chart_rejects_another_creator_even_with_same_event_identity():
     forged = replace(launch, developer_id=AccountId("another-creator"))
     with pytest.raises(ValueError, match="creation binding"):
         _chart(sink.roundtrips[0], (forged,))
+
+
+@pytest.mark.parametrize("side", ["BUY", "SELL"])
+def test_pre_submit_funding_rejection_is_preserved_in_entries_and_chart(side):
+    """Actual engine records carry funding rejection on the position, with no landing."""
+    events = (base._launch(state=base._state(mode=PumpMode.CASHBACK)),)
+    initial = 1 if side == "BUY" else 1_000_000_000 + 5_001 + 2_074_080 + 1_844_400
+    _, sink = base._run(events, initial_sol=initial)
+    record = sink.roundtrips[0]
+    expected_status, reason = (
+        (RoundTripStatus.BUY_PRE_SUBMIT_INSUFFICIENT_FUNDS, "INSUFFICIENT_FUNDS")
+        if side == "BUY"
+        else (
+            RoundTripStatus.SELL_PRE_SUBMIT_INSUFFICIENT_FUNDS_OPEN,
+            "INSUFFICIENT_NETWORK_FEE",
+        )
+    )
+    assert record.status is expected_status
+    leg = record.buy if side == "BUY" else record.sell
+    assert leg is not None and leg.landing_position is None and leg.failure_code is None
+    entry = project_entry(record)
+    attempt = entry.attempts[-1]
+    assert (attempt.side, attempt.status, attempt.failure_code) == (side, "REJECTED", reason)
+    assert attempt.landing_boundary is None
+    assert entry.details == record.document()
+    chart = _chart(record, events)
+    marker = chart.markers[-1]
+    assert (marker.kind, marker.status, marker.failure_code) == (side, "REJECTED", reason)
+    assert marker.point.position == replace(leg.decision_position, event_index=None)
+    _verify_sniping_chart(chart, record)
+    # A reader cannot relabel the same unlanded quote as an executed fill.
+    forged = replace(marker, status="FILLED", failure_code=None)
+    with pytest.raises(ValueError, match="chart attempt binding mismatch"):
+        _verify_sniping_chart(replace(chart, markers=(*chart.markers[:-1], forged)), record)

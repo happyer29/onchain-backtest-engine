@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { ChevronDown, Moon, Settings, Sun } from 'lucide-react';
-import { t, useLocale, setLocale } from './i18n';
+import { t, useLocale, setLocale, isLocaleFixed } from './i18n';
 
 function ThemeControl() {
   useLocale();
@@ -44,6 +44,6 @@ export function SettingsMenu() {
   // This is a group of ordinary labelled form controls, not an ARIA menu of commands.
   return <div className="settings-menu" ref={root}>
     <button className="button settings-toggle" type="button" ref={trigger} aria-expanded={open} aria-controls="workspace-settings-panel" onClick={() => setOpen(!open)}><Settings size={17} /><span>{t('Settings')}</span><ChevronDown className="settings-chevron" size={15} /></button>
-    <div className="settings-panel" id="workspace-settings-panel" role="group" aria-label={t('Settings')} hidden={!open}><ThemeControl /><LanguageControl /></div>
+    <div className="settings-panel" id="workspace-settings-panel" role="group" aria-label={t('Settings')} hidden={!open}><ThemeControl />{!isLocaleFixed() && <LanguageControl />}</div>
   </div>;
 }

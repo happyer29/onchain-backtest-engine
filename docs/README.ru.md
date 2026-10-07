@@ -8,6 +8,9 @@
 основном цикле. Это альфа-версия исследовательского ПО, не система для реальной
 торговли и не финансовая рекомендация.
 
+[Публичный обзор Copy Buy](https://happyer29.github.io/onchain-backtest-engine/copy-buy/) ·
+[Исторические результаты](https://happyer29.github.io/onchain-backtest-engine/)
+
 ## Инструменты
 
 | Область | Возможности |
