@@ -5,8 +5,13 @@ from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1] / "demo-dist"
-PREFIX = "/onchain-backtest-engine/"
+OUTPUT = os.environ.get("BACKTEST_DEMO_DISTRIBUTION", "demo-dist")
+if OUTPUT not in ("demo-dist", "pages-dist"):
+    raise SystemExit("Unsupported static demo distribution.")
+ROOT = Path(__file__).resolve().parents[1] / OUTPUT
+PREFIX = os.environ.get("BACKTEST_DEMO_BASE_PATH", "/onchain-backtest-engine/")
+if PREFIX not in ("/onchain-backtest-engine/", "/onchain-backtest-engine/copy-buy/"):
+    raise SystemExit("Unsupported static demo preview path.")
 
 
 class Handler(SimpleHTTPRequestHandler):

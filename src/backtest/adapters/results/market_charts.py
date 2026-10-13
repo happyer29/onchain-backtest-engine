@@ -35,6 +35,7 @@ from backtest.application.market_charts import (
 # Exact run and snapshot descriptors are the authority for input selection.
 from backtest.application.models import ArtifactKind
 from backtest.application.run_results import SuccessfulRunManifest
+from backtest.application.strategy_result_projection import sniping_leg_outcome
 from backtest.domain.chain import ChainPosition
 from backtest.domain.identifiers import ArtifactId, AssetId, ContentDigest, VenueId
 from backtest.domain.market_events import (
@@ -389,15 +390,9 @@ def _markers(
                 continue
             coordinate = leg.landing_position or leg.decision_position
             # Suppressed targets have no own-order marker; rejects remain at decision time.
-            status = (
-                "FILLED"
-                if leg.failure_code is None
-                else "FAILED"
-                if leg.landing_position
-                else "REJECTED"
-            )
+            status, failure_code = sniping_leg_outcome(position, leg)
             result.append(
-                CopyChartMarker(leg.side.value, status, number, at(coordinate), leg.failure_code)
+                CopyChartMarker(leg.side.value, status, number, at(coordinate), failure_code)
             )
         return tuple(result)
     for attempt in position.attempts:

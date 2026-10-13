@@ -11,11 +11,13 @@ import { ResearchForms } from './forms';
 import { ResearchMethod } from './method';
 import { columns, headings, page, researchError, summary, tableNames, type Summary, type Table } from './contracts';
 import type { Pair, Row } from './types';
+import { PreviewNotice, useStaticPreview } from '../preview';
 const Graph = lazy(() => import('./graph'));
 
 // Historical exact-artifact bookmarks enter the one shared React shell unchanged.
 export default function Research() {
   useLocale();
+  const preview = useStaticPreview();
   const [params, setParams] = useSearchParams(), [input, setInput] = useState(params.get('artifact') ?? '');
   const id = params.get('artifact'), jobId = params.get('job');
   const invalid = id !== null && !/^[0-9a-f]{64}$/.test(id);
@@ -26,10 +28,11 @@ export default function Research() {
   }});
   const data = query.data;
   return <><PageTitle eyebrow={t('From observation to hypothesis')} title={t('On-chain research')} /><p className="intro-text">{t('Who buys together? Explore signer activity and shared first purchases of Pump.fun tokens. Every relationship can be traced to the observed trades.')}</p>
-    <ResearchForms summary={data} /><ResearchMethod />
+    <PreviewNotice /><ResearchForms summary={data} /><ResearchMethod />
     <Card><h2>{t('Open saved research')}</h2><form className="research-open" onSubmit={event => {event.preventDefault(); setParams({artifact:input});}}><label>{t('Snapshot or result ID')}<input required pattern="[0-9a-f]{64}" maxLength={64} value={input} onChange={event => setInput(event.target.value)} /></label><Button tone="primary">{t('Open')}</Button></form></Card>
     {invalid && <Failure message={t('Invalid research artifact ID.')} />}{query.isError && <Failure message={researchError(query.error)} retry={() => void query.refetch()} />}{(id || jobId) && !invalid && query.isPending && <Loading />}
     {data && <ResearchResult key={data.artifact_id} data={data} />}
+    {preview && !data && !id && !jobId && <Card><h2>{t('No wallet research results published')}</h2><p className="subtle">{t('This dataset includes saved strategy results. Explore the research controls and methodology here; wallet analysis requires a running workspace.')}</p></Card>}
     <div className="section-intro"><h2>{t('Research jobs')}</h2><Link to="/jobs">{t('Manage queue →')}</Link></div><JobsPanel researchOnly />
   </>;
 }

@@ -4,7 +4,7 @@
     const saved = localStorage.getItem('backtest.ui.theme');
     document.documentElement.dataset.theme = saved === 'dark' ? 'dark' : 'warm';
     // English is the default regardless of the browser or operating-system language.
-    document.documentElement.lang = localStorage.getItem('backtest.ui.language') === 'ru' ? 'ru' : 'en';
+    document.documentElement.lang = document.documentElement.dataset.fixedLocale === 'en' ? 'en' : localStorage.getItem('backtest.ui.language') === 'ru' ? 'ru' : 'en';
   } catch (error) {
     // Privacy settings affect persistence only, never initial UI availability.
     if (!(error instanceof DOMException) || !['SecurityError', 'QuotaExceededError'].includes(error.name)) throw error;

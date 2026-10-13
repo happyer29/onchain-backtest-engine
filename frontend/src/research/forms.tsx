@@ -7,11 +7,13 @@ import { useVisible } from '../workspace';
 import { t, useLocale } from '../i18n';
 import { Badge, Button, Card, Failure } from '../ui';
 import { analysisSchema, prepareSchema, researchError, type Summary } from './contracts';
+import { useStaticPreview } from '../preview';
 
 const initial = {from_block: '', to_block: '', snapshot_id: '', window_seconds: '60', minimum_shared_mints: '2', mode: 'NON_MAYHEM', wallets: ''};
 // Form defaults follow a verified selection once; later edits do not relabel the committed result.
 export function ResearchForms({summary}: {summary?: Summary}) {
   useLocale();
+  const preview = useStaticPreview();
   const [values, setValues] = useState(initial), [failure, setFailure] = useState({prepare: '', analyze: ''});
   const prepare = useSubmission(), analyze = useSubmission();
   useEffect(() => {
@@ -20,6 +22,7 @@ export function ResearchForms({summary}: {summary?: Summary}) {
   }, [summary]);
   const field = (name: keyof typeof initial, label: string, props: {min?: number; max?: number; type?: string; pattern?: string; maxLength?: number} = {}) => <label>{t(label)}<input name={name} value={values[name]} onChange={event => setValues(old => ({...old, [name]: event.target.value}))} required {...props} /></label>;
   async function submit(kind: 'prepare' | 'analyze') {
+    if (preview) return;
     setFailure(old => ({...old, [kind]: ''}));
     try {
       const body = kind === 'prepare' ? prepareSchema.parse({from_block: Number(values.from_block), to_block: Number(values.to_block)}) : analysisSchema.parse({snapshot_id: values.snapshot_id, window_seconds: Number(values.window_seconds), minimum_shared_mints: Number(values.minimum_shared_mints), mode: values.mode, wallets: values.wallets.trim() ? values.wallets.trim().split(/\s+/) : []});
@@ -28,7 +31,7 @@ export function ResearchForms({summary}: {summary?: Summary}) {
   }
   return <div className="research-forms"><Card><p className="eyebrow">{t('01 / Observations')}</p><h2>{t('Save observations')}</h2><form aria-label={t('Prepare research snapshot')} aria-busy={prepare.busy} onSubmit={event => {event.preventDefault(); void submit('prepare');}}>
     {field('from_block', 'From block, inclusive', {type:'number', min:0, max:2**32 - 1})}{field('to_block', 'To block, exclusive', {type:'number', min:1, max:2**32})}
-    <p className="subtle">{t('Up to 300,000 blocks, 2 million swaps and 50,000 tokens. The snapshot retains successful SOL-paired Pump.fun swaps and available creation-mode data from the same configured source.')}</p><Button tone="primary" disabled={prepare.busy}>{t(prepare.busy ? 'Submitting…' : 'Prepare snapshot')}</Button><Receipt operation={prepare} failure={failure.prepare} />
+    <p className="subtle">{t('Up to 300,000 blocks, 2 million swaps and 50,000 tokens. The snapshot retains successful SOL-paired Pump.fun swaps and available creation-mode data from the same configured source.')}</p><Button tone="primary" disabled={preview || prepare.busy}>{t(prepare.busy ? 'Submitting…' : 'Prepare snapshot')}</Button><Receipt operation={prepare} failure={failure.prepare} />
   </form></Card><Card><p className="eyebrow">{t('02 / Hypothesis')}</p><h2>{t('Find co-purchases')}</h2><form aria-label={t('Analyze wallets')} aria-busy={analyze.busy} onSubmit={event => {event.preventDefault(); void submit('analyze');}}>
     {field('snapshot_id','Research snapshot ID',{pattern:'[0-9a-f]{64}',maxLength:64})}<div className="form-grid">{field('window_seconds','Window, seconds',{type:'number',min:0,max:3600})}{field('minimum_shared_mints','Minimum shared tokens',{type:'number',min:1,max:2000000})}</div>
     <label>{t('Token mode')}<select name="mode" value={values.mode} onChange={event => setValues(old => ({...old, mode: event.target.value}))}><option value="NON_MAYHEM">{t('Without Mayhem')}</option><option value="ALL">{t('All modes')}</option></select></label>
@@ -36,7 +39,7 @@ export function ResearchForms({summary}: {summary?: Summary}) {
     {summary && summary.dataset.schema !== 'research-dataset-spec/v2' && <p className="notice">{t('This snapshot has no token modes. Prepare a new snapshot for Without Mayhem, or use All modes.')}</p>}
     <label>{t('Signers, optional')}<textarea name="wallets" rows={2} value={values.wallets} onChange={event => setValues(old => ({...old, wallets: event.target.value}))} placeholder={t('Addresses separated by spaces or newlines; up to 128')} maxLength={5760} /></label>
     <p className="subtle">{t('An empty signer list includes all observed signers. Compare only the first BUY of each token by each wallet inside the snapshot; later purchases of the same token are ignored.')}</p>
-    <Button tone="primary" disabled={analyze.busy}>{t(analyze.busy ? 'Submitting…' : 'Run analysis')}</Button><Receipt operation={analyze} failure={failure.analyze} />
+    <Button tone="primary" disabled={preview || analyze.busy}>{t(analyze.busy ? 'Submitting…' : 'Run analysis')}</Button><Receipt operation={analyze} failure={failure.analyze} />
   </form></Card></div>;
 }
 

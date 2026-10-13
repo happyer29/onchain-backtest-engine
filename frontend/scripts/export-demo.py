@@ -348,7 +348,10 @@ def main():
         ):
             generate(Path(staging))
         if output.exists():
-            assert json.loads((output / "manifest.json").read_text())["schema"] == SCHEMA
+            assert json.loads((output / "manifest.json").read_text())["schema"] in (
+                SCHEMA,
+                "backtest.static-history/v1",
+            )
             shutil.rmtree(output)
         shutil.copytree(staging, output)
 

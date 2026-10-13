@@ -10,6 +10,7 @@
   </p>
   <p><strong>Reproducible on-chain backtests from verified local artifacts, with no SQL or network access in the event loop.</strong></p>
   <p>
+    <a href="https://happyer29.github.io/onchain-backtest-engine/copy-buy/">Copy Buy browser tour</a> ·
     <a href="#quick-start">Quick start</a> ·
     <a href="#features">Features</a> ·
     <a href="#how-it-works">Architecture</a> ·
@@ -40,6 +41,14 @@ charts, entry/exit analytics, trade details and verified lineage. The old
 interface has been removed; existing result bookmarks open the React app.
 See [deep-dive §34.2](docs/architecture-deep-dive.md#342-web-ui) for its bounded
 query contract.
+
+**[Open the version 0.2 web demo](https://happyer29.github.io/onchain-backtest-engine/)**
+to explore prepared Sniping results on real OnchainDivers history for
+1 September 2026, 00:00–02:00 UTC. Trades, analytics, market charts and lineage
+are available on GitHub Pages. Every product page is available in English for
+interactive preview, with execution buttons disabled; new backtests run in the
+local application.
+See [the static publication guide](docs/demo.md) for the dataset and build contract.
 
 > [!IMPORTANT]
 > The current working surface includes the reference stack and exact Pump.fun

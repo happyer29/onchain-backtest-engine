@@ -15,6 +15,7 @@ import catalog from './form-fields.json';
 import { Badge, Button, Card, Failure, Loading, PageTitle } from './ui';
 import { FactTree } from './results';
 import { recordSubmission } from './workspace';
+import { PreviewNotice, useStaticPreview } from './preview';
 
 // Declarative field metadata supplies labels and constraints, never executable strategy code.
 export type Field = { name: string; label: string; kind: string; type: string; default: string; required: boolean; options: { value: string; label: string }[]; min?: string; max?: string; minlength?: string; maxlength?: string; inputmode?: string };
@@ -73,6 +74,7 @@ function useTypedForm(groups: Group[]) {
 // Pending intent survives uncertain transport failure but is cleared only by a durable receipt.
 type Submission = { fingerprint: string; key: string; body?: unknown; path?: string; nonce: string; resolveBody?: unknown };
 export function useSubmission() {
+  const preview = useStaticPreview();
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState('');
   const [receipt, setReceipt] = useState<Schema<'JobResponse'> | null>(null);
@@ -80,7 +82,8 @@ export function useSubmission() {
   const running = useRef(false);
   const pending = useRef<Submission | null>(null);
   async function submit(fingerprint: string, prepare: (attempt: Submission) => Promise<{ path: string; body: unknown }>) {
-    if (running.current) return;
+    // Guard the preparation callback as well: it may resolve a spec using POST.
+    if (preview || running.current) return;
     running.current = true; setBusy(true); setFailure(''); setReceipt(null);
     try {
       // A changed form is a new intentional operation; an unchanged failed request retains its key.
@@ -147,17 +150,18 @@ export function Launch() {
 // The launch form waits for both admitted semantic discovery and the local physical profile.
 function RunForm({ family }: { family: keyof typeof backendChoices }) {
   const locale = useLocale();
+  const preview = useStaticPreview();
   const groups = useMemo(() => runGroups(family), [family, locale]);
   const form = useTypedForm(groups);
   const operation = useSubmission();
   const contract = useQuery({ queryKey: ['run-contract', family], enabled: family !== 'firstswap', queryFn: async ({ signal }) => validateRunContract(await api<Schema<'RunContractListResponse'>>('/api/v1/run-contracts', { signal }), family as 'copy' | 'sniping') });
   // One coherent host profile supplies physical defaults; user edits always win.
-  const settings = useQuery({ queryKey: ['run-physical-settings'], queryFn: ({ signal }) => api<Schema<'RunPhysicalSettingsCommand'>>('/api/v1/run-physical-settings', { signal }) });
+  const settings = useQuery({ queryKey: ['run-physical-settings'], enabled: !preview, queryFn: ({ signal }) => api<Schema<'RunPhysicalSettingsCommand'>>('/api/v1/run-physical-settings', { signal }) });
   const seeded = useRef(false);
-  useEffect(() => { if (!settings.data || seeded.current) return; seeded.current = true; for (const name of physicalFields) { if (form.getFieldState(name).isDirty) continue; const key = name === 'run_backend' ? 'backend' : name === 'run_threads' ? 'threads' : name; const value = settings.data[key as keyof typeof settings.data]; if (name !== 'run_backend' || backendChoices[family].includes(String(value))) form.setValue(name, String(value)); } }, [settings.data, family, form]);
+  useEffect(() => { if (preview || !settings.data || seeded.current) return; seeded.current = true; for (const name of physicalFields) { if (form.getFieldState(name).isDirty) continue; const key = name === 'run_backend' ? 'backend' : name === 'run_threads' ? 'threads' : name; const value = settings.data[key as keyof typeof settings.data]; if (name !== 'run_backend' || backendChoices[family].includes(String(value))) form.setValue(name, String(value)); } }, [settings.data, family, form, preview]);
   const mode = form.watch('execution_mode');
   async function submit(values: Values, sweep = false) {
-    if ((family !== 'firstswap' && !contract.data) || !settings.data) return;
+    if (preview || (family !== 'firstswap' && !contract.data) || !settings.data) return;
     // Resolve output is forwarded losslessly and never reconstructed by the browser.
     await operation.submit(encode({ family, values, sweep }), async attempt => {
       if (sweep) {
@@ -175,8 +179,8 @@ function RunForm({ family }: { family: keyof typeof backendChoices }) {
     });
   }
   // No submit control becomes active until all required server-owned defaults are available.
-  const ready = settings.isSuccess && (family === 'firstswap' || contract.isSuccess);
-  return <><Card><p className="strategy-note">{family === 'sniping' ? t("600-second cooldown. Buy after 500 transactions. Sell decision 2 seconds after the fill.") : family === 'copy' ? t("One entry per token per run, including rejected buys. Fee-free price TP/SL; up to 4 sell attempts with a new decision after 2 seconds.") : t("Deterministic FirstSwap. Available backends pass exact equivalence checks.")}</p><Badge tone={ready ? 'positive' : ''}>{ready ? t("Contract ready") : t("Checking contract…")}</Badge></Card>
+  const ready = !preview && settings.isSuccess && (family === 'firstswap' || contract.isSuccess);
+  return <><PreviewNotice /><Card><p className="strategy-note">{family === 'sniping' ? t("600-second cooldown. Buy after 500 transactions. Sell decision 2 seconds after the fill.") : family === 'copy' ? t("One entry per token per run, including rejected buys. Fee-free price TP/SL; up to 4 sell attempts with a new decision after 2 seconds.") : t("Deterministic FirstSwap. Available backends pass exact equivalence checks.")}</p><Badge tone={ready ? 'positive' : ''}>{preview ? t('Form preview · execution disabled') : ready ? t("Contract ready") : t("Checking contract…")}</Badge></Card>
   {family === 'firstswap' && form.watch('inference_mode') !== 'DISABLED' && <Card><p className="subtle">{t("For a run using a v2 PredictionSet, select the same Rows before first model policy and choose NULL for Missing prediction if early unscored rows should be skipped.")}</p></Card>}
     {contract.isError && <Failure message={errorText(contract.error)} retry={() => void contract.refetch()} />}{settings.isError && <Failure message={errorText(settings.error)} retry={() => void settings.refetch()} />}
     <form noValidate onSubmit={form.handleSubmit(values => submit(values))}><fieldset disabled={operation.busy}><FormFields groups={groups} form={form} />
@@ -190,20 +194,22 @@ export function MachineLearning() {
   useLocale();
   const [kind, setKind] = useState<MlKind>('features');
   const contract = useQuery({ queryKey: ['ml-contract'], queryFn: ({ signal }) => api<Schema<'ReferenceMlContractResponse'>>('/api/v1/ml/reference-contract', { signal }) });
-  return <><PageTitle eyebrow="Point-in-time pipeline" title={t("Models and features")} /><div className="tabs" role="group" aria-label={t("ML stage")}>{(Object.keys(mlTitles) as MlKind[]).map(key => <Button key={key} tone={kind === key ? 'primary' : 'ghost'} onClick={() => setKind(key)}>{t(mlTitles[key])}</Button>)}</div>
+  return <><PageTitle eyebrow="Point-in-time pipeline" title={t("Models and features")} /><PreviewNotice /><div className="tabs" role="group" aria-label={t("ML stage")}>{(Object.keys(mlTitles) as MlKind[]).map(key => <Button key={key} tone={kind === key ? 'primary' : 'ghost'} onClick={() => setKind(key)}>{t(mlTitles[key])}</Button>)}</div>
     {contract.isError && <Failure message={errorText(contract.error)} retry={() => void contract.refetch()} />}{contract.isPending && <Loading />}{contract.data && <MlForm key={kind} kind={kind} contract={contract.data} />}</>;
 }
 function MlForm({ kind, contract }: { kind: MlKind; contract: Schema<'ReferenceMlContractResponse'> }) {
   const locale = useLocale();
+  const preview = useStaticPreview();
   const groups = useMemo(() => [{ id: kind, title: mlTitles[kind], description: `CANONICAL_EXACT · ${contract.compiler_version}`, open: true, fields: fields(`ml-${kind}-form`).map(field => field.name === 'feature_name' ? select(field, contract.supported_feature_names) : field) }], [kind, contract, locale]);
   const form = useTypedForm(groups);
   const operation = useSubmission();
   // All six forms dispatch the same existing typed ML application commands.
-  return <>{kind === 'predict' && <Card><p className="subtle">{t("Training can use earlier ReplayPack rows. Choose No prediction before first model to leave those rows unscored; later rows use the trained model. Interior or trailing schedule gaps still fail. NULL applies only to missing feature values.")}</p></Card>}<form noValidate onSubmit={form.handleSubmit(values => operation.submit(encode({ kind, values, contract }), async () => ({ path: `/api/v1/ml/${mlPaths[kind]}`, body: mlCommand(kind, values, contract as unknown as Record<string, Json>) })))}><fieldset disabled={operation.busy}><FormFields groups={groups} form={form} /><div className="form-footer"><p>{t("Heavy work runs through the job queue.")}</p><Button tone="primary" type="submit" disabled={operation.busy}><Play size={16} />{operation.busy ? t("Submitting…") : t("Launch: {0}", [t(mlTitles[kind])])}</Button></div></fieldset></form><SubmissionResult operation={operation} /></>;
+  return <>{kind === 'predict' && <Card><p className="subtle">{t("Training can use earlier ReplayPack rows. Choose No prediction before first model to leave those rows unscored; later rows use the trained model. Interior or trailing schedule gaps still fail. NULL applies only to missing feature values.")}</p></Card>}<form noValidate onSubmit={form.handleSubmit(values => operation.submit(encode({ kind, values, contract }), async () => ({ path: `/api/v1/ml/${mlPaths[kind]}`, body: mlCommand(kind, values, contract as unknown as Record<string, Json>) })))}><fieldset disabled={operation.busy}><FormFields groups={groups} form={form} /><div className="form-footer"><p>{t("Heavy work runs through the job queue.")}</p><Button tone="primary" type="submit" disabled={preview || operation.busy}><Play size={16} />{operation.busy ? t("Submitting…") : t("Launch: {0}", [t(mlTitles[kind])])}</Button></div></fieldset></form><SubmissionResult operation={operation} /></>;
 }
 
 export function DatasetPreparation() {
   const locale = useLocale();
+  const preview = useStaticPreview();
   const inspectGroups = useMemo(() => [{ id: 'inspect', title: t("Source inspection"), description: t("Bounded read-only capability inspection"), open: true, fields: fields('inspect-form') }], [locale]);
   const planGroups = useMemo(() => { const all = fields('dataset-plan-form'); return [
     { id: 'identity', title: t("Source and capabilities"), description: t("Verified identity, capability and explicit columns"), open: true, fields: all.slice(0, 6) },
@@ -224,7 +230,7 @@ export function DatasetPreparation() {
   const current = encode(planForm.watch());
   const accepted = !!plan && current === plan.values && plan.result.budget.status !== 'REJECTED';
   async function inspect(values: Values) {
-    if (running.current) return;
+    if (preview || running.current) return;
     running.current = true; setBusy('inspect'); setFailure(''); setInspection(null); setPlan(null);
     try {
       // The logical source ID is encoded into one route segment; no credential input exists.
@@ -236,15 +242,15 @@ export function DatasetPreparation() {
   }
   async function resolvePlan(values: Values) {
     // Invalidate previous admission before building or sending a replacement plan.
-    if (running.current) return;
+    if (preview || running.current) return;
     running.current = true; setBusy('plan'); setFailure(''); setPlan(null);
     try { const result = await api<Schema<'DatasetPlanResponse'>>('/api/v1/datasets/plan', { method: 'POST', body: datasetPlan(values) }); setPlan({ values: encode(values), result }); }
     catch (error) { setFailure(errorText(error)); } finally { running.current = false; setBusy(null); }
   }
-  return <><PageTitle eyebrow={t("Verified local data")} title={t("Prepare data")} />{failure && <Failure message={failure} />}
-    <form noValidate onSubmit={inspectionForm.handleSubmit(inspect)}><fieldset disabled={!!busy || operation.busy}><FormFields groups={inspectGroups} form={inspectionForm} /><div className="form-footer"><p>{t("Inspection checks the source within permitted bounds.")}</p><Button type="submit">{busy === 'inspect' ? t("Checking…") : t("Inspect source")}</Button></div></fieldset></form>
+  return <><PageTitle eyebrow={t("Verified local data")} title={t("Prepare data")} /><PreviewNotice />{failure && <Failure message={failure} />}
+    <form noValidate onSubmit={inspectionForm.handleSubmit(inspect)}><fieldset disabled={!!busy || operation.busy}><FormFields groups={inspectGroups} form={inspectionForm} /><div className="form-footer"><p>{t("Inspection checks the source within permitted bounds.")}</p><Button type="submit" disabled={preview}>{busy === 'inspect' ? t("Checking…") : t("Inspect source")}</Button></div></fieldset></form>
     {inspection && <Card><details><summary>{t("Inspection result ·")} {inspection.capabilities.length} capabilities</summary><FactTree value={inspection} /></details><div className="actions">{inspection.capabilities.map(capability => <Button key={capability.capability_id} onClick={() => { planForm.setValue('capability_id', capability.capability_id); planForm.setValue('columns', capability.mandatory_columns.join(',')); }}>{capability.capability_id}</Button>)}</div></Card>}
-    <form noValidate onSubmit={planForm.handleSubmit(resolvePlan)}><fieldset disabled={!!busy || operation.busy}><FormFields groups={planGroups} form={planForm} /><div className="form-footer"><p>{t("The plan pins the exact range and limits.")}</p><Button type="submit">{busy === 'plan' ? t("Planning…") : t("Build plan")}</Button></div></fieldset></form>
-    {plan && <Card><div className="card-heading"><h3>{t("Preparation plan")}</h3><Badge tone={accepted ? 'positive' : ''}>{current !== plan.values ? t("Parameters changed — refresh the plan") : plan.result.budget.status}</Badge></div><FactTree value={plan.result} /><Button tone="primary" disabled={!accepted || operation.busy || !!busy} onClick={() => void operation.submit(encode(plan.result.resolved_plan), async () => ({ path: '/api/v1/jobs', body: { job_type: 'PREPARE_DATASET', payload: { schema: 'backtest.prepare-dataset-job/v1', plan: plan.result.resolved_plan } } }))}>{t("Prepare dataset")}</Button></Card>}
+    <form noValidate onSubmit={planForm.handleSubmit(resolvePlan)}><fieldset disabled={!!busy || operation.busy}><FormFields groups={planGroups} form={planForm} /><div className="form-footer"><p>{t("The plan pins the exact range and limits.")}</p><Button type="submit" disabled={preview}>{busy === 'plan' ? t("Planning…") : t("Build plan")}</Button></div></fieldset></form>
+    {plan && <Card><div className="card-heading"><h3>{t("Preparation plan")}</h3><Badge tone={accepted ? 'positive' : ''}>{current !== plan.values ? t("Parameters changed — refresh the plan") : plan.result.budget.status}</Badge></div><FactTree value={plan.result} /><Button tone="primary" disabled={preview || !accepted || operation.busy || !!busy} onClick={() => void operation.submit(encode(plan.result.resolved_plan), async () => ({ path: '/api/v1/jobs', body: { job_type: 'PREPARE_DATASET', payload: { schema: 'backtest.prepare-dataset-job/v1', plan: plan.result.resolved_plan } } }))}>{t("Prepare dataset")}</Button></Card>}
     <SubmissionResult operation={operation} /></>;
 }

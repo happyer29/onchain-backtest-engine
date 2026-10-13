@@ -6,6 +6,23 @@ Notable user-facing changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- A GitHub Pages viewer for complete, precomputed version 0.2 backtests on a
+  verified two-hour OnchainDivers window, with paginated trades, market charts,
+  execution-model labels and offline lineage.
+- Offline allowlisted result export and digest-pinned release-asset import for
+  manual Pages publication, without source credentials or a public execution API.
+- Every product page is available in the historical Pages preview, with editable
+  settings, navigation and saved results; execution actions are disabled. The
+  published interface and prepared run names are entirely in English.
+
+### Fixed
+
+- Sniping entries, analytics and chart markers preserve pre-submit funding
+  rejections from the stored round-trip status instead of showing unlanded quotes
+  as fills. Original execution artifacts and financial results remain unchanged.
+
 ## [0.2.0] — release candidate
 
 ### Added

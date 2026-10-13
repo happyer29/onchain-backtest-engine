@@ -23,7 +23,12 @@ from backtest.application.strategy_results import (
 
 # Projection consumes existing typed identities and records without storage access.
 from backtest.domain.identifiers import ArtifactId
-from backtest.domain.roundtrips import RoundTripRecord
+from backtest.domain.roundtrips import (
+    RoundTripLegRecord,
+    RoundTripLegSide,
+    RoundTripRecord,
+    RoundTripStatus,
+)
 from backtest.engine.copytrading_results import CopyPositionRecord
 
 
@@ -133,6 +138,28 @@ def project_entry(record: RoundTripRecord | CopyPositionRecord) -> StrategyEntry
     )
 
 
+def sniping_leg_outcome(
+    record: RoundTripRecord, leg: RoundTripLegRecord
+) -> tuple[Literal["FILLED", "FAILED", "REJECTED"], str | None]:
+    """Pre-submit funding failures live in the round-trip status, not the quote leg."""
+    if leg.landing_position is not None:
+        return ("FILLED" if leg.failure_code is None else "FAILED", leg.failure_code)
+    if leg.failure_code is not None:
+        return "REJECTED", leg.failure_code
+    # These reasons follow the engine's recorded pre-submit audit semantics.
+    if (
+        leg.side is RoundTripLegSide.BUY
+        and record.status is RoundTripStatus.BUY_PRE_SUBMIT_INSUFFICIENT_FUNDS
+    ):
+        return "REJECTED", "INSUFFICIENT_FUNDS"
+    if (
+        leg.side is RoundTripLegSide.SELL
+        and record.status is RoundTripStatus.SELL_PRE_SUBMIT_INSUFFICIENT_FUNDS_OPEN
+    ):
+        return "REJECTED", "INSUFFICIENT_NETWORK_FEE"
+    raise ValueError("unlanded Sniping leg has no recorded rejection reason")
+
+
 def _sniping_attempts(record: RoundTripRecord) -> tuple[EntryAttempt, ...]:
     """Preserve typed coordinates instead of reimplementing chain encoding."""
     result = []
@@ -143,7 +170,7 @@ def _sniping_attempts(record: RoundTripRecord) -> tuple[EntryAttempt, ...]:
         landed = (
             None if leg.landing_position is None else str(leg.landing_position.boundary_ordinal)
         )
-        state = "FILLED" if leg.failure_code is None else "FAILED" if landed else "REJECTED"
+        state, failure_code = sniping_leg_outcome(record, leg)
         # Attempt numbering is retained so individual retries remain traceable in the UI.
         result.append(
             EntryAttempt(
@@ -157,7 +184,7 @@ def _sniping_attempts(record: RoundTripRecord) -> tuple[EntryAttempt, ...]:
                 exact(leg.reference_out_atomic),
                 exact(leg.landing_out_atomic),
                 exact(leg.minimum_out_atomic),
-                leg.failure_code,
+                failure_code,
             )
         )
     # Final immutable ordering follows the stored buy/sell or retry sequence.
